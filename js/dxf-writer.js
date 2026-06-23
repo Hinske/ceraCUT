@@ -1,5 +1,8 @@
 /**
- * CeraCUT DXF Writer V1.7
+ * CeraCUT DXF Writer V1.8
+ * V1.8: BLOCK/ENDBLK in BLOCKS-Sektion bekommen Owner-Handle (330) zum BLOCK_RECORD —
+ *       AC1015 verlangt eine lückenlose Owner-Kette, AutoCAD 2017 wies Dateien ohne
+ *       diesen Pointer als beschädigt zurück. OBJECTS-Root-Dictionary erhält 330=0.
  * V1.7: stats.circleFallbacks zählt fehlgeschlagene Kreis-Validierungen, Nutzer-Warnung beim Speichern
  * Export von Konturen als AutoCAD DXF R2000 (AC1015) — vollständig konform
  *
@@ -9,8 +12,8 @@
  * AC1015-Konformität:
  * - Hex-Handles (Code 5) für alle Table-Entries und Entities
  * - Alle Pflicht-Tables: VPORT, LTYPE, LAYER, STYLE, VIEW, UCS, APPID, DIMSTYLE, BLOCK_RECORD
- * - *MODEL_SPACE / *PAPER_SPACE Blocks
- * - Root-Dictionary in OBJECTS
+ * - *MODEL_SPACE / *PAPER_SPACE Blocks mit Owner-Handle (330) zum BLOCK_RECORD
+ * - Root-Dictionary in OBJECTS (Owner 330=0)
  * - $HANDSEED im Header
  *
  * Encoding: ANSI_1252 (Windows Western) — korrekte Umlaute in Layer-Namen
@@ -20,8 +23,8 @@
  * V1.4: AC1015 ohne Handles (crashte AutoCAD)
  *
  * Created: 2026-02-15 MEZ
- * Last Modified: 2026-03-26 MEZ
- * Build: 20260326-ac1015fix
+ * Last Modified: 2026-06-23 MEZ
+ * Build: 20260623-dxfblockowner
  */
 
 class DXFWriter {
@@ -294,9 +297,15 @@ class DXFWriter {
     _writeBlocks() {
         this._writeSectionStart('BLOCKS');
 
-        for (const name of ['*MODEL_SPACE', '*PAPER_SPACE']) {
+        const blocks = [
+            { name: '*MODEL_SPACE', recordHandle: this._modelSpaceHandle },
+            { name: '*PAPER_SPACE', recordHandle: this._paperSpaceHandle }
+        ];
+
+        for (const { name, recordHandle } of blocks) {
             this._write(0, 'BLOCK');
             this._write(5, this._nextHandle());
+            this._write(330, recordHandle);
             this._write(100, 'AcDbEntity');
             this._write(8, '0');
             this._write(100, 'AcDbBlockBegin');
@@ -307,6 +316,7 @@ class DXFWriter {
             this._write(1, '');
             this._write(0, 'ENDBLK');
             this._write(5, this._nextHandle());
+            this._write(330, recordHandle);
             this._write(100, 'AcDbEntity');
             this._write(8, '0');
             this._write(100, 'AcDbBlockEnd');
@@ -321,6 +331,7 @@ class DXFWriter {
         this._writeSectionStart('OBJECTS');
         this._write(0, 'DICTIONARY');
         this._write(5, this._nextHandle());
+        this._write(330, '0');
         this._write(100, 'AcDbDictionary');
         this._writeSectionEnd();
     }
@@ -394,7 +405,7 @@ class DXFWriter {
             const fit = this._fitCircle(contour.points);
             if (fit) { cx = fit.cx; cy = fit.cy; radius = fit.radius; }
             else {
-                console.warn('[DXF-Writer V1.7] Kreis-Validierung fehlgeschlagen → Polyline');
+                console.warn('[DXF-Writer V1.8] Kreis-Validierung fehlgeschlagen → Polyline');
                 stats.circleFallbacks = (stats.circleFallbacks || 0) + 1;
                 this._writePolyline(contour, stats);
                 return;

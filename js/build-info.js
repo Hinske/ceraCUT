@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.19
- * Version: V6.19
+ * CeraCUT Build Info V6.20
+ * Version: V6.20
  * Last Modified: 2026-06-23 MEZ
- * Build: 20260623-bugfixaudit
+ * Build: 20260623-dxfblockowner
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.19',
-    build: '20260623-bugfixaudit',
+    version: '6.20',
+    build: '20260623-dxfblockowner',
     date: '2026-06-23',
-    time: '01:00 MEZ',
+    time: '02:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '0d30c5d',
-        date: '2026-06-23 16:06:52 +0200',
-        message: 'fix: Code-Audit V6.19 — kritische und mittlere Bugfixes'
+        hash: 'c5b93bf',
+        date: '2026-06-23 18:04:44 +0200',
+        message: 'fix: DXF-Export von AutoCAD 2017 nicht lesbar — BLOCK/ENDBLK Owner-Handle fehlte'
     },
 
     modules: {
@@ -37,7 +37,7 @@ const CERACUT_BUILD = {
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
-        'dxf-writer':         { version: '1.7', build: '20260623-bugfixaudit' },
+        'dxf-writer':         { version: '1.8', build: '20260623-dxfblockowner' },
         'lead-profiles':      { version: '1.1', build: '20260315-intarsia20' },
         'app':                { version: '6.16', build: '20260623-bugfixaudit' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
@@ -57,6 +57,8 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.20: Fix — DXF-Export von AutoCAD 2017 nicht lesbar: BLOCK/ENDBLK in BLOCKS-Sektion hatten keinen Owner-Handle (330) zum BLOCK_RECORD, AC1015-Owner-Kette war unvollständig (dxf-writer V1.8)',
+        'V6.20: Fix — OBJECTS-Root-Dictionary erhält expliziten Owner 330=0 (dxf-writer V1.8)',
         'V6.19: Bugfix-Audit — geometry.js const-Reassignment-Crash in offsetPolygon() behoben (geometry V2.12)',
         'V6.19: Bugfix-Audit — Lead-Kollisions-Warnung zeigte immer 0% (effectiveLength nie gesetzt), jetzt korrekt (cam-contour V5.9)',
         'V6.19: Bugfix-Audit — dxf-parser.js meldet NaN-Koordinaten statt sie stillschweigend zu 0 zu kollabieren (dxf-parser V3.12)',
