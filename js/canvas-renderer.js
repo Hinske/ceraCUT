@@ -1,7 +1,8 @@
 /**
- * CeraCUT V3.36 - Canvas Renderer
+ * CeraCUT V3.37 - Canvas Renderer
  * Features: Selection, Lead-In/Out, Overcut, Micro-Joints, Travel Paths, Order Numbers,
  *           Startpunkt-Drag im Anschuss-Modus, SLIT Support
+ * V3.37: AutoCAD-Grip-Stil (hohle Quadrate, Cold/Hover/Hot) + Vollbild-Fadenkreuz bei aktivem Tool
  * V3.36: edgeOnly — Window-Selection + Rechtsklick funktionieren im Inneren geschlossener Konturen
  * V3.35: _notifyStateChange() nach Grip-Edit → Undo-Buttons aktualisieren sich korrekt
  * V3.34: Shift-Status am ToolManager zwischenspeichern (für CAM-Tools wie BoundaryTrim)
@@ -164,6 +165,7 @@ class CanvasRenderer {
         // V3.10: Grip Editing State
         this._grips = [];           // Berechnete Grips für selektierte Konturen
         this._hoveredGrip = null;   // Grip unter dem Cursor
+        this._draggedGrip = null;   // V3.37: Grip im aktiven Drag (Hot-State)
         this._gripDirty = false;    // Erst dirty wenn Selektion existiert
         this._hasSelection = false; // Schneller Check ohne .some() bei jedem Render
 
@@ -316,6 +318,7 @@ class CanvasRenderer {
                     if (hitGrip) {
                         isDraggingGrip = true;
                         dragGrip = hitGrip;
+                        this._draggedGrip = hitGrip; // V3.37: Hot-State für Rendering
                         dragContourRef = hitGrip.contour;
                         dragOldPoints = dragContourRef.points.map(p => ({x: p.x, y: p.y}));
                         this.canvas.style.cursor = 'crosshair';
@@ -373,6 +376,7 @@ class CanvasRenderer {
 
         this.canvas.addEventListener('mousemove', (e) => {
             const worldPos = this.screenToWorld(e.offsetX, e.offsetY);
+            this._lastMouseScreen = { x: e.offsetX, y: e.offsetY }; // V3.37: für Vollbild-Crosshair
 
             // V2.4: External pre-handler (Dimension-Grip-Drag etc.)
             if (this.onBeforeMouseMove) {
@@ -466,6 +470,12 @@ class CanvasRenderer {
             if (this.app?.measureMode && this.app?.measureStart) {
                 this.render();
             }
+
+            // V3.37: Vollbild-Fadenkreuz folgt dem Cursor bei aktivem Zeichentool
+            const _crosshairToolMgr = this.app?.drawingTools || this.app?.toolManager;
+            if (!needsRender && _crosshairToolMgr?.isToolActive?.() && !_crosshairToolMgr?.activeTool?.isPanTool) {
+                this.render();
+            }
         });
 
         this.canvas.addEventListener('mouseup', (e) => {
@@ -522,6 +532,7 @@ class CanvasRenderer {
                 this._gripDirty = true;
                 isDraggingGrip = false;
                 dragGrip = null;
+                this._draggedGrip = null;
                 dragOldPoints = null;
                 dragContourRef = null;
                 this.canvas.style.cursor = 'default';
@@ -571,6 +582,7 @@ class CanvasRenderer {
             }
             isDraggingGrip = false;
             dragGrip = null;
+            this._draggedGrip = null;
             dragOldPoints = null;
             dragContourRef = null;
             // Window-Selection abbrechen
@@ -798,6 +810,14 @@ class CanvasRenderer {
             this.app.snapManager.drawSnapIndicator(ctx, scr.x, scr.y);
         } else if (this.app?.currentSnapPoint) {
             this.drawSnapIndicator(this.app.currentSnapPoint);
+        }
+
+        // V3.37: Vollbild-Fadenkreuz waehrend aktivem Zeichentool (nur wenn kein Snap-Fadenkreuz schon gezeichnet wurde)
+        if (!snapActive && this._lastMouseScreen) {
+            const toolMgr = this.app?.drawingTools || this.app?.toolManager;
+            if (toolMgr?.isToolActive?.() && !toolMgr?.activeTool?.isPanTool) {
+                this._drawToolCrosshair(ctx, this._lastMouseScreen.x, this._lastMouseScreen.y);
+            }
         }
 
         if (this.app?.measureMode) this.drawMeasurementLabels();
@@ -1799,6 +1819,21 @@ class CanvasRenderer {
         ctx.restore();
     }
 
+    /** V3.37: Vollbild-Fadenkreuz waehrend aktivem Zeichentool (AutoCAD-Stil) */
+    _drawToolCrosshair(ctx, sx, sy) {
+        const w = this.canvas.width, h = this.canvas.height;
+        ctx.save();
+        ctx.strokeStyle = this.colors.snap || '#888888';
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(0, sy); ctx.lineTo(w, sy);
+        ctx.moveTo(sx, 0); ctx.lineTo(sx, h);
+        ctx.stroke();
+        ctx.restore();
+    }
+
     /** V3.4: Fadenkreuz am Snap-Punkt (nur wenn Snap aktiv + nativer Cursor hidden) */
     _drawSnapCrosshair(ctx, sx, sy) {
         const arm = 20;
@@ -2396,7 +2431,7 @@ class CanvasRenderer {
         if (this._gripDirty) this._computeGrips();
         if (this._grips.length === 0) return;
 
-        const size = 4 / this.scale;  // 4px Quadrat in Bildschirmpixeln
+        const size = 7 / this.scale;  // V3.37: 7px Quadrat (AutoCAD-Standard ~6-8px)
 
         // V3.33: Kontrollpolygon für selektierte Spline-Konturen
         const drawnPolygons = new Set();
@@ -2419,13 +2454,20 @@ class CanvasRenderer {
             }
         }
 
+        // V3.37: AutoCAD-Grip-Stil — hohle Quadrate (Cold), gefüllt nur bei Hover/Drag (Warm/Hot)
+        ctx.lineWidth = 1 / this.scale;
         for (const grip of this._grips) {
-            let color = this.colors.grip;
-            if (grip === this._hoveredGrip) color = this.colors.gripHover;
+            const isDragged = grip === this._draggedGrip;
+            const isHovered = grip === this._hoveredGrip;
+            const borderColor = (isDragged || isHovered) ? this.colors.gripHover : this.colors.grip;
 
-            ctx.fillStyle = color;
+            ctx.strokeStyle = borderColor;
+            if (isDragged || isHovered) {
+                ctx.fillStyle = isDragged ? this.colors.gripHot : this.colors.gripHover;
+                ctx.fillRect(grip.x - size, grip.y - size, size * 2, size * 2);
+            }
             // Quadrat zentriert auf Grip-Position
-            ctx.fillRect(grip.x - size, grip.y - size, size * 2, size * 2);
+            ctx.strokeRect(grip.x - size, grip.y - size, size * 2, size * 2);
         }
     }
 

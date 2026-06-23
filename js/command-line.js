@@ -1,14 +1,15 @@
 /**
- * CeraCUT Command Line V1.3
+ * CeraCUT Command Line V1.4
  * AutoCAD-style Command Line Interface
  * - Prompt-System für Zeichentools
  * - Koordinateneingabe (absolut + relativ)
  * - Shortcut-Routing (L, C, N, A, P + M, R, S, O, Shift+C, Shift+M)
  * - History + ArrowUp/Down Navigation
  * - Input-Validation-Feedback (rote Fehlermeldung)
+ * - V1.4: 'echo'-Log-Typ für AutoCAD-Style Command-Echo ("_LINE")
  * Created: 2026-02-13 MEZ
- * Last Modified: 2026-03-17 MEZ
- * Build: 20260317-quickwins
+ * Last Modified: 2026-06-23 MEZ
+ * Build: 20260623-autocadfeel
  */
 
 class CommandLine {
@@ -40,7 +41,7 @@ class CommandLine {
         this.onBackspace = options.onBackspace || null;  // () => void — Backspace Undo
 
         this._init();
-        console.debug('[CommandLine V1.3] ✅ Initialisiert');
+        console.debug('[CommandLine V1.4] ✅ Initialisiert');
     }
 
     _init() {
@@ -290,6 +291,7 @@ class CommandLine {
         const recent = this.history.slice(-5);
         this.historyEl.innerHTML = recent.map(entry => {
             const cls = entry.type === 'input' ? 'cmd-input-echo' :
+                        entry.type === 'echo' ? 'cmd-echo' :
                         entry.type === 'error' ? 'cmd-error' :
                         entry.type === 'success' ? 'cmd-success' : 'cmd-info';
             const safe = entry.message.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');

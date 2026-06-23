@@ -1,17 +1,18 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.10
+ * CeraCUT Drawing & Modification Tools V2.11
  * AutoCAD-style CAD Tools für CeraCUT
- * 
+ *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
  * Tier 2 – Modifizieren: Move (M), Copy (Shift+C), Rotate (R), Mirror (Shift+M),
  *                         Scale (S), Offset (O), Erase (DEL)
- * 
+ *
  * - State-Machine pro Tool
  * - Rubber-Band Preview + Ghost-Preview (Modifikation)
  * - Noun-Verb + Verb-Noun Selektion (AutoCAD-Stil)
  * - Window-Selection (Drag-Rechteck)
  * - Integration mit CommandLine + SnapManager + UndoManager
- * 
+ *
+ * V2.11: AutoCAD-Verhalten — Enter im Idle wiederholt letzten Befehl, Command-Echo ("_LINE") bei Tool-Start
  * V2.10: Fix — Spline-Typ bleibt erhalten in _entityToDxfFormat (war LWPOLYLINE, Fit-Points gingen verloren)
  * V2.8: Locked-Layer Guard — gesperrte Layer von Window-Selection ausgeschlossen
  * V2.7: Auto-Apply pending Entities bei ESC/Enter/Rechtsklick ohne aktives Tool
@@ -119,7 +120,7 @@ class DrawingToolManager {
             this.commandLine.onBackspace = () => this._handleBackspace();
         }
 
-        console.debug('[DrawingTools V2.7] ✅ Initialisiert (Tier 1 + Tier 2)');
+        console.debug('[DrawingTools V2.11] ✅ Initialisiert (Tier 1 + Tier 2)');
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -176,6 +177,10 @@ class DrawingToolManager {
         // Ghost + Window-Selection zurücksetzen
         this.ghostContours = null;
         this.windowSelection = null;
+
+        // V2.11: AutoCAD-Style Command-Echo ("_LINE") vor dem ausführlichen Prompt
+        const echoName = (typeof TOOL_ECHO_NAMES !== 'undefined' && TOOL_ECHO_NAMES[key]) || key;
+        this.commandLine?.log(`_${echoName}`, 'echo');
 
         this.activeTool = factory();
         this.activeTool._toolKey = key;  // V2.3: Tool-Key für Continuous Mode
@@ -238,7 +243,7 @@ class DrawingToolManager {
             this.activeTool = null;
         } else if (this.entities.length > 0) {
             // V2.7: Kein Tool aktiv, aber pending Entities → Auto-Apply
-            console.debug('[DrawingTools V2.7] Auto-Apply: ESC bei pending Entities');
+            console.debug('[DrawingTools V2.11] Auto-Apply: ESC bei pending Entities');
             this.applyEntities();
         }
         this.rubberBand = null;
@@ -1011,8 +1016,11 @@ class DrawingToolManager {
             this.activeTool.finish();
         } else if (this.entities.length > 0) {
             // V2.7: Kein Tool aktiv, aber pending Entities → Auto-Apply
-            console.debug('[DrawingTools V2.7] Auto-Apply: Enter bei pending Entities');
+            console.debug('[DrawingTools V2.11] Auto-Apply: Enter bei pending Entities');
             this.applyEntities();
+        } else {
+            // V2.11: AutoCAD-Verhalten — Enter im Idle wiederholt letzten Befehl
+            this.restartTool();
         }
     }
 

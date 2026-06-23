@@ -1,11 +1,13 @@
 /**
- * CeraCUT Dynamic Input HUD V1.0
+ * CeraCUT Dynamic Input HUD V1.1
  * AutoCAD-style Koordinatenanzeige am Cursor
  * - Zeigt absolute/relative Koordinaten
  * - Zeigt Distanz + Winkel bei aktivem Tool
  * - Folgt dem Mauszeiger
+ * - V1.1: Neutraler Kontrast (Grau statt Dunkelblau/Cyan)
  * Created: 2026-03-09 MEZ
- * Build: 20260309-dynhud
+ * Last Modified: 2026-06-23 MEZ
+ * Build: 20260623-autocadfeel
  */
 
 const DynamicInput = (() => {
@@ -22,8 +24,8 @@ const DynamicInput = (() => {
             position: fixed;
             pointer-events: none;
             z-index: 9999;
-            background: rgba(30, 30, 50, 0.92);
-            border: 1px solid #4fc3f7;
+            background: rgba(40, 40, 40, 0.92);
+            border: 1px solid #888888;
             border-radius: 3px;
             padding: 2px 6px;
             font-family: 'Consolas', 'Courier New', monospace;
@@ -34,7 +36,7 @@ const DynamicInput = (() => {
             line-height: 1.4;
         `;
         document.body.appendChild(hudEl);
-        console.debug('[DynamicInput V1.0] Initialisiert');
+        console.debug('[DynamicInput V1.1] Initialisiert');
     }
 
     function update(screenX, screenY, worldX, worldY, basePoint) {

@@ -1,9 +1,10 @@
 /**
- * CeraCUT V2.9 Constants
+ * CeraCUT V2.10 Constants
  * Blaues Farbschema
+ * V2.10: TOOL_ECHO_NAMES — AutoCAD-Style Command-Echo-Tabelle (_LINE, _CIRCLE, ...)
  * V2.9: TOOL_TOOLTIPS — alle 7 CAM-Tools (EF, REP, AN, BT, PJ, VZ, HULL) eingetragen
  * V2.8: INTARSIA_MATERIALS — 5 Materialgruppen mit Farben
- * Build: 20260324-camfix
+ * Build: 20260623-autocadfeel
  */
 
 const CeraCUT = {
@@ -158,6 +159,17 @@ const TOOL_TOOLTIPS = {
     'PJ':    { label: 'Poly Joint',  tip: 'Geschlossene Polylinien verbinden oder aufteilen', shortcut: 'PJ', group: 'cam' },
     'VZ':    { label: 'Vectorize',   tip: 'Kurven/Arcs in Liniensegmente umwandeln', shortcut: 'VZ',    group: 'cam' },
     'HULL':  { label: 'Convex Hull', tip: 'Konvexes Huellpolygon um Objekte',        shortcut: 'HULL',  group: 'cam' },
+};
+
+// V1.0: AutoCAD-Style Command-Echo (Unterstrich-Praefix in Command-Line, z.B. "_LINE")
+const TOOL_ECHO_NAMES = {
+    L: 'LINE', C: 'CIRCLE', A: 'ARC', N: 'RECTANG', P: 'PLINE',
+    NG: 'POLYGON', OB: 'OBREAK', AB: 'ARABESQUE', EL: 'ELLIPSE',
+    SP: 'SPLINE', DO: 'DONUT', TX: 'TEXT', H: 'HATCH',
+    M: 'MOVE', CO: 'COPY', RO: 'ROTATE', MI: 'MIRROR', SC: 'SCALE',
+    AR: 'ARRAY', O: 'OFFSET', E: 'ERASE', F: 'FILLET', CH: 'CHAMFER',
+    T: 'TRIM', EX: 'EXTEND', X: 'EXPLODE', J: 'JOIN', B: 'BREAK',
+    BO: 'BOOLEAN', BP: 'BOUNDARY', OK: 'OVERKILL',
 };
 
 // Nicht-Tool-Shortcuts (fuer Shortcut-Dialog, nicht fuer data-tip)

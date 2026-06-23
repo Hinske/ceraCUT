@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CeraCUT V6.17 — Wasserstrahl CAM</title>
+    <title>CeraCUT V6.18 — Wasserstrahl CAM</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="styles.css?v=20260328-toplevel">
+    <link rel="stylesheet" href="styles.css?v=20260623-autocadfeel">
     <link rel="stylesheet" href="properties-panel-styles.css?v=20260315-ctxmenu">
 </head>
 <body>
@@ -39,7 +39,7 @@
             </button>
         </div>
         <span class="title-text">
-            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V6.17 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
+            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V6.18 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
         </span>
         <div class="title-right">
             <span class="version-badge">SINUMERIK 840D</span>
@@ -1154,10 +1154,9 @@
 
             </div>
 
-            <!-- Coordinates + Indicators (floating) -->
+            <!-- Indicators (floating, Koordinaten V3.37 in Statusleiste integriert) -->
             <div class="coords-display">
-                X: <span id="coord-x">0.000</span> &nbsp; Y: <span id="coord-y">0.000</span>
-                <span id="snap-indicator" style="margin-left:12px;color:#ffff00;display:none;">● SNAP</span>
+                <span id="snap-indicator" style="color:#ffff00;display:none;">● SNAP</span>
                 <span id="measure-indicator" style="margin-left:12px;color:#00ffff;display:none;">📏 MESSEN</span>
                 <span id="startpoint-indicator" style="margin-left:12px;color:#00ff00;display:none;">📍 STARTPUNKT</span>
             </div>
@@ -1239,6 +1238,8 @@
             </div>
         </div>
         <div class="status-spacer"></div>
+        <span class="status-coords">X: <span id="coord-x">0.000</span>&nbsp;&nbsp;Y: <span id="coord-y">0.000</span></span>
+        <div class="status-separator"></div>
         <span class="status-label">SINUMERIK 840D</span>
     </div>
 
@@ -1445,8 +1446,8 @@
 <!-- Scripts -->
 <!-- DebugMonitor: MUSS als ERSTES geladen werden — fängt alle Fehler ab -->
 <script src="js/debug-monitor.js?v=20260324-gitcommit"></script>
-<script src="js/build-info.js?v=20260328-toplevel"></script>
-<script src="js/constants.js?v=20260324-camfix"></script>
+<script src="js/build-info.js?v=20260623-autocadfeel"></script>
+<script src="js/constants.js?v=20260623-autocadfeel"></script>
 <script src="js/geometry.js?v=20260316-gapdetect"></script>
 <script src="js/arc-fitting.js?v=20260316-quietlogs"></script>
 <script src="js/dxf-parser.js?v=20260324-splinegrip"></script>
@@ -1454,14 +1455,14 @@
 <script src="js/lead-profiles.js?v=20260316-quietlogs"></script>
 <script src="js/cerajet-engine.js?v=20260316-quietlogs"></script>
 <script src="js/ceracut-pipeline.js?v=20260316-gapdetect"></script>
-<script src="js/canvas-renderer.js?v=20260325-winsel"></script>
+<script src="js/canvas-renderer.js?v=20260623-autocadfeel"></script>
 <script src="js/undo-manager.js?v=20260316-quietlogs"></script>
 <script src="js/sinumerik-postprocessor.js?v=20260316-quietlogs"></script>
-<script src="js/command-line.js?v=20260317-quickwins"></script>
-<script src="js/dynamic-input.js?v=20260316-quietlogs"></script>
+<script src="js/command-line.js?v=20260623-autocadfeel"></script>
+<script src="js/dynamic-input.js?v=20260623-autocadfeel"></script>
 <script src="js/snap-manager.js?v=20260316-quietlogs"></script>
 <script src="js/geometry-ops.js?v=20260323-splinetool"></script>
-<script src="js/drawing-tools.js?v=20260325-splinefix"></script>
+<script src="js/drawing-tools.js?v=20260623-autocadfeel"></script>
 <script src="js/layer-manager.js?v=20260324-undofix"></script>
 <script src="js/dxf-writer.js?v=20260326-ac1015fix"></script>
 <script src="js/tool-manager.js?v=20260316-quietlogs"></script>

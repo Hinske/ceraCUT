@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.17
- * Version: V6.17
- * Last Modified: 2026-03-28 MEZ
- * Build: 20260328-toplevel
+ * CeraCUT Build Info V6.18
+ * Version: V6.18
+ * Last Modified: 2026-06-23 MEZ
+ * Build: 20260623-autocadfeel
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.17',
-    build: '20260328-toplevel',
-    date: '2026-03-28',
-    time: '22:30 MEZ',
+    version: '6.18',
+    build: '20260623-autocadfeel',
+    date: '2026-06-23',
+    time: '00:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '4f3cbcc',
-        date: '2026-03-28 22:28:38 +0100',
-        message: 'refactor: CAM-Tab aufgelöst in Setup/Bearbeitung/Extras Top-Level Tabs'
+        hash: 'f10b730',
+        date: '2026-06-23 10:24:00 +0200',
+        message: 'feat: AutoCAD-Look&Feel V6.18 — Interaktion, Grips, Crosshair, Theme'
     },
 
     modules: {
@@ -25,15 +25,15 @@ const CERACUT_BUILD = {
         'geometry':           { version: '2.11', build: '20260316-gapdetect' },
         'pipeline':           { version: '3.7', build: '20260316-gapdetect' },
         'cam-contour':        { version: '5.8', build: '20260323-splinetool' },
-        'canvas-renderer':    { version: '3.36', build: '20260325-winsel' },
+        'canvas-renderer':    { version: '3.37', build: '20260623-autocadfeel' },
         'undo-manager':       { version: '1.1', build: '20260309-wizard' },
         'sinumerik-pp':       { version: '1.6', build: '20260316-hatchentity' },
-        'command-line':       { version: '1.3', build: '20260317-quickwins' },
+        'command-line':       { version: '1.4', build: '20260623-autocadfeel' },
         'snap-manager':       { version: '1.3', build: '20260315-bugfix35' },
         'geometry-ops':       { version: '2.5', build: '20260323-boundary' },
-        'drawing-tools':      { version: '2.10', build: '20260325-splinefix' },
+        'drawing-tools':      { version: '2.11', build: '20260623-autocadfeel' },
         'drawing-tools-ext':  { version: '1.7', build: '20260323-splinetool' },
-        'dynamic-input':      { version: '1.0', build: '20260309-dynhud' },
+        'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
@@ -57,6 +57,13 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.18: AutoCAD-Look&Feel — Enter im Idle wiederholt letzten Befehl (drawing-tools V2.11)',
+        'V6.18: AutoCAD-Look&Feel — Command-Echo "_LINE"-Stil in Command-Line (TOOL_ECHO_NAMES, constants V2.10, command-line V1.4)',
+        'V6.18: AutoCAD-Look&Feel — Grip-Stil: hohle Quadrate, Cold/Hover/Hot-States (canvas-renderer V3.37)',
+        'V6.18: AutoCAD-Look&Feel — Vollbild-Fadenkreuz bei aktivem Zeichentool (canvas-renderer V3.37)',
+        'V6.18: AutoCAD-Look&Feel — Dynamic-Input-HUD neutraler Kontrast (dynamic-input V1.1)',
+        'V6.18: AutoCAD-Look&Feel — Tooltip-Farben themeabhängig (gedämpftes Gelb im Dark-Theme), Status-Toggle-Bevel',
+        'V6.18: AutoCAD-Look&Feel — Statusleiste zeigt Koordinaten (floating Display entfernt)',
         'V6.15: Fix — DXF-Writer AC1015 korrekt: Handles, Pflicht-Tables, MODEL_SPACE, Root-Dict, ANSI_1252 (dxf-writer V1.6)',
         'V6.15: Feat — Dimension Editing: Selektion, Grip-Drag, Text-Override (Doppelklick), DEL-Löschen, Undo/Redo (dimension-tool V2.4)',
         'V6.15: Fix — Window-Selection + Rechtsklick funktionieren im Inneren geschlossener Konturen (canvas-renderer V3.36)',
