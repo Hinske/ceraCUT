@@ -1,5 +1,6 @@
 /**
- * CeraCUT V6.15 - Main Application
+ * CeraCUT V6.16 - Main Application
+ * V6.16: Fix — XSS-Lücken geschlossen (sanitizeHTML in Validation-Modal, Layer-Manager-Tabelle, Export-Vorschau-Warnungen)
  * V6.15: Fix — Ctrl+Z/Y funktioniert jetzt auch wenn cmd-input Focus hat (Keyboard-Filter erweitert)
  * V6.15: Fix — Layer-Dropdown zeigt alle Layer (auch leere manuell erstellte)
  * V6.15: Fix — Undo-System: LayerManager.undoManager Verknüpfung für undo-fähige Layer-Ops
@@ -4175,9 +4176,9 @@ class CeraCutApp {
                 const color = item.severity === 'critical' ? '#ef4444' : '#f59e0b';
                 return `<div style="padding:6px 8px;margin:4px 0;background:${color}22;border-left:3px solid ${color};border-radius:3px;font-size:12px;">
                     <span>${item.icon}</span>
-                    <strong style="color:${color}">[${item.code}]</strong>
-                    <span style="color:#ccc">${item.contourName}:</span>
-                    ${item.message}
+                    <strong style="color:${color}">[${sanitizeHTML(item.code)}]</strong>
+                    <span style="color:#ccc">${sanitizeHTML(item.contourName)}:</span>
+                    ${sanitizeHTML(item.message)}
                 </div>`;
             }).join('');
 
@@ -4589,7 +4590,7 @@ class CeraCutApp {
         if (existing) existing.remove();
 
         const warningHtml = warnings.length > 0
-            ? `<div style="background:#fff3cd;color:#856404;padding:8px;border-radius:4px;margin-bottom:8px;font-size:12px">⚠️ ${warnings.join('<br>⚠️ ')}</div>`
+            ? `<div style="background:#fff3cd;color:#856404;padding:8px;border-radius:4px;margin-bottom:8px;font-size:12px">⚠️ ${warnings.map(sanitizeHTML).join('<br>⚠️ ')}</div>`
             : '';
 
         const modal = document.createElement('div');
@@ -4964,13 +4965,15 @@ class CeraCutApp {
             const isZero = l.name === '0';
             const draggable = isZero ? '' : ' draggable="true"';
             const handle = isZero ? '' : '<span class="lm-drag-handle">≡</span>';
-            return `<tr class="${rowClass}" data-layer="${l.name}" data-order="${idx}"${draggable}>
+            const safeName = sanitizeHTML(l.name);
+            const safeColor = sanitizeHTML(l.color);
+            return `<tr class="${rowClass}" data-layer="${safeName}" data-order="${idx}"${draggable}>
                 <td>${isActive ? '▶' : ''}${handle}</td>
-                <td><button class="lm-visible-btn${visClass}" data-action="toggle-vis" data-layer="${l.name}">${visIcon}</button></td>
-                <td><button class="lm-lock-btn${lockClass}" data-action="toggle-lock" data-layer="${l.name}">${lockIcon}</button></td>
-                <td>${l.name}</td>
-                <td><span class="lm-color-swatch" data-action="change-color" data-layer="${l.name}" style="background:${l.color}"></span></td>
-                <td><select class="lm-linetype-select" data-action="change-linetype" data-layer="${l.name}">
+                <td><button class="lm-visible-btn${visClass}" data-action="toggle-vis" data-layer="${safeName}">${visIcon}</button></td>
+                <td><button class="lm-lock-btn${lockClass}" data-action="toggle-lock" data-layer="${safeName}">${lockIcon}</button></td>
+                <td>${safeName}</td>
+                <td><span class="lm-color-swatch" data-action="change-color" data-layer="${safeName}" style="background:${safeColor}"></span></td>
+                <td><select class="lm-linetype-select" data-action="change-linetype" data-layer="${safeName}">
                     <option value="Continuous"${l.lineType === 'Continuous' ? ' selected' : ''}>Continuous</option>
                     <option value="Dashed"${l.lineType === 'Dashed' ? ' selected' : ''}>Dashed</option>
                     <option value="DashDot"${l.lineType === 'DashDot' ? ' selected' : ''}>DashDot</option>
@@ -5175,6 +5178,9 @@ class CeraCutApp {
                 `✅ ${filename} gespeichert (${result.stats.entities} Entities, ${(result.stats.fileSize / 1024).toFixed(1)} KB)`,
                 'success'
             );
+            if (result.stats.circleFallbacks > 0) {
+                this.showToast(`⚠️ ${result.stats.circleFallbacks} Kreis(e) als Polyline exportiert (Validierung fehlgeschlagen)`, 'warning');
+            }
             console.log('[DXF-Writer] Export (Save):', result.stats);
         } catch (err) {
             console.warn('[DXF-Writer] Direktes Speichern fehlgeschlagen, Fallback auf Speichern-unter:', err);
@@ -5225,6 +5231,9 @@ class CeraCutApp {
                     `✅ ${filename} gespeichert (${result.stats.entities} Entities, ${(result.stats.fileSize / 1024).toFixed(1)} KB)`,
                     'success'
                 );
+                if (result.stats.circleFallbacks > 0) {
+                    this.showToast(`⚠️ ${result.stats.circleFallbacks} Kreis(e) als Polyline exportiert (Validierung fehlgeschlagen)`, 'warning');
+                }
                 console.log('[DXF-Writer] Export (SaveAs):', result.stats);
                 document.getElementById('current-filename').textContent = `📄 ${filename}`;
                 return;
@@ -5263,6 +5272,9 @@ class CeraCutApp {
                 `✅ ${filename} gespeichert (${stats.entities} Entities, ${(stats.fileSize / 1024).toFixed(1)} KB)`,
                 'success'
             );
+            if (stats.circleFallbacks > 0) {
+                this.showToast(`⚠️ ${stats.circleFallbacks} Kreis(e) als Polyline exportiert (Validierung fehlgeschlagen)`, 'warning');
+            }
             console.log('[DXF-Writer] Export:', stats);
 
             // Dateiname aktualisieren

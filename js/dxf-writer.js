@@ -1,5 +1,6 @@
 /**
- * CeraCUT DXF Writer V1.6
+ * CeraCUT DXF Writer V1.7
+ * V1.7: stats.circleFallbacks zählt fehlgeschlagene Kreis-Validierungen, Nutzer-Warnung beim Speichern
  * Export von Konturen als AutoCAD DXF R2000 (AC1015) — vollständig konform
  *
  * Unterstützte Entity-Typen:
@@ -393,7 +394,8 @@ class DXFWriter {
             const fit = this._fitCircle(contour.points);
             if (fit) { cx = fit.cx; cy = fit.cy; radius = fit.radius; }
             else {
-                console.warn('[DXF-Writer V1.6] Kreis-Validierung fehlgeschlagen → Polyline');
+                console.warn('[DXF-Writer V1.7] Kreis-Validierung fehlgeschlagen → Polyline');
+                stats.circleFallbacks = (stats.circleFallbacks || 0) + 1;
                 this._writePolyline(contour, stats);
                 return;
             }

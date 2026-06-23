@@ -1,7 +1,8 @@
 /**
- * CeraCUT V2.11 - Geometry Kernel
- * Last Modified: 2026-03-16 UTC
- * Build: 20260316-gapdetect
+ * CeraCUT V2.12 - Geometry Kernel
+ * Last Modified: 2026-06-23 UTC
+ * Build: 20260623-bugfixaudit
+ * V2.12: Fix — offsetPolygon() const-Reassignment-Crash bei NaN-Intersection (const→let)
  *
  * Mathematics over Guesswork
  */
@@ -103,7 +104,7 @@ const Geometry = {
         const seg1 = segments[i];
         const seg2 = segments[i + 1];
 
-        const intersection = this._lineIntersection(
+        let intersection = this._lineIntersection(
           seg1.p1, seg1.p2,
           seg2.p1, seg2.p2
         );
@@ -125,7 +126,7 @@ const Geometry = {
         const seg1 = segments[i];
         const seg2 = segments[i + 1];
 
-        const intersection = this._lineIntersection(
+        let intersection = this._lineIntersection(
           seg1.p1, seg1.p2,
           seg2.p1, seg2.p2
         );

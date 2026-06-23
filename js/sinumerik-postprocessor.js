@@ -1,5 +1,5 @@
 /**
- * CeraCUT/CeraCUT Sinumerik 840D Postprozessor V1.6
+ * CeraCUT/CeraCUT Sinumerik 840D Postprozessor V1.7
  *
  * Erzeugt CNC-Code im MPF-Format für Sinumerik 840D Steuerungen.
  * Format-Vorlage: 7 echte CNC-Referenzdateien (KERNKREIS, ERBEN, SCHWEDEN, etc.)
@@ -16,14 +16,16 @@
  * V1.3: Multi-Head Support, Machine-Profile Integration
  * V1.4: BugFix: Overcut-Erstsegment (i=0), R-Parameter Dezimalstellen (bar/g/min = int), _ff() entfernt
  * V1.5: Slit-Rückzug in Schnittrichtung, expliziter F-Code auf Kontur, _fc() NaN-Warnung
+ * V1.7: Fix — _fc() blockiert Export bei NaN/Infinity statt 0.000 zu exportieren; Lead-In-Fallback ohne Kerf;
+ *       Multi-Head-Achsgrenzen-Check; Bridges (Haltestege) werden im G-Code berücksichtigt (Abrasiv aus/an)
  *
- * Last Modified: 2026-03-15
- * Build: 20260315-bugfix
+ * Last Modified: 2026-06-23
+ * Build: 20260623-bugfixaudit
  */
 
 class SinumerikPostprocessor {
 
-    static VERSION = '1.5';
+    static VERSION = '1.7';
 
     constructor(options = {}) {
         // ═══ Formatierung ═══
@@ -72,6 +74,7 @@ class SinumerikPostprocessor {
     generate(contours, cutOrder, settings = {}) {
         this._lineNum = 0;
         this._warnings = [];
+        this._hasFatalError = false;
 
         const planName = (settings.planName || 'UNNAMED').toUpperCase().replace(/[^A-Z0-9_]/g, '_');
         const material = settings.material || 'AALLGEMEIN';
@@ -111,6 +114,10 @@ class SinumerikPostprocessor {
 
         console.log(`[PP V${SinumerikPostprocessor.VERSION}] Generiert: ${planName}.CNC — ${cuttable.length} Konturen, ${code.split('\n').length} Zeilen`);
 
+        if (this._hasFatalError) {
+            console.error(`[PP V${SinumerikPostprocessor.VERSION}] Export blockiert — ungültige Koordinaten im G-Code`);
+            return { code: '', warnings: [...this._warnings], stats };
+        }
         return { code, warnings: [...this._warnings], stats };
     }
 
@@ -455,16 +462,49 @@ class SinumerikPostprocessor {
         }
 
         // ── Kontur-Punkte (G01/G02/G03) — V1.5: expliziter F-Code auf erstem Segment ──
-        const contourSegments = this._processContourPoints(pts);
+        // V1.7: Haltestege (Bridges) — Abrasiv kurz aus/an statt durchgehend zu schneiden
         const contourFeedParam = this._getNormalVorschubParam(quality);
-        for (let i = 0; i < contourSegments.length; i++) {
-            const seg = contourSegments[i];
-            const feedSuffix = (i === 0) ? ` F=${contourFeedParam}` : '';
-            if (seg.type === 'line') {
-                lines.push(`N${this._lineNum++} G01 X${this._fc(seg.x)} Y${this._fc(seg.y)}${feedSuffix}`);
-            } else {
-                const arcCmd = seg.clockwise ? 'G02' : 'G03';
-                lines.push(`N${this._lineNum++} ${arcCmd} X${this._fc(seg.x)} Y${this._fc(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}${feedSuffix}`);
+        const bridgeSegs = (typeof BridgeCutting !== 'undefined' && contour.bridges?.length > 0)
+            ? BridgeCutting.getBridgedPath(contour)
+            : null;
+
+        if (!bridgeSegs || bridgeSegs.length <= 1) {
+            const contourSegments = this._processContourPoints(pts);
+            for (let i = 0; i < contourSegments.length; i++) {
+                const seg = contourSegments[i];
+                const feedSuffix = (i === 0) ? ` F=${contourFeedParam}` : '';
+                if (seg.type === 'line') {
+                    lines.push(`N${this._lineNum++} G01 X${this._fc(seg.x)} Y${this._fc(seg.y)}${feedSuffix}`);
+                } else {
+                    const arcCmd = seg.clockwise ? 'G02' : 'G03';
+                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._fc(seg.x)} Y${this._fc(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}${feedSuffix}`);
+                }
+            }
+        } else {
+            const abrasiveOff = this.machineProfile?.mCodes?.abrasiveOff || 'M09';
+            const abrasiveOn = this.machineProfile?.mCodes?.abrasiveOn || 'M08';
+            let isFirstOverall = true;
+            for (const bseg of bridgeSegs) {
+                if (bseg.type === 'cut') {
+                    const segs = this._processContourPoints(bseg.points);
+                    for (let i = 0; i < segs.length; i++) {
+                        const seg = segs[i];
+                        const feedSuffix = (isFirstOverall && i === 0) ? ` F=${contourFeedParam}` : '';
+                        if (seg.type === 'line') {
+                            lines.push(`N${this._lineNum++} G01 X${this._fc(seg.x)} Y${this._fc(seg.y)}${feedSuffix}`);
+                        } else {
+                            const arcCmd = seg.clockwise ? 'G02' : 'G03';
+                            lines.push(`N${this._lineNum++} ${arcCmd} X${this._fc(seg.x)} Y${this._fc(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}${feedSuffix}`);
+                        }
+                    }
+                    isFirstOverall = false;
+                } else {
+                    lines.push(`N${this._lineNum++} ${abrasiveOff}                            ; Steg — Abrasiv aus`);
+                    for (const p of bseg.points) {
+                        lines.push(`N${this._lineNum++} G01 X${this._fc(p.x)} Y${this._fc(p.y)}`);
+                    }
+                    lines.push(`N${this._lineNum++} ${abrasiveOn}                            ; Steg Ende — Abrasiv an`);
+                }
             }
         }
 
@@ -531,6 +571,9 @@ class SinumerikPostprocessor {
     _generateSlitContour(contour, contourNum) {
         const lines = [];
         const pts = contour.points;
+        if (contour.bridges?.length > 0) {
+            this._warnings.push(`Slit ${contourNum}: Bridges auf Slit-Konturen werden nicht unterstützt — werden ignoriert`);
+        }
         if (!pts || pts.length < 2) {
             this._warnings.push(`Slit ${contourNum}: Zu wenig Punkte (${pts?.length})`);
             return lines;
@@ -766,9 +809,10 @@ class SinumerikPostprocessor {
     _fc(value) {
         if (value == null || !isFinite(value)) {
             const msg = `KOORDINATEN-FEHLER: ungültiger Wert (${value})`;
-            console.error(`[PP V1.5] ${msg}`);
+            console.error(`[PP V1.7] ${msg}`);
             this._warnings.push(msg);
-            return '0.000';  // Fallback, aber Warnung ist gesetzt
+            this._hasFatalError = true;
+            return '0.000';  // Fallback, aber Export wird durch _hasFatalError blockiert
         }
         return value.toFixed(this.coordDecimals);
     }
@@ -806,6 +850,7 @@ class SinumerikPostprocessor {
         // Einzelnen Code für jeden Kopf generieren, dann zusammenführen
         this._lineNum = 0;
         this._warnings = [];
+        this._hasFatalError = false;
 
         const planName = (settings.planName || 'UNNAMED').toUpperCase().replace(/[^A-Z0-9_]/g, '_');
         const material = settings.material || 'AALLGEMEIN';
@@ -813,6 +858,20 @@ class SinumerikPostprocessor {
         const dicke = settings.dicke || 8.0;
         const rp = settings.technologyParams || {};
         const plate = this._getPlateSize(contours);
+
+        // Achsgrenzen-Check: letzter Kopf darf nicht über die Maschinen-Achsgrenze fahren
+        if (this.machineProfile?.axes) {
+            const offsetAxisKey = this.headAxis === 'X' ? 'X' : 'Y';
+            const axisLimit = this.machineProfile.axes[offsetAxisKey]?.max;
+            const plateExtent = offsetAxisKey === 'X' ? plate.width : plate.height;
+            const maxOffset = (this.headCount - 1) * this.headSpacing;
+            if (typeof axisLimit === 'number' && (plateExtent + maxOffset) > axisLimit) {
+                this._warnings.push(
+                    `KOORDINATEN-FEHLER: Letzter Kopf (Offset ${maxOffset.toFixed(1)}mm + Plattenmaß ${plateExtent.toFixed(1)}mm = ${(plateExtent + maxOffset).toFixed(1)}mm) überschreitet Achsgrenze ${offsetAxisKey}=${axisLimit}mm`
+                );
+                this._hasFatalError = true;
+            }
+        }
 
         let code = '';
         code += this._generateMPFHeader(planName, material, tafelName, plate, dicke);
@@ -862,6 +921,11 @@ class SinumerikPostprocessor {
         };
 
         console.log(`[PP V${SinumerikPostprocessor.VERSION}] Multi-Head: ${this.headCount} Köpfe, ${stats.contoursPerHead.join('/')} Konturen`);
+
+        if (this._hasFatalError) {
+            console.error(`[PP V${SinumerikPostprocessor.VERSION}] Multi-Head-Export blockiert — ungültige Koordinaten oder Achsgrenzen überschritten`);
+            return { code: '', warnings: [...this._warnings], stats };
+        }
         return { code, warnings: [...this._warnings], stats };
     }
 

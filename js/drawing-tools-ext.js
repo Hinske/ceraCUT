@@ -1,6 +1,7 @@
 /**
- * CeraCUT Drawing Tools Extension V1.7
+ * CeraCUT Drawing Tools Extension V1.8
  * Zusätzliche Zeichentools: Ellipse, Spline, Donut, XLine, OverlapBreak, Hatch
+ * V1.8: Fix — HatchTool.cancel() entfernt Farbpalette (war zuvor nur in finish(), blieb nach ESC sichtbar)
  * V1.7: SplineTool AutoCAD-Overhaul — Dual-Preview, Close-to-Start, Continuous Mode, FitPoints erhalten
  * V1.6: Hatch Farbpalette — Floating Toolbar mit 8 AutoCAD-Farben + Pattern-Auswahl
  * V1.5: Hatch als eigenständige CamContour (cuttingMode='none') — AutoCAD-konform
@@ -914,8 +915,14 @@ class HatchTool extends BaseTool {
         this.cmd?.setPrompt(`HATCH — IN geschlossenen Bereich klicken [${patternLabel[this.pattern]}] [S/L/C/D]:`);
         this.cmd?.log('▧ Schraffur: IN einen geschlossenen Bereich klicken → Füllung anwenden', 'info');
         this.cmd?.log('   Optionen: S=Solid  L=Linien  C=Kreuz  D=Punkte', 'info');
-        console.log('[HatchTool V1.6] gestartet, Pattern=' + this.pattern);
+        console.log('[HatchTool V1.7] gestartet, Pattern=' + this.pattern);
         this._showColorPalette();
+    }
+
+    // V1.7: Farbpalette auch beim Abbrechen (ESC/Tool-Wechsel) entfernen
+    cancel() {
+        this._removeColorPalette();
+        super.cancel();
     }
 
     // ═══ V1.6: Floating Farbpalette ═══

@@ -1,5 +1,9 @@
 /**
- * CeraCUT Server
+ * CeraCUT Server V1.3
+ * V1.3: Fix — safePath() prüft Symlink-Ziel via fs.realpathSync gegen DXF_ROOT,
+ *       Content-Disposition-Header filtert CR/LF (Header-Injection)
+ * Last Modified: 2026-06-23
+ * Build: 20260623-bugfixaudit
  *
  * Statischer Dateiserver + DXF-Browse-API für Netzlaufwerk-Zugriff.
  * Ersetzt `npx serve .` und stellt zusätzlich /api/dxf/* Endpunkte bereit.
@@ -173,6 +177,15 @@ function safePath(root, userPath) {
     if (!resolved.startsWith(root + path.sep) && resolved !== root) {
         return null;
     }
+    // Symlink-Schutz: falls der Pfad existiert, finalen Ziel-Pfad ebenfalls gegen root prüfen
+    try {
+        const real = fs.realpathSync(resolved);
+        if (!real.startsWith(root + path.sep) && real !== root) {
+            return null;
+        }
+    } catch {
+        // Pfad existiert (noch) nicht — lexikalischer Check oben reicht dann aus
+    }
     return resolved;
 }
 
@@ -278,7 +291,7 @@ function handleDXFFile(res, queryPath) {
             res.writeHead(200, {
                 'Content-Type': 'application/octet-stream',
                 'Content-Length': buffer.length,
-                'Content-Disposition': `inline; filename="${path.basename(filePath).replace(/"/g, '\\"')}"`,
+                'Content-Disposition': `inline; filename="${path.basename(filePath).replace(/[\r\n"]/g, '')}"`,
             });
             res.end(buffer);
         });

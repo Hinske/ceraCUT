@@ -1,5 +1,6 @@
 /**
- * CeraCUT Snap Manager V1.3
+ * CeraCUT Snap Manager V1.4
+ * V1.4: Fix — _collectAllPoints() gecacht (_pointsCache), lief zuvor bei jedem Mousemove neu
  * Erweitetes Object-Snap System (AutoCAD-Stil)
  * - Endpoint, Midpoint, Center, GeoCenter, Quadrant, Intersection, Perpendicular, Tangent, Nearest
  * - V1.1: Perpendicular + Tangent (7 Kern-Snaps)
@@ -77,12 +78,14 @@ class SnapManager {
     setContours(contours) {
         this._contours = contours || [];
         this._segmentCache = null; // V5.0: Cache invalidieren
+        this._pointsCache = null;  // V1.4: Cache invalidieren
     }
 
     /** Zusätzliche Drawing-Entities für Snapping */
     setDrawingEntities(entities) {
         this._drawingEntities = entities || [];
         this._segmentCache = null; // V5.0: Cache invalidieren
+        this._pointsCache = null;  // V1.4: Cache invalidieren
     }
 
     /** Ortho-Modus umschalten (F8) */
@@ -112,7 +115,8 @@ class SnapManager {
         // Alle Punkt-Quellen sammeln (V1.1: inkl. arcs-Daten)
         let allPoints;
         try {
-            allPoints = this._collectAllPoints();
+            if (!this._pointsCache) this._pointsCache = this._collectAllPoints();
+            allPoints = this._pointsCache;
         } catch (err) {
             console.error('[SnapManager] _collectAllPoints ERROR:', err);
             return null;

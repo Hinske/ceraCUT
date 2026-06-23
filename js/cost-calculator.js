@@ -1,5 +1,6 @@
 /**
- * CeraCUT Cost Calculator V1.1
+ * CeraCUT Cost Calculator V1.2
+ * V1.2: Fix — toter d.contour-Verweis entfernt, nutzt direkt d.type für disc/hole-Filter
  * Kosten- und Zeitberechnung für Wasserstrahlschneiden
  *
  * Berechnet Schnittzeit, Maschinenkosten, Materialkosten,
@@ -347,10 +348,10 @@ const CostCalculator = (() => {
         // ── Materialausnutzung ──
         // Disc-Konturen = Nutzfläche, Holes = Abfall innerhalb Discs
         const discArea = contourDetails
-            .filter(d => (d.contour ?? orderedContours[d.index])?.cuttingMode === 'disc')
+            .filter(d => d.type === 'disc')
             .reduce((s, d) => s + d.area, 0);
         const holeArea = contourDetails
-            .filter(d => (d.contour ?? orderedContours[d.index])?.cuttingMode === 'hole')
+            .filter(d => d.type === 'hole')
             .reduce((s, d) => s + d.area, 0);
         const usedArea = Math.max(0, discArea - holeArea);  // mm² Netto-Nutzfläche
         const wasteArea = sheetAreaMm2 - usedArea;  // mm² Abfall

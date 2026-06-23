@@ -1,51 +1,51 @@
 /**
- * CeraCUT Build Info V6.18
- * Version: V6.18
+ * CeraCUT Build Info V6.19
+ * Version: V6.19
  * Last Modified: 2026-06-23 MEZ
- * Build: 20260623-autocadfeel
+ * Build: 20260623-bugfixaudit
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.18',
-    build: '20260623-autocadfeel',
+    version: '6.19',
+    build: '20260623-bugfixaudit',
     date: '2026-06-23',
-    time: '00:00 MEZ',
+    time: '01:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'f10b730',
-        date: '2026-06-23 10:24:00 +0200',
-        message: 'feat: AutoCAD-Look&Feel V6.18 — Interaktion, Grips, Crosshair, Theme'
+        hash: '0d30c5d',
+        date: '2026-06-23 16:06:52 +0200',
+        message: 'fix: Code-Audit V6.19 — kritische und mittlere Bugfixes'
     },
 
     modules: {
-        'dxf-parser':         { version: '3.11', build: '20260324-splinegrip' },
-        'geometry':           { version: '2.11', build: '20260316-gapdetect' },
+        'dxf-parser':         { version: '3.12', build: '20260623-bugfixaudit' },
+        'geometry':           { version: '2.12', build: '20260623-bugfixaudit' },
         'pipeline':           { version: '3.7', build: '20260316-gapdetect' },
-        'cam-contour':        { version: '5.8', build: '20260323-splinetool' },
+        'cam-contour':        { version: '5.9', build: '20260623-bugfixaudit' },
         'canvas-renderer':    { version: '3.37', build: '20260623-autocadfeel' },
         'undo-manager':       { version: '1.1', build: '20260309-wizard' },
-        'sinumerik-pp':       { version: '1.6', build: '20260316-hatchentity' },
+        'sinumerik-pp':       { version: '1.7', build: '20260623-bugfixaudit' },
         'command-line':       { version: '1.4', build: '20260623-autocadfeel' },
-        'snap-manager':       { version: '1.3', build: '20260315-bugfix35' },
+        'snap-manager':       { version: '1.4', build: '20260623-bugfixaudit' },
         'geometry-ops':       { version: '2.5', build: '20260323-boundary' },
         'drawing-tools':      { version: '2.11', build: '20260623-autocadfeel' },
-        'drawing-tools-ext':  { version: '1.7', build: '20260323-splinetool' },
+        'drawing-tools-ext':  { version: '1.8', build: '20260623-bugfixaudit' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
-        'dxf-writer':         { version: '1.6', build: '20260326-ac1015fix' },
+        'dxf-writer':         { version: '1.7', build: '20260623-bugfixaudit' },
         'lead-profiles':      { version: '1.1', build: '20260315-intarsia20' },
-        'app':                { version: '6.15', build: '20260325-undoctrlz' },
+        'app':                { version: '6.16', build: '20260623-bugfixaudit' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
         'debug-monitor':      { version: '1.1', build: '20260324-gitcommit' },
         'nesting':            { version: '1.1', build: '20260315-bugfix35' },
         'toolpath-simulator': { version: '1.0', build: '20260309' },
-        'cost-calculator':    { version: '1.1', build: '20260315-bugfix35' },
+        'cost-calculator':    { version: '1.2', build: '20260623-bugfixaudit' },
         'machine-profiles':   { version: '1.0', build: '20260309' },
         'bridge-cutting':     { version: '1.0', build: '20260309' },
         'quality-zones':      { version: '1.1', build: '20260315-bugfix35' },
@@ -57,6 +57,19 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.19: Bugfix-Audit — geometry.js const-Reassignment-Crash in offsetPolygon() behoben (geometry V2.12)',
+        'V6.19: Bugfix-Audit — Lead-Kollisions-Warnung zeigte immer 0% (effectiveLength nie gesetzt), jetzt korrekt (cam-contour V5.9)',
+        'V6.19: Bugfix-Audit — dxf-parser.js meldet NaN-Koordinaten statt sie stillschweigend zu 0 zu kollabieren (dxf-parser V3.12)',
+        'V6.19: Bugfix-Audit — Sinumerik-PP blockiert Export bei NaN/Infinity-Koordinaten statt 0.000 zu exportieren (sinumerik-pp V1.7)',
+        'V6.19: Bugfix-Audit — Sinumerik-PP prüft Multi-Head-Achsgrenzen vor Export, blockiert bei Überschreitung (sinumerik-pp V1.7)',
+        'V6.19: Bugfix-Audit — Haltestege (Bridges) werden im G-Code berücksichtigt: Abrasiv aus/an über Steg-Segmente (sinumerik-pp V1.7)',
+        'V6.19: Bugfix-Audit — XSS-Lücken in Validation-Modal, Layer-Manager-Tabelle, Export-Vorschau geschlossen (app V6.16)',
+        'V6.19: Bugfix-Audit — server.js: Symlink-Bypass-Schutz + Content-Disposition-Header-Injection behoben (Server V1.3)',
+        'V6.19: Bugfix-Audit — CamContour.clone() überträgt startPointIndex (cam-contour V5.9)',
+        'V6.19: Bugfix-Audit — SnapManager cacht _collectAllPoints() statt bei jedem Mousemove neu zu berechnen (snap-manager V1.4)',
+        'V6.19: Bugfix-Audit — HatchTool.cancel() entfernt Farbpalette (war zuvor nur in finish(), blieb nach ESC sichtbar) (drawing-tools-ext V1.8)',
+        'V6.19: Bugfix-Audit — cost-calculator.js: toter d.contour-Verweis entfernt (cost-calculator V1.2)',
+        'V6.19: Bugfix-Audit — dxf-writer.js: Kreis-Validierungs-Fallback wird als Warnung sichtbar gemacht (dxf-writer V1.7)',
         'V6.18: AutoCAD-Look&Feel — Enter im Idle wiederholt letzten Befehl (drawing-tools V2.11)',
         'V6.18: AutoCAD-Look&Feel — Command-Echo "_LINE"-Stil in Command-Line (TOOL_ECHO_NAMES, constants V2.10, command-line V1.4)',
         'V6.18: AutoCAD-Look&Feel — Grip-Stil: hohle Quadrate, Cold/Hover/Hot-States (canvas-renderer V3.37)',

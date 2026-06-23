@@ -1,8 +1,9 @@
 /**
- * CeraCUT DXF Parser V3.11
- * Last Modified: 2026-03-24 MEZ
- * Build: 20260324-splinegrip
+ * CeraCUT DXF Parser V3.12
+ * Last Modified: 2026-06-23 MEZ
+ * Build: 20260623-bugfixaudit
  *
+ * V3.12: Fix — NaN-Koordinaten werden gezählt + als Warnung gemeldet (statt stillschweigend zu 0 zu kollabieren)
  * V3.11 Änderungen:
  *   - _fitPoints + _splineClosed Durchreichung in chainContours/_createContour
  *   - Gezeichnete Splines zeigen nach Selektion Fit-Point-Grips statt tessellierte Vertex-Grips
@@ -99,6 +100,7 @@ const DXFParser = {
     _blockDefinitions: {},
     _ignoredEntities: [],
     _entityStats: {},
+    _nanCoordCount: 0,
 
     parse(dxfContent, options = {}) {
         console.log('[DXF Parser V3.11] Starting parse...');
@@ -109,6 +111,7 @@ const DXFParser = {
             this._blockDefinitions = {};
             this._ignoredEntities = [];
             this._entityStats = {};
+            this._nanCoordCount = 0;
             
             this._parseBlocksSection(dxfContent);
 
@@ -232,6 +235,15 @@ const DXFParser = {
             });
         }
         
+        // Ungültige (NaN) Koordinaten in der Quelldatei
+        if (this._nanCoordCount > 0) {
+            warnings.push({
+                type: 'NAN_COORDINATES',
+                message: `${this._nanCoordCount} ungültige Koordinate(n) in der DXF-Datei wurden auf 0 gesetzt — Datei prüfen`,
+                count: this._nanCoordCount
+            });
+        }
+
         // TEXT ohne Font (BBox-Fallback)
         const textBBoxCount = contours.filter(c => c.sourceType === 'TEXT' && c.sourceText).length;
         if (textBBoxCount > 0) {
@@ -1346,7 +1358,10 @@ const DXFParser = {
         return bestMatch;
     },
 
-    _snap(value) { return isNaN(value) ? 0 : Math.round(value / this.TOLERANCES.SNAP) * this.TOLERANCES.SNAP; },
+    _snap(value) {
+        if (isNaN(value)) { this._nanCoordCount++; return 0; }
+        return Math.round(value / this.TOLERANCES.SNAP) * this.TOLERANCES.SNAP;
+    },
     _dist(p1, p2) { return Math.hypot(p2.x - p1.x, p2.y - p1.y); },
 
     _autoNormalizeEntities(entities) {

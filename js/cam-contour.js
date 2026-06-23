@@ -1,5 +1,6 @@
 /**
- * CeraCUT CamContour V5.8 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.9 - IGEMS-konformes Lead-In/Out System
+ * V5.9: Fix — effectiveLength wird bei Lead-Verkürzung gesetzt (Validation-Warnung zeigte immer 0%), clone() überträgt startPointIndex
  * Small-Hole: Center-Pierce bei kleinen RUNDEN Bohrungen (Aspekt < 2.5:1)
  * Corner-Lead: linear bei Ecken, Arc bei Segmenten
  * Collision-Detection V2: Distance-based, Lead-In/Out-aware, Fallback
@@ -1129,6 +1130,7 @@ class CamContour {
                 leadPath.piercingPoint = bestHit.point;
             }
             leadPath.shortened = true;
+            leadPath.effectiveLength = this._pathLength(leadPath.points);
         }
 
         return leadPath;
@@ -1566,6 +1568,7 @@ class CamContour {
             }
             leadPath.shortened = true;
             leadPath.multiContourCollision = true;
+            leadPath.effectiveLength = this._pathLength(leadPath.points);
             return true;
         }
         return false;
@@ -1949,6 +1952,7 @@ class CamContour {
             leadInLengthMax: this.leadInLengthMax
         });
         c.kerfSide = this.kerfSide;
+        c.startPointIndex = this.startPointIndex;
         c.leadManualOverride = this.leadManualOverride;
         c.areaClassApplied = this.areaClassApplied;
         c.kerfFlipped = this.kerfFlipped;
