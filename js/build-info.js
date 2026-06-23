@@ -1,30 +1,30 @@
 /**
- * CeraCUT Build Info V6.20
- * Version: V6.20
+ * CeraCUT Build Info V6.21
+ * Version: V6.21
  * Last Modified: 2026-06-23 MEZ
- * Build: 20260623-dxfblockowner
+ * Build: 20260623-multidoc
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.20',
-    build: '20260623-dxfblockowner',
+    version: '6.21',
+    build: '20260623-multidoc',
     date: '2026-06-23',
-    time: '02:00 MEZ',
+    time: '03:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'c5b93bf',
-        date: '2026-06-23 18:04:44 +0200',
-        message: 'fix: DXF-Export von AutoCAD 2017 nicht lesbar — BLOCK/ENDBLK Owner-Handle fehlte'
+        hash: '53c2618',
+        date: '2026-06-23 18:27:31 +0200',
+        message: 'feat: Multi-Dokument-Tabs — mehrere DXF-Dateien gleichzeitig offen'
     },
 
     modules: {
         'dxf-parser':         { version: '3.12', build: '20260623-bugfixaudit' },
         'geometry':           { version: '2.12', build: '20260623-bugfixaudit' },
         'pipeline':           { version: '3.7', build: '20260316-gapdetect' },
-        'cam-contour':        { version: '5.9', build: '20260623-bugfixaudit' },
+        'cam-contour':        { version: '5.10', build: '20260623-multidoc' },
         'canvas-renderer':    { version: '3.37', build: '20260623-autocadfeel' },
         'undo-manager':       { version: '1.1', build: '20260309-wizard' },
         'sinumerik-pp':       { version: '1.7', build: '20260623-bugfixaudit' },
@@ -39,7 +39,8 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.8', build: '20260623-dxfblockowner' },
         'lead-profiles':      { version: '1.1', build: '20260315-intarsia20' },
-        'app':                { version: '6.16', build: '20260623-bugfixaudit' },
+        'app':                { version: '6.17', build: '20260623-multidoc' },
+        'document-manager':   { version: '1.0', build: '20260623-multidoc' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
         'debug-monitor':      { version: '1.1', build: '20260324-gitcommit' },
@@ -57,6 +58,10 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.21: Feat — Multi-Dokument-Tabs: mehrere DXF-Dateien gleichzeitig offen (wie AutoCAD), neuer document-manager.js V1.0 (Document/DocumentManager, Swap-Pattern)',
+        'V6.21: Feat — Tabs werden in eigener IndexedDB "ceracut-tabs" persistiert und beim Neuladen wiederhergestellt (Undo-Historie bewusst ausgenommen)',
+        'V6.21: Feat — CamContour V5.10: toJSON()/fromJSON() für Dokument-Persistenz (denylist-basiert, Cache-Felder ausgeschlossen)',
+        'V6.21: Feat — Jede neu geöffnete Datei (Dialog/FSAPI/Server-Browse/Drag&Drop) öffnet einen neuen Tab; "Neu" erzeugt einen neuen Tab statt In-Place-Reset (app V6.17)',
         'V6.20: Fix — DXF-Export von AutoCAD 2017 nicht lesbar: BLOCK/ENDBLK in BLOCKS-Sektion hatten keinen Owner-Handle (330) zum BLOCK_RECORD, AC1015-Owner-Kette war unvollständig (dxf-writer V1.8)',
         'V6.20: Fix — OBJECTS-Root-Dictionary erhält expliziten Owner 330=0 (dxf-writer V1.8)',
         'V6.19: Bugfix-Audit — geometry.js const-Reassignment-Crash in offsetPolygon() behoben (geometry V2.12)',

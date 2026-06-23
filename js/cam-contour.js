@@ -1,5 +1,8 @@
 /**
- * CeraCUT CamContour V5.9 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.10 - IGEMS-konformes Lead-In/Out System
+ * V5.10: toJSON()/fromJSON() für Dokument-Persistenz (Multi-Tab) — denylist-basiert,
+ *        überträgt alle Datenfelder (auch extern angehängte wie sourceType/_splineData/
+ *        microjoints/nestingLevel) außer Cache-/Transient-Feldern
  * V5.9: Fix — effectiveLength wird bei Lead-Verkürzung gesetzt (Validation-Warnung zeigte immer 0%), clone() überträgt startPointIndex
  * Small-Hole: Center-Pierce bei kleinen RUNDEN Bohrungen (Aspekt < 2.5:1)
  * Corner-Lead: linear bei Ecken, Arc bei Segmenten
@@ -1971,6 +1974,37 @@ class CamContour {
         return c;
     }
 
+    /**
+     * Serialisiert alle Datenfelder (auch extern angehängte wie sourceType,
+     * _splineData, microjoints, nestingLevel) — denylist statt allowlist, damit
+     * neue/extern angehängte Properties automatisch mit-persistiert werden.
+     * Cache-/Transient-Felder werden ausgeschlossen (werden bei Bedarf neu berechnet).
+     */
+    toJSON() {
+        const data = {};
+        for (const key of Object.keys(this)) {
+            if (CamContour._TRANSIENT_KEYS.includes(key)) continue;
+            data[key] = this[key];
+        }
+        return data;
+    }
+
+    /** Rekonstruiert eine CamContour-Instanz aus toJSON()-Daten (V5.10 — Dokument-Persistenz) */
+    static fromJSON(data) {
+        const points = (data.points || []).map(p => ({ ...p }));
+        const c = new CamContour(points, {});
+        Object.assign(c, data);
+        c.points = points;
+        c.isSelected = false;
+        c.isHovered = false;
+        c._cachedKerfPolyline = null;
+        c._cacheKey = null;
+        c._cachedLeadInPath = null;
+        c._cachedLeadOutPath = null;
+        c._cachedOvercutPath = null;
+        return c;
+    }
+
     isNearPoint(point, tolerance = 5) {
         if (!point || !this.points || this.points.length < 2) return false;
         const result = Geometry.closestPointOnPolyline(point, this.points);
@@ -1991,5 +2025,11 @@ class CamContour {
 }
 
 CamContour.nextId = 1;
+
+// V5.10: Cache-/Transient-Felder, die toJSON() von der Persistenz ausschließt
+CamContour._TRANSIENT_KEYS = [
+    '_cachedKerfPolyline', '_cacheKey', '_cachedLeadInPath', '_cachedLeadOutPath',
+    '_cachedOvercutPath', 'isSelected', 'isHovered'
+];
 
 if (typeof module !== 'undefined' && module.exports) { module.exports = CamContour; }

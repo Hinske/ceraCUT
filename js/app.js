@@ -1,5 +1,8 @@
 /**
- * CeraCUT V6.16 - Main Application
+ * CeraCUT V6.17 - Main Application
+ * V6.17: Multi-Dokument-Tabs — DocumentManager integriert (openFilePicker() extrahiert,
+ *        loadDXFContent() öffnet jede neue Datei in einem eigenen Tab, "Neu" erzeugt
+ *        einen neuen Tab statt In-Place-Reset, Tabs werden via IndexedDB persistiert)
  * V6.16: Fix — XSS-Lücken geschlossen (sanitizeHTML in Validation-Modal, Layer-Manager-Tabelle, Export-Vorschau-Warnungen)
  * V6.15: Fix — Ctrl+Z/Y funktioniert jetzt auch wenn cmd-input Focus hat (Keyboard-Filter erweitert)
  * V6.15: Fix — Layer-Dropdown zeigt alle Layer (auch leere manuell erstellte)
@@ -28,8 +31,8 @@
  * V3.1: Undo/Redo (Command Pattern), Clipboard (Copy/Cut/Paste)
  * V3.14: CAM-Tab Redesign — Außen/Innen-Lead, Material-Gruppe, Piercing-Typen, Speed-Info
  * V4.5: IGEMS 4-Slot Lead-System — Alternativ-Lead Fallback bei Kollision
- * Last Modified: 2026-03-16 MEZ
- * Build: 20260316-validate
+ * Last Modified: 2026-06-23 MEZ
+ * Build: 20260623-multidoc
  */
 
 // XSS Protection
@@ -154,7 +157,10 @@ class CeraCutApp {
 
         // V3.11: Image Underlay Manager
         this.imageUnderlayManager = new ImageUnderlayManager(this);
-        
+
+        // V6.20: Multi-Dokument-Tabs (mehrere DXF gleichzeitig offen, IndexedDB-Persistenz)
+        this.documentManager = (typeof DocumentManager !== 'undefined') ? new DocumentManager(this) : null;
+
         // V3.1: Verifikation dass Undo-Integration geladen ist
         this.init();
     }
@@ -182,7 +188,16 @@ class CeraCutApp {
         this.bindDrawingEvents();    // V3.4
         this._updateSnapModesDisplay();  // V6.10: Snap-Modi-Statusbar
 
-        this.updateStepUI();
+        // V6.20: Tabs aus IndexedDB wiederherstellen (ruft intern updateStepUI()/onStepEnter()
+        // für das aktive Dokument auf) — ohne DocumentManager Fallback auf einfaches updateStepUI()
+        if (this.documentManager) {
+            this.documentManager.restoreAll().catch(err => {
+                console.warn('[App V6.20] Dokument-Restore fehlgeschlagen:', err);
+                this.updateStepUI();
+            });
+        } else {
+            this.updateStepUI();
+        }
 
         // V5.6: Workspace wiederherstellen (async, non-blocking)
         if (this.projectManager) {
@@ -2668,25 +2683,7 @@ class CeraCutApp {
         const canvasArea = document.getElementById('canvas-area');
         
         // File-Open: showOpenFilePicker (für DirHandle + FileHandle) oder Fallback auf <input>
-        const openFile = async () => {
-            if (window.showOpenFilePicker) {
-                try {
-                    const [fileHandle] = await window.showOpenFilePicker({
-                        id: 'ceracut-dxf',
-                        startIn: this._lastDirHandle || 'documents'
-                    });
-                    this._dxfFileHandle = fileHandle;  // Handle merken für Strg+S
-                    const file = await fileHandle.getFile();
-                    this.loadFile(file);
-                    console.log('[App] DXF geöffnet via File Picker, Handle gespeichert');
-                    return;
-                } catch (err) {
-                    if (err.name === 'AbortError') return;
-                    console.warn('[App] showOpenFilePicker fehlgeschlagen, Fallback:', err);
-                }
-            }
-            fileInput?.click();
-        };
+        const openFile = () => this.openFilePicker();
         uploadArea?.addEventListener('click', openFile);
         dropZone?.addEventListener('click', openFile);
         document.getElementById('start-hint')?.addEventListener('click', openFile);
@@ -2741,6 +2738,28 @@ class CeraCutApp {
         });
     }
     
+    /** File-Open: showOpenFilePicker (für DirHandle + FileHandle) oder Fallback auf <input> (V6.20) */
+    async openFilePicker() {
+        const fileInput = document.getElementById('file-input');
+        if (window.showOpenFilePicker) {
+            try {
+                const [fileHandle] = await window.showOpenFilePicker({
+                    id: 'ceracut-dxf',
+                    startIn: this._lastDirHandle || 'documents'
+                });
+                this._dxfFileHandle = fileHandle;  // Handle merken für Strg+S
+                const file = await fileHandle.getFile();
+                this.loadFile(file);
+                console.log('[App] DXF geöffnet via File Picker, Handle gespeichert');
+                return;
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                console.warn('[App] showOpenFilePicker fehlgeschlagen, Fallback:', err);
+            }
+        }
+        fileInput?.click();
+    }
+
     loadFile(file) {
         if (!file.name.toLowerCase().endsWith('.dxf')) {
             this.showToast('Bitte eine DXF-Datei auswählen', 'error');
@@ -2769,6 +2788,10 @@ class CeraCutApp {
      * @param {string} sizeKB - Dateigröße in KB (für Anzeige)
      */
     loadDXFContent(filename, content, sizeKB) {
+        // V6.20: Jede neu geöffnete Datei bekommt einen eigenen Tab — außer dem
+        // allerersten leeren Start-Tab, der einmalig wiederverwendet wird.
+        this.documentManager?.ensureTargetForNewFile();
+
         this.dxfFileName = filename;
         this.loadedFileName = filename;
         this.currentProjectName = filename;
@@ -2793,8 +2816,9 @@ class CeraCutApp {
         if (planInput) planInput.value = filename.replace(/\.dxf$/i, '').toUpperCase();
 
         this.showToast(`${filename} geladen`, 'success');
+        this.documentManager?._renderTabs();
     }
-    
+
     parseDXF() {
         if (!this.dxfContent || typeof DXFParser === 'undefined') {
             this.showToast('DXF-Parser nicht verfügbar', 'error');

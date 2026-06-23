@@ -599,6 +599,17 @@ html, body {
 
 .file-tab:hover .close-btn, .file-tab.active .close-btn { opacity: 1; }
 
+.file-tab-label { overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+
+/* V6.20: "+"-Button zum Öffnen eines neuen Tabs */
+.file-tab-add {
+    height: 22px; width: 22px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--file-tab-text);
+    font-size: 14px; cursor: pointer; border-radius: 2px; flex-shrink: 0;
+}
+.file-tab-add:hover { background: var(--file-tab-bg); color: #ccc; }
+
 /* ═══════════════════════════════════════════════════════════════
    MAIN CONTENT LAYOUT
    ═══════════════════════════════════════════════════════════════ */
