@@ -1,5 +1,5 @@
 /**
- * CeraCUT Lead Profiles V1.2
+ * CeraCUT Lead Profiles V1.3
  *
  * Profil-basierte Lead-Verwaltung für Wasserstrahl-CAM.
  * Built-in Profile für typische Material/Dicke-Kombinationen.
@@ -8,18 +8,25 @@
  * Persistenz via localStorage.
  * V1.2: Aktive Profil-Auswahl (ACTIVE_KEY) pro User (_userKey()) — die Profil-
  *       Liste selbst (STORAGE_KEY) bleibt firmenweit geteilt (Login/User-Management V6.32)
+ * V1.3: Lead-Überarbeitung — Custom-Profil-Migration/-Validierung beim Laden
+ *       (_migrateProfile, verhindert Crash bei alten Profilen ohne smallHole/slit/alt),
+ *       Area-Class-Schutz (areaClassApplied wird von applyBatchRules nicht mehr
+ *       überschrieben), isModified() prüft jetzt auch Piercing-Zeiten + Lead-Längen-
+ *       Grenzen, Lead-Out wird in Small-Hole/Slit-Zweigen mitgesetzt (war zuvor nur
+ *       im Normalzweig), smallHole.strategy ausgewertet, DEFAULT_PROFILE_ID-Konstante
  *
  * Last Modified: 2026-06-24
- * Build: 20260624-userlogin
+ * Build: 20260624-leadoverhaul
  */
 
 const LeadProfiles = (() => {
     'use strict';
 
-    const VERSION = '1.2';
+    const VERSION = '1.3';
     const STORAGE_KEY = 'ceracut_lead_profiles';
     const ACTIVE_KEY = 'ceracut_active_lead_profile';
     const PREFIX = `[LeadProfiles V${VERSION}]`;
+    const DEFAULT_PROFILE_ID = 'builtin-stahl-mittel';
 
     /** Pro-User-Namespacing für die aktive Profil-Auswahl (Profil-Liste bleibt global). */
     function _userKey(base) {
@@ -270,8 +277,24 @@ const LeadProfiles = (() => {
     // INIT / LADEN / SPEICHERN
     // ════════════════════════════════════════════════════════════════
 
+    /**
+     * V1.3: Migration/Validierung eines aus localStorage geladenen Custom-Profils.
+     * Aeltere Profile (vor Einfuehrung von smallHole/slit/alt) bekommen fehlende
+     * Sektionen vom Default-Profil ergaenzt, damit applyBatchRules() nicht auf
+     * undefined-Properties zugreift.
+     */
+    function _migrateProfile(p, defaults) {
+        p.ext = p.ext || { ...defaults.ext };
+        p.int = p.int || { ...defaults.int };
+        p.alt = p.alt || { ...defaults.alt };
+        p.smallHole = p.smallHole || { ...defaults.smallHole };
+        p.slit = p.slit || { ...defaults.slit };
+        return p;
+    }
+
     function init() {
         _profiles = _createBuiltinProfiles();
+        const defaults = _profiles.find(p => p.id === DEFAULT_PROFILE_ID) || _profiles[0];
 
         // Custom-Profile aus localStorage laden
         try {
@@ -280,7 +303,12 @@ const LeadProfiles = (() => {
                 const custom = JSON.parse(stored);
                 if (Array.isArray(custom)) {
                     custom.forEach(p => {
+                        if (!p || typeof p !== 'object' || !p.id) {
+                            console.warn(`${PREFIX} Ungueltiges Custom-Profil ignoriert:`, p);
+                            return;
+                        }
                         p.isBuiltin = false;
+                        _migrateProfile(p, defaults);
                         _profiles.push(p);
                     });
                     console.debug(`${PREFIX} ${custom.length} Benutzerprofile geladen`);
@@ -291,7 +319,7 @@ const LeadProfiles = (() => {
         }
 
         // Aktives Profil laden
-        _activeProfileId = localStorage.getItem(_userKey(ACTIVE_KEY)) || 'builtin-stahl-mittel';
+        _activeProfileId = localStorage.getItem(_userKey(ACTIVE_KEY)) || DEFAULT_PROFILE_ID;
         console.debug(`${PREFIX} Initialisiert — ${_profiles.length} Profile, aktiv: ${_activeProfileId}`);
     }
 
@@ -356,7 +384,7 @@ const LeadProfiles = (() => {
         _profiles.splice(idx, 1);
         _saveCustomToStorage();
         if (_activeProfileId === id) {
-            _activeProfileId = 'builtin-stahl-mittel';
+            _activeProfileId = DEFAULT_PROFILE_ID;
             localStorage.setItem(_userKey(ACTIVE_KEY), _activeProfileId);
         }
         console.log(`${PREFIX} Benutzerprofil gelöscht: ${id}`);
@@ -370,7 +398,8 @@ const LeadProfiles = (() => {
         if (!profile) return false;
         const extKeys = ['leadInType', 'leadInLength', 'leadInRadius', 'leadInAngle',
                          'leadOutLength', 'overcutLength', 'piercingType', 'preferCorners',
-                         'leadInDynamic'];
+                         'leadInDynamic', 'piercingStationaryTime', 'piercingCircularRadius',
+                         'piercingCircularTime', 'leadInLengthMin', 'leadInLengthMax'];
         const altKeys = ['altLeadEnabled', 'altLeadType', 'altLeadInLength', 'altLeadInAngle',
                          'altLeadOutLength', 'altOvercutLength'];
 
@@ -434,6 +463,14 @@ const LeadProfiles = (() => {
                 return;
             }
 
+            // Skip: Flächenklasse hat bereits Auto-Lead gesetzt — Batch-Profil würde das
+            // bewusst gesetzte Ergebnis stillschweigend überschreiben
+            if (c.areaClassApplied) {
+                details.push(`${c.name}: übersprungen (Flächenklasse aktiv)`);
+                skipped++;
+                return;
+            }
+
             // Skip: nicht schneidbar
             if (!c.isClosed && c.cuttingMode !== 'slit') {
                 skipped++;
@@ -442,8 +479,10 @@ const LeadProfiles = (() => {
 
             // Slit-Konturen
             if (c.cuttingMode === 'slit') {
-                c.leadInType = profile.slit.leadInType || 'on_geometry';
-                c.overcutLength = profile.slit.overcutLength ?? 0;
+                const slitSection = profile.slit || {};
+                c.leadInType = slitSection.leadInType || 'on_geometry';
+                c.leadOutType = c.leadInType;
+                c.overcutLength = slitSection.overcutLength ?? 0;
                 c.leadOutLength = 0;
                 c._cachedLeadInPath = null;
                 c._cachedLeadOutPath = null;
@@ -453,16 +492,23 @@ const LeadProfiles = (() => {
                 return;
             }
 
-            // Small Hole Check
-            if (c.cuttingMode === 'hole' && profile.smallHole) {
+            // Small Hole Check — V1.3: smallHole.strategy ausgewertet (bisher totes Feld).
+            // Aktuell einzige unterstützte Strategie: 'center_pierce'. Unbekannte/zukünftige
+            // Strategien fallen NICHT auf die Small-Hole-Regel zurück (kein stilles Verhalten).
+            const smallHoleStrategy = profile.smallHole?.strategy || 'center_pierce';
+            if (c.cuttingMode === 'hole' && profile.smallHole?.thresholdDiameter !== undefined
+                && smallHoleStrategy === 'center_pierce') {
                 const diameter = _estimateDiameter(c);
                 if (diameter > 0 && diameter < profile.smallHole.thresholdDiameter) {
-                    // Center-Pierce: kurze Linear-Leads
+                    // Center-Pierce: kurze Linear-Leads (Lead-Out spiegelt Lead-In, Parität mit _applyProfileSection)
                     c.leadInType = 'linear';
                     c.leadInLength = Math.min(diameter * 0.3, 2.0);
                     c.leadInRadius = 0;
                     c.leadInAngle = 45;
+                    c.leadOutType = 'linear';
                     c.leadOutLength = Math.min(diameter * 0.2, 1.5);
+                    c.leadOutRadius = 0;
+                    c.leadOutAngle = 45;
                     c.overcutLength = 0.3;
                     c.piercingType = 'auto';
                     c.preferCorners = false;

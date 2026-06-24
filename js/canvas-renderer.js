@@ -1,7 +1,9 @@
 /**
- * CeraCUT V3.38 - Canvas Renderer
+ * CeraCUT V3.39 - Canvas Renderer
  * Features: Selection, Lead-In/Out, Overcut, Micro-Joints, Travel Paths, Order Numbers,
  *           Startpunkt-Drag im Anschuss-Modus, SLIT Support
+ * V3.39: _getLeadColor() kennt jetzt isFallbackCenterExit (neues Lead-Out-Fallback-Flag
+ *        aus cam-contour.js V5.12) — sonst falsche Farbe statt Fallback-Kennzeichnung
  * V3.38: Theme-Key pro User (_userKey(), Login/User-Management V6.32)
  * V3.37: AutoCAD-Grip-Stil (hohle Quadrate, Cold/Hover/Hot) + Vollbild-Fadenkreuz bei aktivem Tool
  * V3.36: edgeOnly — Window-Selection + Rechtsklick funktionieren im Inneren geschlossener Konturen
@@ -1502,7 +1504,7 @@ class CanvasRenderer {
      */
     _getLeadColor(leadPath, direction) {
         if (!leadPath) return direction === 'in' ? this.colors.leadIn : this.colors.leadOut;
-        if (leadPath.isFallbackCenterPierce) return this.colors.leadFallback;
+        if (leadPath.isFallbackCenterPierce || leadPath.isFallbackCenterExit) return this.colors.leadFallback;
         if (leadPath.shortened)              return this.colors.leadShortened;
         if (leadPath.isAlternative)          return this.colors.leadAlternative;
         if (leadPath.isRotated)              return this.colors.leadRotated;

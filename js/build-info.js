@@ -1,33 +1,33 @@
 /**
- * CeraCUT Build Info V6.33
- * Version: V6.33
+ * CeraCUT Build Info V6.34
+ * Version: V6.34
  * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-cadimprovements7
+ * Build: 20260624-leadoverhaul
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.33',
-    build: '20260624-cadimprovements7',
+    version: '6.34',
+    build: '20260624-leadoverhaul',
     date: '2026-06-24',
-    time: '18:30 MEZ',
+    time: '20:15 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '5c59b57',
-        date: '2026-06-24 16:29:59 +0200',
-        message: 'feat: Login + Benutzerverwaltung, CAD-Tools Abschnitt 7 komplett'
+        hash: 'cab0996',
+        date: '2026-06-24 18:52:50 +0200',
+        message: 'fix: Lead-In/Out-System überarbeitet — Radius-0-Bug, Lead-Out-Parität, Profil-Robustheit'
     },
 
     modules: {
         'dxf-parser':         { version: '3.15', build: '20260624-gapfix' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.8', build: '20260624-gapfix' },
-        'cam-contour':        { version: '5.11', build: '20260624-gapfix' },
-        'canvas-renderer':    { version: '3.38', build: '20260624-userlogin' },
+        'cam-contour':        { version: '5.12', build: '20260624-leadoverhaul' },
+        'canvas-renderer':    { version: '3.39', build: '20260624-leadoverhaul' },
         'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
-        'sinumerik-pp':       { version: '1.7', build: '20260623-bugfixaudit' },
+        'sinumerik-pp':       { version: '1.8', build: '20260624-leadoverhaul' },
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.4', build: '20260623-bugfixaudit' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
@@ -38,7 +38,7 @@ const CERACUT_BUILD = {
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.9', build: '20260624-orphanlayer' },
-        'lead-profiles':      { version: '1.2', build: '20260624-userlogin' },
+        'lead-profiles':      { version: '1.3', build: '20260624-leadoverhaul' },
         'app':                { version: '6.21', build: '20260624-cadimprovements7' },
         'document-manager':   { version: '1.1', build: '20260623-camsetupgate' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
@@ -63,6 +63,23 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.34: Fix/Feat — Lead-In/Out-System überarbeitet (Audit ergab mehrere Bugs/Asymmetrien): ' +
+        '(1) Radius-0-Bug: _calcArcLeadIn/_calcArcLeadOut kollabierten bei leadInRadius=0 (über Properties-Panel erreichbar, min="0") ' +
+        'das Bogenzentrum auf den Entry-/Exit-Punkt, wodurch entryAngle=atan2(0,0)=0 IMMER galt statt tangential zur ' +
+        'tatsächlichen Schnittrichtung — Lead degenerierte zu einer Linie Richtung 0°/+X. Beide Funktionen weichen jetzt bei ' +
+        'radius<=1e-6 auf einen korrekten tangentialen Lead aus. ' +
+        '(2) Lead-Out hatte keine der Sicherheitsnetze von Lead-In: getLeadOutPath() bekommt jetzt dieselbe Alt-Lead- + ' +
+        'Center-Exit-Fallback-Kette, checkMultiContourCollision() bekommt Dog-Leg-Routing für Lead-Out (_tryDogLegLeadOut, neu) ' +
+        'statt nur stumpfes Kürzen bis zur Quasi-Null-Länge. leadOutType unterstützt jetzt auch tangent/on_geometry ' +
+        '(war über leadOutType=leadInType in app.js/lead-profiles.js erreichbar, fiel aber lautlos auf linear zurück). ' +
+        '(3) lead-profiles.js: applyBatchRules() crashte bei alten/korrupten Custom-Profilen ohne smallHole/slit/alt-Sektion ' +
+        '— init() migriert/validiert jetzt beim Laden (_migrateProfile). Area-Class-Auto-Leads (areaClassApplied) werden nicht ' +
+        'mehr von Batch-Profilen überschrieben. isModified() prüft jetzt auch Piercing-Zeiten + Lead-Längen-Grenzen. Lead-Out ' +
+        'wird in Small-Hole/Slit-Zweigen jetzt mitgesetzt (vorher nur im Normalzweig) — verhinderte Vermischung aus ' +
+        'unterschiedlichen Profilen. smallHole.strategy ausgewertet (war totes Feld). ' +
+        '(4) sinumerik-postprocessor.js: unveränderte Arc-Leads nutzen jetzt die exakten arcCenter/arcRadius/arcSweepCCW-' +
+        'Metadaten direkt für G02/G03 statt die Tessellierung neu zu fitten (Diskrepanz-Risiko Vorschau vs. Maschinencode). ' +
+        '(cam-contour V5.12, lead-profiles V1.3, sinumerik-pp V1.8, canvas-renderer V3.39)',
         'V6.33: Feat — CAD-Improvements Abschnitt 7 komplett abgearbeitet: LineTool setzt bei Enter ohne Eingabe vom letzten Linie/Bogen/Polylinie-Endpunkt fort (DrawingToolManager._lastDrawEndpoint, AutoCAD-LASTPOINT-Verhalten); ModificationTool (Move/Copy/Rotate/Mirror/Scale/Offset/Erase/Explode/Join) akzeptiert jetzt ALL (alle Konturen) und L (zuletzt erzeugte Kontur, app.lastCreatedContour) zusätzlich zu P (Vorherige); RectangleTool bekommt F(illet)/C(hamfer)/R(otation)-Optionen vor der 2. Ecke (nutzt GeometryOps.filletPolyline/neues chamferPolyline + ModificationTool.rotatePoints); PolylineTool-Bogen-Modus (A) erzeugt jetzt tatsächlich Bögen (3-Punkt-Bogen pro Segment: letzter Vertex + Durchgangspunkt + Endpunkt, segments[] statt flachem points[]); ArcTool bekommt 7 neue Konstruktionsarten (SCE/SCA/SCL/SEA/SED/SER/CSE) nach dem CircleTool-Submodus-Vorbild — alle Formeln vorab gegen bekannte geometrische Fälle verifiziert. Nebenbei gefixt: GeometryOps.filletPolyline() verarbeitete bei geschlossenen Konturen die erste Ecke doppelt (off-by-one bei der Schließpunkt-Erkennung) — betraf auch das bestehende FilletTool (geometry-ops V2.6, drawing-tools V2.15, app V6.21)',
         'V6.32: Feat — Login + Benutzerverwaltung: Cookie-Session (server.js, lib/user-store.js, lib/session-store.js, lib/auth.js), neue Routen /api/auth/{login,logout,me} + /api/admin/users* (Rolle admin), / und /api/dxf/* sind jetzt gegated. Server injiziert window.CeraCutCurrentUser direkt in index.html (vor allen Script-Tags), damit Theme/aktives Lead-/Maschinen-Profil pro User schon beim ersten Render korrekt aufgelöst werden (kein Async-Fetch-Wettlauf mit den selbstinitialisierenden IIFEs in lead-profiles.js/machine-profiles.js). Neue Seiten login.html + admin-users.html. Profil-Listen (Maschinenpark, Lead-Presets) bleiben firmenweit geteilt, nur die aktive Auswahl ist pro User (app V6.20, canvas-renderer V3.38, machine-profiles V1.1, lead-profiles V1.2, dxf-browser V1.1, server V1.4)',
         'V6.31: Feat — CircleTool TTT (Tan,Tan,Tan) fertiggestellt: 3 beliebige Tangenten-Objekte (Linie/Kreis gemischt) anklicken, Kreis wird automatisch berechnet. Verallgemeinertes Apollonius-Problem über Newton-Raphson auf (x,y,r) mit 8 Vorzeichen-Kombinationen (innen-/außen-tangential pro Objekt), Lösungsauswahl wie beim bestehenden TTR-Tool über Nähe zu den 3 Klickpunkten. War zuvor nur ein Menüpunkt mit "noch nicht implementiert"-Warnung (drawing-tools V2.14)',

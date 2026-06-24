@@ -1,5 +1,12 @@
 /**
- * CeraCUT CamContour V5.11 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.12 - IGEMS-konformes Lead-In/Out System
+ * V5.12: Lead-Überarbeitung — (1) Radius-0-Guard in _calcArcLeadIn/_calcArcLeadOut
+ *        (kollabierendes Bogenzentrum erzeugte entryAngle=atan2(0,0)=0 IMMER statt
+ *        tangential zur Schnittrichtung), (2) Lead-Out Sicherheitsnetz-Parität mit
+ *        Lead-In: Alt-Lead-Fallback + Center-Exit-Fallback in getLeadOutPath(),
+ *        Dog-Leg-Routing (_tryDogLegLeadOut) in checkMultiContourCollision(),
+ *        leadOutType unterstützt jetzt auch 'tangent'/'on_geometry' (war lautlos
+ *        auf 'linear' degradiert, obwohl über leadOutType=leadInType erreichbar)
  * V5.11: entitySeams[] Property — echte Naht-Distanzen aus DXFParser.chainContours() (statt
  *        blinder Punktlisten-Scan), Basis für Gap-Erkennung in ceracut-pipeline.js V3.8
  * V5.10: toJSON()/fromJSON() für Dokument-Persistenz (Multi-Tab) — denylist-basiert,
@@ -533,6 +540,28 @@ class CamContour {
         const radius = this.leadInRadius;
         const totalLength = this.leadInLength;
 
+        // V5.12 Fix: radius<=0 würde Bogenzentrum auf Entry-Punkt kollabieren lassen
+        // (atan2(0,0)=0 IMMER, unabhängig von der tatsächlichen Schnittrichtung) →
+        // degeneriert auf reinen Tangenten-Lead statt dem Bogen-Pfad zu folgen.
+        if (radius <= 1e-6) {
+            const pierce = {
+                x: entry.x - tangent.x * totalLength,
+                y: entry.y - tangent.y * totalLength
+            };
+            return {
+                points: [pierce, { x: entry.x, y: entry.y }],
+                piercingPoint: pierce,
+                entryPoint: { x: entry.x, y: entry.y },
+                arcCenter: { x: entry.x, y: entry.y },
+                arcRadius: 0,
+                arcStartAngle: 0,
+                arcEndAngle: 0,
+                arcSweepCCW: true,
+                hasLinePortion: totalLength > 0.1,
+                type: 'arc'
+            };
+        }
+
         // Bogenzentrum auf der Verschnittseite
         const cx = entry.x + normal.x * radius;
         const cy = entry.y + normal.y * radius;
@@ -860,6 +889,9 @@ class CamContour {
 
     getLeadOutPath() {
         if (this._cachedLeadOutPath) return this._cachedLeadOutPath;
+        // Offene Konturen (Slit) brauchen keinen Lead-Out: das Schneiden endet am
+        // letzten Punkt des Pfads, der Rückzug erfolgt inkrementell ohne Kerf
+        // (siehe SinumerikPostprocessor._calcSlitRetractDirection / G91 G40).
         if (!this.isClosed) return null;
 
         const offsetResult = this.getKerfOffsetPolyline();
@@ -907,18 +939,103 @@ class CamContour {
         // 4. Lead-Out berechnen
         let leadPath;
         switch (effectiveType) {
-            case 'arc':
-                leadPath = this._arcLeadOutWithFallback(exitPoint, exitTangent, normal, pts);
-                break;
             case 'linear':
-            default:
                 leadPath = this._calcLinearLeadOut(exitPoint, exitTangent, normal);
                 leadPath = this._shortenLeadIfCollision(leadPath, pts);
                 break;
+            case 'arc':
+                leadPath = this._arcLeadOutWithFallback(exitPoint, exitTangent, normal, pts);
+                break;
+            case 'tangent':
+                leadPath = this._calcTangentLeadOut(exitPoint, exitTangent, normal);
+                leadPath = this._shortenLeadIfCollision(leadPath, pts);
+                break;
+            case 'on_geometry':
+                leadPath = this._calcOnGeometryLeadOut(exitPoint);
+                break;
+            default:
+                leadPath = this._arcLeadOutWithFallback(exitPoint, exitTangent, normal, pts);
+        }
+
+        // V5.12: Alt-Lead Fallback bei starker Kollision — Parität mit Lead-In (siehe getLeadInPath)
+        if (leadPath?.shortened && this.altLeadEnabled) {
+            const primaryLen = this._pathLength(leadPath.points);
+            const requestedLen = this.leadOutLength;
+            if (primaryLen < requestedLen * 0.4) {
+                const altPath = this._tryAlternativeLeadOut(exitPoint, exitTangent, normal, pts);
+                if (altPath && (!altPath.shortened || this._pathLength(altPath.points) > primaryLen)) {
+                    leadPath = altPath;
+                    console.debug(`[CamContour V5.12] Alt-Lead-Out: ${this.name} (${primaryLen.toFixed(1)}mm < 40% von ${requestedLen}mm)`);
+                }
+            }
+        }
+
+        // V5.12: Letzter Fallback — Center-Exit wenn Lead-Out immer noch stark kollidiert
+        if (leadPath?.shortened && this.altLeadEnabled) {
+            const finalLen = this._pathLength(leadPath.points);
+            if (finalLen < 0.5) {
+                leadPath = this._calcCenterExitLeadOut(exitPoint, pts);
+                leadPath.isFallbackCenterExit = true;
+                console.debug(`[CamContour V5.12] Center-Exit Fallback: ${this.name}`);
+            }
         }
 
         this._cachedLeadOutPath = leadPath;
         return leadPath;
+    }
+
+    /**
+     * TANGENTIAL LEAD-OUT - Gerade weiter in Schnittrichtung (Pendant zu _calcTangentLeadIn)
+     */
+    _calcTangentLeadOut(exit, tangent, normal) {
+        const length = this.leadOutLength;
+        const endPoint = {
+            x: exit.x + tangent.x * length,
+            y: exit.y + tangent.y * length
+        };
+        return {
+            points: [{ x: exit.x, y: exit.y }, endPoint],
+            endPoint,
+            type: 'tangent'
+        };
+    }
+
+    /**
+     * ON-GEOMETRY LEAD-OUT (IGEMS Piercing Type 0) - Kein sichtbarer Lead-Out (Pendant zu _calcOnGeometryLead)
+     */
+    _calcOnGeometryLeadOut(exit) {
+        return {
+            points: [{ x: exit.x, y: exit.y }],
+            endPoint: { x: exit.x, y: exit.y },
+            type: 'on_geometry'
+        };
+    }
+
+    /**
+     * V5.12: Alternativ-Lead-Out berechnen — Pendant zu _tryAlternativeLeadIn.
+     */
+    _tryAlternativeLeadOut(exit, tangent, normal, contourPts) {
+        const orig = {
+            type: this.leadOutType,
+            length: this.leadOutLength
+        };
+
+        this.leadOutType = this.altLeadType;
+        this.leadOutLength = this.altLeadOutLength;
+
+        let altPath;
+        if (this.altLeadType === 'arc' && this.altLeadOutLength > 0 && this.leadOutRadius > 0) {
+            altPath = this._arcLeadOutWithFallback(exit, tangent, normal, contourPts);
+        } else {
+            altPath = this._calcLinearLeadOut(exit, tangent, normal);
+            altPath = this._shortenLeadIfCollision(altPath, contourPts);
+        }
+
+        this.leadOutType = orig.type;
+        this.leadOutLength = orig.length;
+
+        if (altPath) altPath.isAlternative = true;
+        return altPath;
     }
 
     _calcLinearLeadOut(exit, tangent, normal) {
@@ -943,6 +1060,27 @@ class CamContour {
     _calcArcLeadOut(exit, tangent, normal) {
         const radius = this.leadOutRadius;
         const totalLength = this.leadOutLength;
+
+        // V5.12 Fix: radius<=0 würde Bogenzentrum auf Exit-Punkt kollabieren lassen
+        // (atan2(0,0)=0 IMMER, unabhängig von der tatsächlichen Schnittrichtung) →
+        // degeneriert auf reinen Tangenten-Lead statt dem Bogen-Pfad zu folgen.
+        if (radius <= 1e-6) {
+            const endPoint = {
+                x: exit.x + tangent.x * totalLength,
+                y: exit.y + tangent.y * totalLength
+            };
+            return {
+                points: [{ x: exit.x, y: exit.y }, endPoint],
+                endPoint,
+                arcCenter: { x: exit.x, y: exit.y },
+                arcRadius: 0,
+                arcStartAngle: 0,
+                arcEndAngle: 0,
+                arcSweepCCW: true,
+                hasLinePortion: totalLength > 0.1,
+                type: 'arc'
+            };
+        }
 
         // Bogenzentrum auf der Verschnittseite
         const cx = exit.x + normal.x * radius;
@@ -1216,16 +1354,25 @@ class CamContour {
             }
         }
 
-        // Lead-Out prüfen — nur konventionelles Shortening (kein Routing)
+        // Lead-Out prüfen — V5.12: Dog-Leg-Routing-Parität mit Lead-In (Strategy A/
+        // Startpunkt-Rotation bewusst ausgelassen — würde auch den ggf. bereits
+        // angepassten Lead-In wieder verändern; nur Strategy B + Shortening-Fallback).
         let leadOutModified = false;
         const leadOut = this.getLeadOutPath();
 
-        if (leadOut?.points?.length >= 2) {
-            for (const nb of neighbors) {
-                const leadBB = this._getBBox(leadOut.points);
-                if (leadBB && this._bboxOverlap(leadBB, nb.bbox, safetyMargin)) {
-                    if (this._shortenLeadAgainstContour(leadOut, nb.pts, 'out', safetyMargin)) {
-                        leadOutModified = true;
+        if (leadOut?.points?.length >= 2 && !leadOut.isFallbackCenterExit) {
+            const outCollision = this._checkLeadAgainstNeighbors(leadOut, neighbors, 'out', safetyMargin);
+            if (outCollision) {
+                const dogLeg = this._tryDogLegLeadOut(neighbors, safetyMargin);
+                if (dogLeg) {
+                    this._cachedLeadOutPath = dogLeg;
+                    leadOutModified = true;
+                    console.log(`[CamContour V5.12] Lead-Routing B: Dog-Leg (Out) für ${this.name}`);
+                } else {
+                    for (const nb of neighbors) {
+                        if (this._shortenLeadAgainstContour(leadOut, nb.pts, 'out', safetyMargin)) {
+                            leadOutModified = true;
+                        }
                     }
                 }
             }
@@ -1503,6 +1650,85 @@ class CamContour {
                         points: testPoints,
                         piercingPoint: pierce,
                         entryPoint: entry,
+                        type: 'dog_leg',
+                        dogLegAngle: angleDeg,
+                        shortened: false,
+                        multiContourCollision: false,
+                        isAlternative: true
+                    };
+                }
+            }
+        }
+        return null; // Kein Dog-Leg möglich
+    }
+
+    /**
+     * V5.12: Strategy B für Lead-Out — Dog-Leg mit Waypoint auf der Verschnittseite.
+     * Pendant zu _tryDogLegLeadIn: Exit → Waypoint → End-Punkt.
+     */
+    _tryDogLegLeadOut(neighbors, margin) {
+        if (!this.isClosed) return null;
+
+        const offsetResult = this.getKerfOffsetPolyline();
+        const pts = (offsetResult?.points?.length > 2 && !this.compensationSkipped)
+            ? offsetResult.points : this.points;
+        if (!pts || pts.length < 3) return null;
+
+        const overcut = this.getOvercutPath();
+        let exit, prev;
+        if (overcut?.points?.length >= 2) {
+            const op = overcut.points;
+            exit = op[op.length - 1];
+            prev = op[op.length - 2];
+        } else {
+            exit = pts[pts.length - 1];
+            prev = pts[pts.length - 2];
+        }
+        const dx = exit.x - prev.x, dy = exit.y - prev.y;
+        const tLen = Math.hypot(dx, dy);
+        if (tLen < 1e-6) return null;
+        const tangent = { x: dx / tLen, y: dy / tLen };
+        const normal = this._getWasteSideNormal(exit, tangent);
+
+        const leadLen = this.leadOutLength;
+        const angles = [30, 45, 15, 60];
+        const sides = [1, -1];
+
+        for (const angleDeg of angles) {
+            for (const side of sides) {
+                const angleRad = angleDeg * Math.PI / 180;
+                const cosA = Math.cos(angleRad);
+                const sinA = Math.sin(angleRad);
+
+                const dirX = normal.x * cosA + side * tangent.x * sinA;
+                const dirY = normal.y * cosA + side * tangent.y * sinA;
+
+                const waypoint = {
+                    x: exit.x + dirX * leadLen * 0.6,
+                    y: exit.y + dirY * leadLen * 0.6
+                };
+                const endPoint = {
+                    x: waypoint.x + normal.x * leadLen * 0.4,
+                    y: waypoint.y + normal.y * leadLen * 0.4
+                };
+
+                const testPoints = [{ x: exit.x, y: exit.y }, waypoint, endPoint];
+
+                let collision = false;
+                for (const nb of neighbors) {
+                    if (this._leadIntersectsContour(testPoints, nb.pts, margin)) {
+                        collision = true;
+                        break;
+                    }
+                }
+                if (!collision) {
+                    collision = this._leadIntersectsContour(testPoints, pts, margin);
+                }
+
+                if (!collision) {
+                    return {
+                        points: testPoints,
+                        endPoint,
                         type: 'dog_leg',
                         dogLegAngle: angleDeg,
                         shortened: false,
