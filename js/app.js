@@ -1,5 +1,13 @@
 /**
- * CeraCUT V6.17 - Main Application
+ * CeraCUT V6.19 - Main Application
+ * V6.19: Fix — saveDXF()/saveDXFAs() schrieben result.content als rohen String in den
+ *        FileSystemWritableFileStream (File System Access API). Der Browser kodiert das
+ *        als UTF-8, der DXF-Header deklariert aber $DWGCODEPAGE=ANSI_1252 — Umlaute in
+ *        Layer-Namen wurden dadurch beschädigt, AutoCAD wies den Import zurück. Beide
+ *        Pfade nutzen jetzt dxfWriter._encodeAnsi1252() wie der Blob-Download-Fallback.
+ * V6.18: Fix — CAM-Funktionen (Kontextmenü-Properties, Startpunkt/Reverse/Microjoint) erst
+ *        nach abgeschlossenem Setup (Referenz + Nullpunkt) freigeschaltet: neue Methode
+ *        isSetupComplete(), settings.originSet-Flag, von currentStep entkoppelt
  * V6.17: Multi-Dokument-Tabs — DocumentManager integriert (openFilePicker() extrahiert,
  *        loadDXFContent() öffnet jede neue Datei in einem eigenen Tab, "Neu" erzeugt
  *        einen neuen Tab statt In-Place-Reset, Tabs werden via IndexedDB persistiert)
@@ -31,8 +39,8 @@
  * V3.1: Undo/Redo (Command Pattern), Clipboard (Copy/Cut/Paste)
  * V3.14: CAM-Tab Redesign — Außen/Innen-Lead, Material-Gruppe, Piercing-Typen, Speed-Info
  * V4.5: IGEMS 4-Slot Lead-System — Alternativ-Lead Fallback bei Kollision
- * Last Modified: 2026-06-23 MEZ
- * Build: 20260623-multidoc
+ * Last Modified: 2026-06-24 MEZ
+ * Build: 20260624-dxfsaveencoding
  */
 
 // XSS Protection
@@ -67,6 +75,7 @@ class CeraCutApp {
             kerfWidth: 0.8,
             quality: 2,
             origin: { x: 0, y: 0 },
+            originSet: false, // V6.21: true erst nach explizitem Setzen — gate fuer CAM-Freischaltung
             originPreset: 'bottom-left',
             microjointWidth: 0.5,
             microjointCount: 2,
@@ -946,20 +955,22 @@ class CeraCutApp {
         menu.classList.add('visible');
         
         // Menü-Items je nach Kontext ein/ausblenden
+        // V6.21: CAM-Aktionen erst nach abgeschlossenem Setup (Referenz + Nullpunkt)
         const isReference = contour.isReference;
-        const isCuttable = (contour.isClosed || contour.cuttingMode === 'slit') && !isReference;
-        
+        const setupComplete = this.isSetupComplete();
+        const isCuttable = (contour.isClosed || contour.cuttingMode === 'slit') && !isReference && setupComplete;
+
         const startpointItem = menu.querySelector('[data-action="set-startpoint"]');
         if (startpointItem) startpointItem.style.display = isCuttable ? 'flex' : 'none';
         const reverseItem = menu.querySelector('[data-action="reverse-direction"]');
         if (reverseItem) reverseItem.style.display = isCuttable ? 'flex' : 'none';
         const microjointItem = menu.querySelector('[data-action="add-microjoint"]');
-        if (microjointItem) microjointItem.style.display = (contour.isClosed && !isReference) ? 'flex' : 'none';
+        if (microjointItem) microjointItem.style.display = (contour.isClosed && !isReference && setupComplete) ? 'flex' : 'none';
 
-        // V5.7: CAM-Properties im Kontextmenu (nur Step 4)
+        // V5.7: CAM-Properties im Kontextmenu (erst nach abgeschlossenem Setup, V6.21)
         const camContainer = document.getElementById('ctx-cam-properties');
         if (camContainer) {
-            if (this.currentStep === 4 && !isReference) {
+            if (setupComplete && !isReference) {
                 // Sicherstellen, dass die rechts-geklickte Kontur selektiert ist
                 if (!contour.isSelected) {
                     this.contours.forEach(c => { c.isSelected = false; });
@@ -1260,6 +1271,7 @@ class CeraCutApp {
             if (contour.isReference) this.setOriginToReferenceUL();
             this.renderer?.render();
             this.updateContourPanel();
+            this.updateStepUI();
         });
         this.undoManager.execute(cmd);
         this.showToast(newVal ? '🟨 Referenz gesetzt (STRG+Z = Rückgängig)' : 'Referenz aufgehoben', 'success');
@@ -3133,14 +3145,16 @@ class CeraCutApp {
     
     setOriginFromPoint(point) {
         this.settings.origin = { x: point.x, y: point.y };
+        this.settings.originSet = true;
         this.updateOriginDisplay();
-        
+
         if (this.renderer?.setNullPoint) {
             this.renderer.setNullPoint(point.x, point.y);
             this.renderer.render();
         }
-        
+
         document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('selected'));
+        this.updateStepUI();
     }
     
     setOriginPreset(preset) {
@@ -3167,14 +3181,16 @@ class CeraCutApp {
         }
         
         this.settings.origin = { x, y };
+        this.settings.originSet = true;
         this.updateOriginDisplay();
-        
+
         if (this.renderer?.setNullPoint) {
             this.renderer.setNullPoint(x, y);
             this.renderer.render();
         }
-        
+
         this.showToast(`Nullpunkt: ${preset}`, 'success');
+        this.updateStepUI();
     }
     
     getReferenceBounds() {
@@ -3206,13 +3222,15 @@ class CeraCutApp {
         const y = parseFloat(document.getElementById('origin-y')?.value) || 0;
         
         this.settings.origin = { x, y };
-        
+        this.settings.originSet = true;
+
         if (this.renderer?.setNullPoint) {
             this.renderer.setNullPoint(x, y);
             this.renderer.render();
         }
+        this.updateStepUI();
     }
-    
+
     updateOriginDisplay() {
         const oxEl = document.getElementById('origin-x');
         const oyEl = document.getElementById('origin-y');
@@ -3229,16 +3247,23 @@ class CeraCutApp {
         
         this.settings.origin = { x, y };
         this.settings.originPreset = 'bottom-left';
-        
+        this.settings.originSet = true;
+
         document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('selected'));
         document.querySelector('.preset-btn[data-pos="bottom-left"]')?.classList.add('selected');
-        
+
         this.updateOriginDisplay();
-        
+
         if (this.renderer?.setNullPoint) {
             this.renderer.setNullPoint(x, y);
             this.renderer.render();
         }
+        this.updateStepUI();
+    }
+
+    /** V6.21: Setup-Status — CAM-Funktionen erst nach Referenz + Nullpunkt freigeschaltet */
+    isSetupComplete() {
+        return this.contours.some(c => c.isReference) && !!this.settings.originSet;
     }
     
     // ════════════════════════════════════════════════════════════════
@@ -3254,8 +3279,8 @@ class CeraCutApp {
             const app = this;
             const cmd = new FunctionCommand(
                 'Referenz löschen',
-                () => { snapshot.forEach(s => { s.contour.isReference = false; }); app.renderer?.render(); app.updateContourPanel(); },
-                () => { snapshot.forEach(s => { s.contour.isReference = true; }); app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); }
+                () => { snapshot.forEach(s => { s.contour.isReference = false; }); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); },
+                () => { snapshot.forEach(s => { s.contour.isReference = true; }); app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); }
             );
             this.undoManager.undoStack.push(cmd);
             this.undoManager.redoStack.length = 0;
@@ -3263,6 +3288,7 @@ class CeraCutApp {
             this.showToast('Referenz gelöscht (STRG+Z = Rückgängig)', 'success');
             this.renderer?.render();
             this.updateContourPanel();
+            this.updateStepUI();
         });
         
         document.getElementById('btn-auto-reference')?.addEventListener('click', () => {
@@ -3287,12 +3313,13 @@ class CeraCutApp {
                 const app = this;
                 const cmd = new FunctionCommand(
                     'Referenz zurückgesetzt (keine geschlossenen Konturen)',
-                    () => { app.contours.forEach(c => { c.isReference = false; }); app.renderer?.render(); app.updateContourPanel(); },
-                    () => { oldRefs.forEach(c => { c.isReference = true; }); app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); }
+                    () => { app.contours.forEach(c => { c.isReference = false; }); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); },
+                    () => { oldRefs.forEach(c => { c.isReference = true; }); app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); }
                 );
                 this.undoManager.undoStack.push(cmd);
                 this.undoManager.redoStack.length = 0;
                 this.undoManager._notifyStateChange();
+                this.updateStepUI();
             }
             this.showToast('Keine geschlossenen Konturen für Referenz gefunden', 'warning');
             return;
@@ -3325,8 +3352,8 @@ class CeraCutApp {
             const app = this;
             const cmd = new FunctionCommand(
                 `Auto-Referenz: ${referenceContour.layer || 'größte Fläche'}`,
-                () => { app.contours.forEach(c => { c.isReference = false; }); newRef.isReference = true; app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); },
-                () => { app.contours.forEach(c => { c.isReference = false; }); oldRefs.forEach(c => { c.isReference = true; }); if (oldRefs.length > 0) app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); }
+                () => { app.contours.forEach(c => { c.isReference = false; }); newRef.isReference = true; app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); },
+                () => { app.contours.forEach(c => { c.isReference = false; }); oldRefs.forEach(c => { c.isReference = true; }); if (oldRefs.length > 0) app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); }
             );
             this.undoManager.undoStack.push(cmd);
             this.undoManager.redoStack.length = 0;
@@ -5194,7 +5221,7 @@ class CeraCutApp {
                 imageUnderlayManager: this.imageUnderlayManager
             });
             const writable = await this._dxfFileHandle.createWritable();
-            await writable.write(result.content);
+            await writable.write(this.dxfWriter._encodeAnsi1252(result.content));
             await writable.close();
 
             this.isDirty = false;
@@ -5246,7 +5273,7 @@ class CeraCutApp {
                     imageUnderlayManager: this.imageUnderlayManager
                 });
                 const writable = await fileHandle.createWritable();
-                await writable.write(result.content);
+                await writable.write(this.dxfWriter._encodeAnsi1252(result.content));
                 await writable.close();
 
                 this.isDirty = false;

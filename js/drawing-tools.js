@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.11
+ * CeraCUT Drawing & Modification Tools V2.13
  * AutoCAD-style CAD Tools für CeraCUT
  *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
@@ -12,6 +12,9 @@
  * - Window-Selection (Drag-Rechteck)
  * - Integration mit CommandLine + SnapManager + UndoManager
  *
+ * V2.13: RotateTool — AutoCAD-Option [C]opy (Original bleibt erhalten, rotierte Kopie wird hinzugefügt)
+ * V2.12: ScaleTool — AutoCAD-Optionen [C]opy (Original bleibt erhalten) und [R]eference
+ *        (Referenzlänge/Neue Länge per Punkt oder Wert, optional [P]oints für neue Länge)
  * V2.11: AutoCAD-Verhalten — Enter im Idle wiederholt letzten Befehl, Command-Echo ("_LINE") bei Tool-Start
  * V2.10: Fix — Spline-Typ bleibt erhalten in _entityToDxfFormat (war LWPOLYLINE, Fit-Points gingen verloren)
  * V2.8: Locked-Layer Guard — gesperrte Layer von Window-Selection ausgeschlossen
@@ -23,8 +26,8 @@
  * V1.1: handleRawInput für Linie/Rechteck/Polylinie
  * V1.0: Initiale 5 Zeichentools
  * Created: 2026-02-13 MEZ
- * Last Modified: 2026-03-25 MEZ
- * Build: 20260323-splinetool
+ * Last Modified: 2026-06-24 MEZ
+ * Build: 20260624-rotatecopy-polarinput
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -120,7 +123,7 @@ class DrawingToolManager {
             this.commandLine.onBackspace = () => this._handleBackspace();
         }
 
-        console.debug('[DrawingTools V2.11] ✅ Initialisiert (Tier 1 + Tier 2)');
+        console.debug('[DrawingTools V2.13] ✅ Initialisiert (Tier 1 + Tier 2)');
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -243,7 +246,7 @@ class DrawingToolManager {
             this.activeTool = null;
         } else if (this.entities.length > 0) {
             // V2.7: Kein Tool aktiv, aber pending Entities → Auto-Apply
-            console.debug('[DrawingTools V2.11] Auto-Apply: ESC bei pending Entities');
+            console.debug('[DrawingTools V2.13] Auto-Apply: ESC bei pending Entities');
             this.applyEntities();
         }
         this.rubberBand = null;
@@ -1016,7 +1019,7 @@ class DrawingToolManager {
             this.activeTool.finish();
         } else if (this.entities.length > 0) {
             // V2.7: Kein Tool aktiv, aber pending Entities → Auto-Apply
-            console.debug('[DrawingTools V2.11] Auto-Apply: Enter bei pending Entities');
+            console.debug('[DrawingTools V2.13] Auto-Apply: Enter bei pending Entities');
             this.applyEntities();
         } else {
             // V2.11: AutoCAD-Verhalten — Enter im Idle wiederholt letzten Befehl
@@ -1770,12 +1773,13 @@ class RotateTool extends ModificationTool {
         super(manager);
         this.basePoint = null;
         this.referenceAngle = null;
+        this.copyMode = false;      // AutoCAD-Option [C]opy: Original bleibt erhalten
     }
 
     getToolName() { return 'ROTATE'; }
 
     start() {
-        this.cmd?.log('🔄 Rotate: Objekte wählen → Basispunkt → Winkel', 'info');
+        this.cmd?.log('🔄 Rotate: Objekte wählen → Basispunkt → Winkel [C=Kopie]', 'info');
         super.start();
     }
 
@@ -1784,13 +1788,33 @@ class RotateTool extends ModificationTool {
         this.cmd?.setPrompt(`ROTATE (${contours.length} Obj.) — Basispunkt angeben:`);
     }
 
+    _anglePrompt() {
+        const tag = this.copyMode ? ' [Kopie aktiv]' : '';
+        this.cmd?.setPrompt(`ROTATE${tag} — Winkel angeben (Grad) oder Punkt für Referenzwinkel [C=Kopie]:`);
+    }
+
+    acceptsOption(opt) {
+        if (this.state === 'angle') return opt === 'C';
+        return super.acceptsOption(opt);
+    }
+
+    handleOption(option) {
+        if (this.state === 'angle' && option === 'C') {
+            this.copyMode = !this.copyMode;
+            this.cmd?.log(this.copyMode ? '→ Kopie-Modus aktiv: Original bleibt erhalten' : '→ Kopie-Modus deaktiviert', 'info');
+            this._anglePrompt();
+            return;
+        }
+        super.handleOption(option);
+    }
+
     handleClick(point) {
         if (this.state === 'select') { super.handleClick(point); return; }
 
         if (this.state === 'basepoint') {
             this.basePoint = { x: point.x, y: point.y };
             this.state = 'angle';
-            this.cmd?.setPrompt('ROTATE — Winkel angeben (Grad) oder Punkt für Referenzwinkel:');
+            this._anglePrompt();
             return;
         }
 
@@ -1802,14 +1826,14 @@ class RotateTool extends ModificationTool {
                 this.state = 'newangle';
                 this.cmd?.setPrompt('ROTATE — Neuen Winkel angeben (Punkt oder Grad):');
             } else {
-                this._executeRotation(angle - this.referenceAngle);
+                this._applyRotation(angle - this.referenceAngle);
             }
             return;
         }
 
         if (this.state === 'newangle') {
             const newAngle = Math.atan2(point.y - this.basePoint.y, point.x - this.basePoint.x);
-            this._executeRotation(newAngle - this.referenceAngle);
+            this._applyRotation(newAngle - this.referenceAngle);
             return;
         }
     }
@@ -1839,6 +1863,15 @@ class RotateTool extends ModificationTool {
         if ((this.state === 'angle' || this.state === 'newangle') && this.basePoint) {
             const angleRad = value * Math.PI / 180;
             this.cmd?.log(`→ Rotation ${value}°`, 'info');
+            this._applyRotation(angleRad);
+        }
+    }
+
+    /** Rotation anwenden — direkt (Original) oder als Kopie (AutoCAD [C]opy) */
+    _applyRotation(angleRad) {
+        if (this.copyMode) {
+            this._executeRotationCopy(angleRad);
+        } else {
             this._executeRotation(angleRad);
         }
     }
@@ -1891,6 +1924,45 @@ class RotateTool extends ModificationTool {
 
         this.cmd?.log(`✓ ${contours.length} Kontur(en) rotiert um ${angleDeg}°`, 'success');
         app?.showToast?.(`🔄 ${contours.length} Konturen rotiert (STRG+Z = Rückgängig)`, 'success');
+
+        this._finishTool();
+    }
+
+    /** AutoCAD [C]opy: Original bleibt erhalten, rotierte Kopie wird hinzugefügt */
+    _executeRotationCopy(angleRad) {
+        const app = this.manager.app;
+        const cx = this.basePoint.x;
+        const cy = this.basePoint.y;
+
+        const clones = this.selectedContours.map(src => {
+            const pts = ModificationTool.deepCopyPoints(src);
+            ModificationTool.rotatePoints(pts, cx, cy, angleRad);
+
+            if (typeof CamContour !== 'undefined' && src instanceof CamContour && typeof src.clone === 'function') {
+                const clone = src.clone();
+                clone.points = pts;
+                clone.name = (src.name || 'Kontur') + ' (Kopie)';
+                clone.isSelected = false;
+                return clone;
+            }
+            return { ...src, points: pts, name: (src.name || 'Kontur') + ' (Kopie)', isSelected: false };
+        });
+
+        const addCmd = new AddContoursCommand(
+            app.contours,
+            clones,
+            app.contours.length,
+            () => {
+                app.rebuildCutOrder?.();
+                app.renderer?.setContours(app.contours);
+                app.updateContourPanel?.();
+            }
+        );
+        app?.undoManager?.execute(addCmd);
+
+        const angleDeg = (angleRad * 180 / Math.PI).toFixed(1);
+        this.cmd?.log(`✓ ${clones.length} Kontur(en) als Kopie rotiert (${angleDeg}°)`, 'success');
+        app?.showToast?.(`🔄 Kopie rotiert um ${angleDeg}° (STRG+Z = Rückgängig)`, 'success');
 
         this._finishTool();
     }
@@ -2099,12 +2171,16 @@ class ScaleTool extends ModificationTool {
     constructor(manager) {
         super(manager);
         this.basePoint = null;
+        this.copyMode = false;      // AutoCAD-Option [C]opy: Original bleibt erhalten
+        this.refLength = null;      // AutoCAD-Option [R]eference: Referenzlänge
+        this.refP1 = null;          // Referenzlänge: 1. Punkt (Punkt-Eingabe)
+        this.newLenP1 = null;       // Neue Länge: 1. Punkt (Punkt-Eingabe via [P])
     }
 
     getToolName() { return 'SCALE'; }
 
     start() {
-        this.cmd?.log('📐 Scale: Objekte wählen → Basispunkt → Faktor', 'info');
+        this.cmd?.log('📐 Scale: Objekte wählen → Basispunkt → Faktor [C=Kopie, R=Referenz]', 'info');
         super.start();
     }
 
@@ -2113,13 +2189,81 @@ class ScaleTool extends ModificationTool {
         this.cmd?.setPrompt(`SCALE (${contours.length} Obj.) — Basispunkt angeben:`);
     }
 
+    _factorPrompt() {
+        const tag = this.copyMode ? ' [Kopie aktiv]' : '';
+        this.cmd?.setPrompt(`SCALE${tag} — Skalierungsfaktor eingeben [C=Kopie, R=Referenz]:`);
+    }
+
+    acceptsOption(opt) {
+        if (this.state === 'factor') return opt === 'C' || opt === 'R';
+        if (this.state === 'newlength') return opt === 'P';
+        return super.acceptsOption(opt);
+    }
+
+    handleOption(option) {
+        if (this.state === 'factor' && option === 'C') {
+            this.copyMode = !this.copyMode;
+            this.cmd?.log(this.copyMode ? '→ Kopie-Modus aktiv: Original bleibt erhalten' : '→ Kopie-Modus deaktiviert', 'info');
+            this._factorPrompt();
+            return;
+        }
+
+        if (this.state === 'factor' && option === 'R') {
+            this.state = 'ref_p1';
+            this.cmd?.setPrompt('SCALE [Referenz] — 1. Punkt angeben (oder Referenzlänge als Wert):');
+            return;
+        }
+
+        if (this.state === 'newlength' && option === 'P') {
+            this.state = 'newlen_p1';
+            this.cmd?.setPrompt('SCALE [Referenz] — Neue Länge: 1. Punkt angeben:');
+            return;
+        }
+
+        super.handleOption(option);
+    }
+
     handleClick(point) {
         if (this.state === 'select') { super.handleClick(point); return; }
 
         if (this.state === 'basepoint') {
             this.basePoint = { x: point.x, y: point.y };
             this.state = 'factor';
-            this.cmd?.setPrompt('SCALE — Skalierungsfaktor eingeben (z.B. 2, 0.5):');
+            this._factorPrompt();
+            return;
+        }
+
+        if (this.state === 'factor') {
+            // Klick bestätigt den aktuell angezeigten dynamischen Faktor
+            const factor = this._dynamicFactor(point);
+            this._applyFactor(factor);
+            return;
+        }
+
+        if (this.state === 'ref_p1') {
+            this.refP1 = { x: point.x, y: point.y };
+            this.state = 'ref_p2';
+            this.cmd?.setPrompt('SCALE [Referenz] — 2. Punkt angeben:');
+            return;
+        }
+
+        if (this.state === 'ref_p2') {
+            this.refLength = Math.hypot(point.x - this.refP1.x, point.y - this.refP1.y);
+            this.state = 'newlength';
+            this.cmd?.setPrompt(`SCALE [Referenz=${this.refLength.toFixed(2)}] — Neue Länge eingeben [P=Punkte]:`);
+            return;
+        }
+
+        if (this.state === 'newlen_p1') {
+            this.newLenP1 = { x: point.x, y: point.y };
+            this.state = 'newlen_p2';
+            this.cmd?.setPrompt('SCALE [Referenz] — Neue Länge: 2. Punkt angeben:');
+            return;
+        }
+
+        if (this.state === 'newlen_p2') {
+            const newLength = Math.hypot(point.x - this.newLenP1.x, point.y - this.newLenP1.y);
+            this._applyFactor(newLength / this.refLength);
             return;
         }
     }
@@ -2130,16 +2274,37 @@ class ScaleTool extends ModificationTool {
                 this.cmd?.log('Skalierungsfaktor darf nicht 0 sein', 'error');
                 return;
             }
-            this._executeScale(value, value);
+            this._applyFactor(value);
+            return;
         }
+
+        if (this.state === 'ref_p1') {
+            if (Math.abs(value) < 0.0001) {
+                this.cmd?.log('Referenzlänge darf nicht 0 sein', 'error');
+                return;
+            }
+            this.refLength = value;
+            this.state = 'newlength';
+            this.cmd?.setPrompt(`SCALE [Referenz=${this.refLength.toFixed(2)}] — Neue Länge eingeben [P=Punkte]:`);
+            return;
+        }
+
+        if (this.state === 'newlength') {
+            this._applyFactor(value / this.refLength);
+            return;
+        }
+    }
+
+    _dynamicFactor(point) {
+        // Dynamischer Faktor basierend auf Maus-Abstand
+        const baseDist = 50;  // Referenz-Distanz
+        const dist = Math.hypot(point.x - this.basePoint.x, point.y - this.basePoint.y);
+        return Math.max(0.1, dist / baseDist);
     }
 
     handleMouseMove(point) {
         if (this.state === 'factor' && this.basePoint) {
-            // Dynamischer Faktor basierend auf Maus-Abstand
-            const baseDist = 50;  // Referenz-Distanz
-            const dist = Math.hypot(point.x - this.basePoint.x, point.y - this.basePoint.y);
-            const factor = Math.max(0.1, dist / baseDist);
+            const factor = this._dynamicFactor(point);
 
             this.manager.ghostContours = this._createGhostPreview(
                 this.selectedContours,
@@ -2152,6 +2317,19 @@ class ScaleTool extends ModificationTool {
             };
 
             this.manager.renderer?.render();
+        }
+    }
+
+    /** Skalierungsfaktor anwenden — direkt (Original) oder als Kopie (AutoCAD [C]opy) */
+    _applyFactor(factor) {
+        if (Math.abs(factor) < 0.0001) {
+            this.cmd?.log('Skalierungsfaktor darf nicht 0 sein', 'error');
+            return;
+        }
+        if (this.copyMode) {
+            this._executeScaleCopy(factor, factor);
+        } else {
+            this._executeScale(factor, factor);
         }
     }
 
@@ -2202,6 +2380,44 @@ class ScaleTool extends ModificationTool {
 
         this.cmd?.log(`✓ ${contours.length} Kontur(en) skaliert (Faktor ${factorX.toFixed(2)})`, 'success');
         app?.showToast?.(`📐 Skaliert ×${factorX.toFixed(2)} (STRG+Z = Rückgängig)`, 'success');
+
+        this._finishTool();
+    }
+
+    /** AutoCAD [C]opy: Original bleibt erhalten, skalierte Kopie wird hinzugefügt */
+    _executeScaleCopy(factorX, factorY) {
+        const app = this.manager.app;
+        const cx = this.basePoint.x;
+        const cy = this.basePoint.y;
+
+        const clones = this.selectedContours.map(src => {
+            const pts = ModificationTool.deepCopyPoints(src);
+            ModificationTool.scalePoints(pts, cx, cy, factorX, factorY);
+
+            if (typeof CamContour !== 'undefined' && src instanceof CamContour && typeof src.clone === 'function') {
+                const clone = src.clone();
+                clone.points = pts;
+                clone.name = (src.name || 'Kontur') + ' (Kopie)';
+                clone.isSelected = false;
+                return clone;
+            }
+            return { ...src, points: pts, name: (src.name || 'Kontur') + ' (Kopie)', isSelected: false };
+        });
+
+        const addCmd = new AddContoursCommand(
+            app.contours,
+            clones,
+            app.contours.length,
+            () => {
+                app.rebuildCutOrder?.();
+                app.renderer?.setContours(app.contours);
+                app.updateContourPanel?.();
+            }
+        );
+        app?.undoManager?.execute(addCmd);
+
+        this.cmd?.log(`✓ ${clones.length} Kontur(en) als Kopie skaliert (Faktor ${factorX.toFixed(2)})`, 'success');
+        app?.showToast?.(`📐 Kopie skaliert ×${factorX.toFixed(2)} (STRG+Z = Rückgängig)`, 'success');
 
         this._finishTool();
     }

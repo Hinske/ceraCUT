@@ -1,5 +1,7 @@
 /**
- * CeraCUT CamContour V5.10 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.11 - IGEMS-konformes Lead-In/Out System
+ * V5.11: entitySeams[] Property — echte Naht-Distanzen aus DXFParser.chainContours() (statt
+ *        blinder Punktlisten-Scan), Basis für Gap-Erkennung in ceracut-pipeline.js V3.8
  * V5.10: toJSON()/fromJSON() für Dokument-Persistenz (Multi-Tab) — denylist-basiert,
  *        überträgt alle Datenfelder (auch extern angehängte wie sourceType/_splineData/
  *        microjoints/nestingLevel) außer Cache-/Transient-Feldern
@@ -101,6 +103,7 @@ class CamContour {
         // ═══ GAP DETECTION (Offene Konturen) ═══
         this.gaps = [];           // [{x1,y1, x2,y2, distance, type:'open'|'healable'}]
         this.healedGaps = [];     // [{x1,y1, x2,y2, originalDistance}]
+        this.entitySeams = [];    // [{x1,y1, x2,y2, distance}] — echte Naht-Distanzen aus dem Chaining (V5.11)
 
         // ═══ KERF FLIP (Kompensationsseite umkehren) ═══
         this.kerfFlipped = false;  // true = Kerf auf Gegenseite
@@ -1971,6 +1974,7 @@ class CamContour {
         c.intarsiaRole = this.intarsiaRole;      // V5.5: base/insert
         c.gaps = this.gaps.map(g => ({ ...g }));           // V5.7: Gap Detection
         c.healedGaps = this.healedGaps.map(g => ({ ...g })); // V5.7: Gap Detection
+        c.entitySeams = (this.entitySeams || []).map(s => ({ ...s })); // V5.11: Gap Detection (echte Naht-Distanzen)
         return c;
     }
 

@@ -275,3 +275,47 @@ CeraCUT hat 45+ Tools mit AutoCAD-konformem Workflow (Noun-Verb/Verb-Noun, Conti
 | Grid & Display | 8/10 | Nicht konfigurierbar |
 | Undo/Redo | 8/10 | Keine History-UI |
 | **Gesamt** | **7.8/10** | **UI-Tiefe & Discoverability** |
+
+---
+
+## Phase 7: AutoCAD-Parity-Audit `drawing-tools.js` (2026-06-24)
+
+> Vollständiges Tool-für-Tool-Audit von `js/drawing-tools.js` (3904 Zeilen) gegen reales AutoCAD-Befehlszeilen-Verhalten. ScaleTool-Lücke (Copy/Reference) bereits behoben (V2.12, 20260624-scalecopyref). Punkte 7.1 (Polar-Input) und 7.4 (Rotate-Copy) werden direkt umgesetzt — Rest für später zurückgestellt.
+
+### 7.1 Polar-Koordinaten-Eingabe (`dist<winkel` / `@dist<winkel`) 🔧 IN ARBEIT
+- [ ] `command-line.js` `CommandLine.parseInput()` (Zeilen 124–168): parst `x,y` / `@x,y` / reine Distanz, aber nie `<`
+- **Impact:** Höchster Hebel im gesamten Audit — kein Tool-spezifischer Fix, betrifft Line, Polyline, Rectangle, Move, Copy, Rotate, Scale gleichzeitig
+- **AutoCAD:** `50<45` = 50mm bei 45° (Standard-Muscle-Memory)
+- **Datei:** `js/command-line.js`
+
+### 7.2 PolylineTool Bogen-Modus (`A`) ist funktionslos
+- [ ] `drawing-tools.js:3349-3364` (`handleOption('A')`) setzt `mode='arc'` + Prompt-Text, aber `handleClick`/`_createPolyline` (3325–3415) zeichnen trotzdem immer Linien
+- **Impact:** UI behauptet einen Zustand, den sie nicht umsetzt — schlimmer als reines Fehlen
+- **Datei:** `js/drawing-tools.js`
+
+### 7.3 ArcTool: nur 3-Punkt-Modus
+- [ ] `drawing-tools.js:3212-3305`: fehlt Start-Center-End/Angle/Length, Start-End-Angle/Direction/Radius, Center-Start-End, Fortsetzung per Enter
+- **Impact:** Für CAM mit bekanntem Mittelpunkt/Radius sind Start-Center-End/Angle die wichtigsten Eingabeformen
+- **Datei:** `js/drawing-tools.js`
+
+### 7.4 RotateTool: kein `[Copy]`-Option 🔧 IN ARBEIT
+- [ ] `drawing-tools.js:1770-1916`: kein `acceptsOption`-Override → erbt nur `P` (Previous) von `ModificationTool`
+- **Impact:** Exakt die gleiche Lücke wie bei Scale (bereits gefixt) — gleiches Muster: Flag im Winkel-State + `AddContoursCommand` statt In-Place-Mutation bei aktivem Copy-Modus
+- **Datei:** `js/drawing-tools.js`
+
+### 7.5 RectangleTool: kein Chamfer/Fillet (`C`/`F`), keine Rotation
+- [ ] `drawing-tools.js:3133-3205`: kein `acceptsOption`-Override für Eckenbehandlung oder Rotationswinkel vor 2. Eckpunkt
+- **Impact:** Width/Area niedrigere Priorität für 2D-Wasserstrahl-CAM; Chamfer/Fillet sind die praxisrelevanten
+- **Datei:** `js/drawing-tools.js`
+
+### 7.6 LineTool: keine Fortsetzung vom letzten Endpunkt
+- [ ] `drawing-tools.js:2451` (`start()`): Enter bei "Startpunkt angeben" ohne Eingabe sollte vom letzten Linien-/Bogen-Endpunkt fortsetzen (AutoCAD-Standard), tut es aber nicht
+- **Datei:** `js/drawing-tools.js`
+
+### 7.7 Selektion: kein `ALL`/`L` (Last)
+- [ ] `ModificationTool.acceptsOption`/`handleOption` (`drawing-tools.js:1177-1193`): nur `P` (Previous) implementiert, betrifft Move/Copy/Rotate/Mirror/Scale/Erase gemeinsam (geteilte Basisklasse)
+- **Datei:** `js/drawing-tools.js`
+
+### 7.8 Niedrige Priorität / bewusste Abweichung
+- [ ] BreakTool (`drawing-tools.js:3691-3863`) macht nur Zero-Gap-Splits, kein echter 2-Punkt-Gap wie AutoCAD-Default — für CAM vermutlich bewusst sinnvoll, aber überrascht AutoCAD-Nutzer
+- [x] CircleTool `TTT` ist bereits als Stub mit Warnung markiert (`drawing-tools.js:2689-2691`) — kein Action Item

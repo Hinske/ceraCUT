@@ -1,15 +1,16 @@
 /**
- * CeraCUT Command Line V1.4
+ * CeraCUT Command Line V1.5
  * AutoCAD-style Command Line Interface
  * - Prompt-System für Zeichentools
- * - Koordinateneingabe (absolut + relativ)
+ * - Koordinateneingabe (absolut + relativ + polar)
  * - Shortcut-Routing (L, C, N, A, P + M, R, S, O, Shift+C, Shift+M)
  * - History + ArrowUp/Down Navigation
  * - Input-Validation-Feedback (rote Fehlermeldung)
+ * - V1.5: Polar-Koordinaten-Eingabe ("50<45" / "@50<45") in parseInput()
  * - V1.4: 'echo'-Log-Typ für AutoCAD-Style Command-Echo ("_LINE")
  * Created: 2026-02-13 MEZ
- * Last Modified: 2026-06-23 MEZ
- * Build: 20260623-autocadfeel
+ * Last Modified: 2026-06-24 MEZ
+ * Build: 20260624-polarinput
  */
 
 class CommandLine {
@@ -41,7 +42,7 @@ class CommandLine {
         this.onBackspace = options.onBackspace || null;  // () => void — Backspace Undo
 
         this._init();
-        console.debug('[CommandLine V1.4] ✅ Initialisiert');
+        console.debug('[CommandLine V1.5] ✅ Initialisiert');
     }
 
     _init() {
@@ -116,6 +117,7 @@ class CommandLine {
      * Koordinateneingabe parsen
      * Absolut:  "100,50" oder "100 50"
      * Relativ:  "@30,20" oder "@30 20"
+     * Polar:    "50<45" oder "@50<45" (Distanz<Winkel in Grad, AutoCAD-Standard — immer relativ zum letzten Punkt)
      * Einzelwert (als Radius/Distanz): "5.5"
      * @param {string} input - Benutzereingabe
      * @param {{x:number, y:number}|null} lastPoint - Letzter Punkt (für relative Eingabe)
@@ -129,6 +131,21 @@ class CommandLine {
         // Options-Erkennung: Buchstaben-Befehle wie "D", "R", "LE", "EX", "CH", etc.
         if (/^[a-zA-Z]{1,6}$/i.test(trimmed)) {
             return { type: 'option', option: trimmed.toUpperCase() };
+        }
+
+        // Polar-Koordinaten: dist<winkel oder @dist<winkel (immer relativ zum letzten Punkt, wie AutoCAD)
+        const polarMatch = trimmed.match(/^@?\s*(-?\d*\.?\d+)\s*<\s*(-?\d*\.?\d+)\s*$/);
+        if (polarMatch) {
+            const dist = Number(polarMatch[1]);
+            const angleDeg = Number(polarMatch[2]);
+            const angleRad = angleDeg * Math.PI / 180;
+            const baseX = lastPoint?.x || 0;
+            const baseY = lastPoint?.y || 0;
+            return {
+                type: 'point',
+                x: baseX + dist * Math.cos(angleRad),
+                y: baseY + dist * Math.sin(angleRad)
+            };
         }
 
         // Relative Koordinaten: @x,y oder @x y
@@ -201,7 +218,7 @@ class CommandLine {
                 // V1.3: Input-Validation — rote Fehlermeldung bei ungültiger Eingabe
                 const parsed = CommandLine.parseInput(value);
                 if (!parsed) {
-                    this.log(`Ungültige Eingabe: "${value}" — Erwartet: Koordinaten (100,50), relativ (@25,10) oder Distanz (25)`, 'error');
+                    this.log(`Ungültige Eingabe: "${value}" — Erwartet: Koordinaten (100,50), relativ (@25,10), polar (25<45) oder Distanz (25)`, 'error');
                     this.inputEl.value = '';
                     return;
                 }

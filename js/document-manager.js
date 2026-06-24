@@ -1,5 +1,6 @@
 /**
- * CeraCUT Document Manager V1.0
+ * CeraCUT Document Manager V1.1
+ * V1.1: Fix — settings.originSet-Default ergänzt (Gate für CAM-Freischaltung erst nach Setup)
  * Multi-Dokument-Tabs (AutoCAD-Stil) — mehrere DXF-Dateien gleichzeitig offen.
  *
  * Architektur: Swap-Pattern. Pro Tab existiert ein Document mit dem
@@ -67,6 +68,7 @@ class CeraDocument {
             kerfWidth: 0.8,
             quality: 2,
             origin: { x: 0, y: 0 },
+            originSet: false, // V1.1: true erst nach explizitem Setzen — gate fuer CAM-Freischaltung
             originPreset: 'bottom-left',
             microjointWidth: 0.5,
             microjointCount: 2,

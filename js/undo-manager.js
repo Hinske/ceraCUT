@@ -3,9 +3,18 @@
  *  CeraCUT / CeraCUT – Undo/Redo Manager (Command Pattern) + Clipboard
  * =========================================================================
  *  Datei:    undo-manager.js
- *  Version:  V1.1
+ *  Version:  V1.2
  *  Erstellt: 2026-02-12
- *  Build:    20260212-1800 MEZ
+ *  Build:    20260624-crossdocpaste
+ *
+ *  V1.2: Fix — Cross-Dokument Copy/Paste (wie AutoCAD): Jedes Dokument-Tab hat eine eigene
+ *        ClipboardManager-Instanz (siehe document-manager.js), die beim Tab-Wechsel komplett
+ *        ausgetauscht wurde — damit zeigte Strg+V nach einem Tab-Wechsel auf ein leeres,
+ *        dokument-lokales Clipboard statt auf die zuvor kopierten Konturen. Das Clipboard-
+ *        Payload (_clipboard) ist jetzt ein STATISCHES Klassenfeld (ClipboardManager.
+ *        _sharedClipboard) und damit über alle Dokumente hinweg geteilt, während app/
+ *        undoManager weiterhin pro Instanz ans aktive Dokument gebunden bleiben — Paste landet
+ *        also korrekt auf dem Undo-Stack des Ziel-Dokuments.
  *
  *  Beschreibung:
  *    Command Pattern basierter Undo/Redo-Manager für alle Benutzeraktionen.
@@ -684,9 +693,6 @@ class ClipboardManager {
         this.undoManager = options.undoManager;
         this.app = options.app;
 
-        /** @type {object[]|null} Internes Clipboard (geklonte Konturen) */
-        this._clipboard = null;
-
         /** Offset für Paste-Verschiebung (damit nicht exakt übereinander) */
         this._pasteOffset = { x: 5, y: -5 };
 
@@ -704,7 +710,7 @@ class ClipboardManager {
             return 0;
         }
 
-        this._clipboard = selected.map(c => this._cloneContour(c));
+        ClipboardManager._sharedClipboard = selected.map(c => this._cloneContour(c));
 
         this.app.showToast?.(`📋 ${selected.length} Kontur(en) kopiert`, 'info');
         console.log(`[Clipboard V1.0] ${selected.length} Kontur(en) kopiert`);
@@ -728,7 +734,7 @@ class ClipboardManager {
         }
 
         // Erst kopieren
-        this._clipboard = selected.map(c => this._cloneContour(c));
+        ClipboardManager._sharedClipboard = selected.map(c => this._cloneContour(c));
 
         // Dann als Undo-fähige Aktion löschen
         const deleteCmd = new DeleteContoursCommand(
@@ -755,17 +761,29 @@ class ClipboardManager {
      * @returns {number} Anzahl eingefügter Konturen
      */
     paste() {
-        if (!this._clipboard || this._clipboard.length === 0) {
+        const clipboard = ClipboardManager._sharedClipboard;
+        if (!clipboard || clipboard.length === 0) {
             this.app.showToast?.('Clipboard leer', 'warning');
             return 0;
         }
 
         // Neue Deep-Copies erstellen (damit mehrfaches Paste geht)
-        const clones = this._clipboard.map(c => {
+        const clones = clipboard.map(c => {
             const clone = this._cloneContour(c);
             this._applyOffset(clone, this._pasteOffset);
             return clone;
         });
+
+        // V1.2: Cross-Dokument-Paste — Layer, die im Ziel-Dokument noch nicht existieren
+        // (z.B. weil aus einem anderen Tab kopiert), neu anlegen statt unverwaltet zu lassen
+        const targetLayerManager = this.app.layerManager;
+        if (targetLayerManager) {
+            for (const c of clones) {
+                if (c.layer && !targetLayerManager.getLayer(c.layer)) {
+                    targetLayerManager.addLayer(c.layer);
+                }
+            }
+        }
 
         // Alte Selektion aufheben, neue Konturen selektieren
         const addCmd = new AddContoursCommand(
@@ -789,12 +807,12 @@ class ClipboardManager {
 
     /** @returns {boolean} */
     hasContent() {
-        return this._clipboard !== null && this._clipboard.length > 0;
+        return ClipboardManager._sharedClipboard !== null && ClipboardManager._sharedClipboard.length > 0;
     }
 
     /** Clipboard leeren */
     clear() {
-        this._clipboard = null;
+        ClipboardManager._sharedClipboard = null;
     }
 
     // ----- Interne Helfer -----
@@ -881,6 +899,11 @@ class ClipboardManager {
         }
     }
 }
+
+// V1.2: Clipboard-Payload dokumentübergreifend geteilt (siehe Datei-Header) — jedes Dokument-Tab
+// hat zwar eine eigene ClipboardManager-Instanz (für die korrekte app/undoManager-Bindung), aber
+// alle Instanzen lesen/schreiben dasselbe statische Feld.
+ClipboardManager._sharedClipboard = null;
 
 
 // =========================================================================

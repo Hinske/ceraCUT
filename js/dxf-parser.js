@@ -1,8 +1,27 @@
 /**
- * CeraCUT DXF Parser V3.12
- * Last Modified: 2026-06-23 MEZ
- * Build: 20260623-bugfixaudit
+ * CeraCUT DXF Parser V3.15
+ * Last Modified: 2026-06-24 MEZ
+ * Build: 20260624-gapfix
  *
+ * V3.15: Fix — Falsch-positive Gap-Marker (orange) bei grob tessellierten Bögen/kurzen Linien.
+ *        chainContours() zeichnet jetzt beim Verketten die tatsaechlichen Naht-Distanzen
+ *        zwischen verschiedenen Source-Entities auf (entitySeams[]), statt dass die Gap-
+ *        Erkennung nachtraeglich blind jeden Punktabstand > 2mm in der fertigen Punktliste
+ *        als Luecke interpretiert (das traf faelschlich auch normale Arc-Sehnenlaengen und
+ *        einzelne kurze LINE-Kanten). Siehe ceracut-pipeline.js V3.8 (_classifyGaps).
+ * V3.14: Fix — CAM-Export-Artefakt "Anschussfahnen": manche CAM-Systeme exportieren gesetzte
+ *        Anschussfahnen als zusaetzliche, redundante Arc-Duplikate (gleicher Mittelpunkt/Radius,
+ *        Winkelbereich innerhalb der Hauptkontur) bzw. als freihaengende Kurz-Stubs an der
+ *        Verzweigung der Hauptkontur. Beides verwirrte das Chaining → Konturen blieben faelschlich
+ *        offen. Neue Vorverarbeitung: _removeRedundantLeadTabArcs() + _removeDanglingLeadTabs()
+ *        vor dem Chaining.
+ * V3.13: Fix — _parseLine/_parseCircle/_parseArc/_parseEllipse hatten ein hartes 30-Zeilen-
+ *        Lookahead-Limit. Entities mit vollem AutoCAD-Eigenschaftssatz (Handle/Owner/Linetype/
+ *        Color/Lineweight) brauchten mehr Felder als das Limit zuliess — bei ARC fiel der
+ *        Endwinkel (Code 51) regelmäßig ausserhalb, die Funktion gab dann null zurück und das
+ *        Arc wurde stillschweigend verworfen (keine Fehlermeldung). Sichtbares Symptom: kleine
+ *        Rundungsecken zwischen LINE-Segmenten fehlten → Konturen blieben fälschlich "offen".
+ *        Fix: kein hartes Limit mehr, Abbruch nur an der nächsten echten Entity (wie _parseLWPolyline).
  * V3.12: Fix — NaN-Koordinaten werden gezählt + als Warnung gemeldet (statt stillschweigend zu 0 zu kollabieren)
  * V3.11 Änderungen:
  *   - _fitPoints + _splineClosed Durchreichung in chainContours/_createContour
@@ -87,7 +106,8 @@ const DXFParser = {
         CHAIN: 0.1,
         CLOSE: 0.01,
         MIN_SEGMENT: 1.0,
-        AUTO_CLOSE: 0.5
+        AUTO_CLOSE: 0.5,
+        LEAD_TAB_MAX_LENGTH: 5.0  // V3.13: max. Laenge einer freihaengenden Anschussfahnen-Stub (mm)
     },
 
     NORMALIZATION_THRESHOLD: 1000000,
@@ -119,12 +139,23 @@ const DXFParser = {
             const layerDefs = this._parseLayerTable(dxfContent);
 
             let entities = this._extractEntitiesFromSection(dxfContent);
-            
+
+            // V3.13: CAM-Export-Artefakt — gesetzte Anschussfahnen werden von manchen CAM-Systemen
+            // beim DXF-Export als zusätzliche, ueberlappende Arc-Duplikate auf derselben Kontur
+            // exportiert (gleicher Mittelpunkt/Radius, Winkelbereich liegt innerhalb der Hauptkontur).
+            // Das verwirrt das Chaining (falscher Zweig an der Verzweigung) → Kontur faelschlich offen.
+            entities = this._removeRedundantLeadTabArcs(entities);
+            // V3.13: Anschussfahnen-Stub als kurze gerade Linie (kein Arc-Duplikat, sondern
+            // ein freihaengendes Segment an der Verzweigung der Hauptkontur). Ohne Filterung
+            // haengt sich die Kontur nach dem Ringschluss noch an diesen Stub und gilt dadurch
+            // faelschlich als "offen".
+            entities = this._removeDanglingLeadTabs(entities);
+
             // Größen-Warnung
             if (entities.length > 5000) {
                 console.warn(`[DXF Parser] ⚠️ LARGE FILE: ${entities.length} entities`);
             }
-            
+
             const normResult = this._autoNormalizeEntities(entities);
             if (normResult.normalized) {
                 entities = normResult.entities;
@@ -400,6 +431,105 @@ const DXFParser = {
         return layerDefs;
     },
 
+    /**
+     * V3.13: Entfernt redundante Anschussfahnen-Duplikat-Arcs aus dem CAM-DXF-Export.
+     * Manche CAM-Systeme exportieren gesetzte Anschussfahnen als zusaetzliche ARC-Entity
+     * mit (fast) demselben Mittelpunkt/Radius wie die Hauptkontur, deren Winkelbereich
+     * vollstaendig innerhalb des Winkelbereichs der Hauptkontur liegt. Ohne Filterung
+     * verwirrt das das Deque-Chaining an der Verzweigung (falscher Zweig wird gewaehlt),
+     * die Kontur wird faelschlich als offen erkannt statt als geschlossener Ring.
+     */
+    _removeRedundantLeadTabArcs(entities) {
+        const CENTER_TOL = 0.05;  // mm — beobachtete Abweichung zwischen Duplikaten: bis 0.01mm
+        const RADIUS_TOL = 0.05;  // mm
+        const ANGLE_TOL = 0.01;   // rad (~0.6°)
+
+        const arcs = [];
+        entities.forEach((e, idx) => {
+            if (e.sourceType === 'ARC' && e.center && e.radius !== undefined &&
+                e.startAngle !== undefined && e.endAngle !== undefined) {
+                arcs.push({ idx, e });
+            }
+        });
+        if (arcs.length < 2) return entities;
+
+        const toRemove = new Set();
+        for (let i = 0; i < arcs.length; i++) {
+            if (toRemove.has(arcs[i].idx)) continue;
+            const a = arcs[i].e;
+            const aLen = a.endAngle - a.startAngle;
+            for (let j = 0; j < arcs.length; j++) {
+                if (i === j || toRemove.has(arcs[j].idx)) continue;
+                const b = arcs[j].e;
+                const sameCircle = Math.abs(a.center.x - b.center.x) <= CENTER_TOL &&
+                    Math.abs(a.center.y - b.center.y) <= CENTER_TOL &&
+                    Math.abs(a.radius - b.radius) <= RADIUS_TOL;
+                if (!sameCircle) continue;
+
+                const bLen = b.endAngle - b.startAngle;
+                const contained = (b.startAngle - ANGLE_TOL <= a.startAngle) && (a.endAngle <= b.endAngle + ANGLE_TOL);
+                const strictlyShorter = aLen < bLen - 1e-6;
+                const equalButLaterIndex = Math.abs(aLen - bLen) < 1e-6 && arcs[i].idx > arcs[j].idx;
+                if (contained && (strictlyShorter || equalButLaterIndex)) {
+                    toRemove.add(arcs[i].idx);
+                    break;
+                }
+            }
+        }
+
+        if (toRemove.size === 0) return entities;
+        console.log(`[DXF V3.13] ${toRemove.size} redundante Anschussfahnen-Duplikat-Arc(s) entfernt (CAM-Export-Artefakt)`);
+        return entities.filter((e, idx) => !toRemove.has(idx));
+    },
+
+    /**
+     * V3.13: Entfernt freihaengende Anschussfahnen-Stubs (kurze Segmente, die an einer
+     * Verzweigung der Hauptkontur abzweigen und mit einem toten Ende enden). Erkennung:
+     * ein Endpunkt des Entities faellt mit dem Endpunkt von >=2 anderen Entities zusammen
+     * (= echte Verzweigung der Hauptkontur), das andere Ende beruehrt kein anderes Entity
+     * (= Sackgasse), und das Entity ist kurz (<= TOLERANCES.LEAD_TAB_MAX_LENGTH). Echte,
+     * gewollt offene Pfade (z.B. Slit-/Gravur-Strokes) beruehren an BEIDEN Enden kein
+     * anderes Entity und werden daher nicht angefasst.
+     */
+    _removeDanglingLeadTabs(entities) {
+        const KEY_PRECISION = 3;
+        const MAX_TAB_LENGTH = this.TOLERANCES.LEAD_TAB_MAX_LENGTH;
+        const keyOf = (p) => `${p.x.toFixed(KEY_PRECISION)},${p.y.toFixed(KEY_PRECISION)}`;
+
+        const endpoints = entities.map(e => {
+            if (!e.points || e.points.length < 2) return null;
+            const start = e.points[0], end = e.points[e.points.length - 1];
+            return { startKey: keyOf(start), endKey: keyOf(end) };
+        });
+
+        const touchCount = new Map();
+        endpoints.forEach(ep => {
+            if (!ep) return;
+            touchCount.set(ep.startKey, (touchCount.get(ep.startKey) || 0) + 1);
+            touchCount.set(ep.endKey, (touchCount.get(ep.endKey) || 0) + 1);
+        });
+
+        const toRemove = new Set();
+        entities.forEach((e, idx) => {
+            const ep = endpoints[idx];
+            if (!ep) return;
+            const startOthers = touchCount.get(ep.startKey) - 1;
+            const endOthers = touchCount.get(ep.endKey) - 1;
+            const danglingFromJunction = (startOthers >= 2 && endOthers === 0) || (endOthers >= 2 && startOthers === 0);
+            if (!danglingFromJunction) return;
+
+            let length = 0;
+            for (let i = 1; i < e.points.length; i++) {
+                length += Math.hypot(e.points[i].x - e.points[i - 1].x, e.points[i].y - e.points[i - 1].y);
+            }
+            if (length <= MAX_TAB_LENGTH) toRemove.add(idx);
+        });
+
+        if (toRemove.size === 0) return entities;
+        console.log(`[DXF V3.13] ${toRemove.size} freihaengende Anschussfahnen-Stub(s) entfernt (CAM-Export-Artefakt)`);
+        return entities.filter((e, idx) => !toRemove.has(idx));
+    },
+
     _extractEntitiesFromSection(dxfContent) {
         const lines = dxfContent.split(/\r?\n/);
         const entities = [];
@@ -631,7 +761,11 @@ const DXFParser = {
     _parseLine(lines, startIndex) {
         let x1, y1, x2, y2;
         let layer = null;
-        for (let i = startIndex; i < Math.min(startIndex + 30, lines.length); i += 2) {
+        // V3.13: Kein hartes Zeilen-Limit mehr (war 30 Zeilen) — Entities mit vollem
+        // AutoCAD-Eigenschaftssatz (Handle/Owner/Linetype/Color/Lineweight) brauchten mehr
+        // Felder als das Limit zuliess, Code 11/21 (Endpunkt) fiel dann ausserhalb. Abbruch
+        // jetzt nur an der naechsten echten Entity (Code 0), wie bei _parseLWPolyline.
+        for (let i = startIndex; i < lines.length; i += 2) {
             const code = lines[i]?.trim();
             const value = lines[i + 1]?.trim();
             if (code === '8') layer = value;
@@ -756,7 +890,8 @@ const DXFParser = {
     _parseCircle(lines, startIndex) {
         let cx, cy, radius;
         let layer = null;
-        for (let i = startIndex; i < Math.min(startIndex + 30, lines.length); i += 2) {
+        // V3.13: Kein hartes Zeilen-Limit mehr — siehe _parseLine
+        for (let i = startIndex; i < lines.length; i += 2) {
             const code = lines[i]?.trim();
             const value = lines[i + 1]?.trim();
             if (code === '8') layer = value;
@@ -780,7 +915,14 @@ const DXFParser = {
     _parseArc(lines, startIndex) {
         let cx, cy, radius, startAngle, endAngle;
         let layer = null;
-        for (let i = startIndex; i < Math.min(startIndex + 30, lines.length); i += 2) {
+        // V3.13: BUGFIX — hartes 30-Zeilen-Limit (15 Code/Value-Paare) schnitt den
+        // Endwinkel (Code 51) ab, wenn das Entity den vollen AutoCAD-Eigenschaftssatz
+        // (Handle 5, Owner 330, Linetype 6, Color 62, Lineweight 370) trug: das sind
+        // bereits 16 Paare bis Code 51 — 1 mehr als das Limit erlaubte. _parseArc gab
+        // dann null zurueck und der Arc wurde stillschweigend verworfen (keine Fehlermeldung,
+        // kein "ignored"-Log) — sichtbar als Luecke/offene Kontur an jeder Rundungsecke.
+        // Siehe _parseLWPolyline: kein hartes Limit mehr, Abbruch nur an naechster Entity.
+        for (let i = startIndex; i < lines.length; i += 2) {
             const code = lines[i]?.trim();
             const value = lines[i + 1]?.trim();
             if (code === '8') layer = value;
@@ -959,7 +1101,8 @@ const DXFParser = {
     _parseEllipse(lines, startIndex) {
         let cx, cy, majorX, majorY, ratio, startAngle, endAngle;
         let layer = null;
-        for (let i = startIndex; i < Math.min(startIndex + 30, lines.length); i += 2) {
+        // V3.13: Kein hartes Zeilen-Limit mehr — siehe _parseLine/_parseArc
+        for (let i = startIndex; i < lines.length; i += 2) {
             const code = lines[i]?.trim();
             const value = lines[i + 1]?.trim();
             if (code === '8') layer = value;
@@ -1026,7 +1169,7 @@ const DXFParser = {
             if (segments[i].isClosed) {
                 segments[i].used = true;
                 processedCount++;
-                result.push(this._createContour(segments[i].points, segments[i].layer, true, segments[i].type, segments[i]._splineData, segments[i]._center, segments[i]._radius, segments[i]._fitPoints, segments[i]._splineClosed));
+                result.push(this._createContour(segments[i].points, segments[i].layer, true, segments[i].type, segments[i]._splineData, segments[i]._center, segments[i]._radius, segments[i]._fitPoints, segments[i]._splineClosed, []));
             }
         }
 
@@ -1051,6 +1194,9 @@ const DXFParser = {
             let tailPoint = segments[i].points[segments[i].points.length - 1];
             const chainLayer = segments[i].layer || '';
             let changed = true;
+            // V3.15: echte Naht-Distanzen zwischen verschiedenen Source-Entities — Basis für
+            // die Gap-Erkennung in ceracut-pipeline.js (statt blinder Punktlisten-Scan)
+            const seams = [];
 
             while (changed) {
                 changed = false;
@@ -1059,6 +1205,10 @@ const DXFParser = {
                 const endMatch = this._findGridMatch(grid, tailPoint, segments, cellSize, tolerance, chainLayer);
                 if (endMatch) {
                     const seg = segments[endMatch.segIdx];
+                    const joinPoint = endMatch.isStart ? seg.points[0] : seg.points[seg.points.length - 1];
+                    if (endMatch.dist > 0.01) {
+                        seams.push({ x1: tailPoint.x, y1: tailPoint.y, x2: joinPoint.x, y2: joinPoint.y, distance: endMatch.dist });
+                    }
                     segments[endMatch.segIdx].used = true;
                     processedCount++;
                     this._removeFromGrid(grid, endMatch.segIdx, seg, cellSize);
@@ -1079,6 +1229,10 @@ const DXFParser = {
                 const startMatch = this._findGridMatch(grid, headPoint, segments, cellSize, tolerance, chainLayer);
                 if (startMatch) {
                     const seg = segments[startMatch.segIdx];
+                    const joinPoint = startMatch.isStart ? seg.points[0] : seg.points[seg.points.length - 1];
+                    if (startMatch.dist > 0.01) {
+                        seams.push({ x1: headPoint.x, y1: headPoint.y, x2: joinPoint.x, y2: joinPoint.y, distance: startMatch.dist });
+                    }
                     segments[startMatch.segIdx].used = true;
                     processedCount++;
                     this._removeFromGrid(grid, startMatch.segIdx, seg, cellSize);
@@ -1099,8 +1253,14 @@ const DXFParser = {
             const chain = this._concatDeque(headParts, tailParts);
 
             const isClosed = this._dist(chain[0], chain[chain.length - 1]) < tolerance;
-            if (isClosed && chain.length > 2) chain[chain.length - 1] = { x: chain[0].x, y: chain[0].y };
-            result.push(this._createContour(chain, segments[i].layer, isClosed, segments[i].type, segments[i]._splineData, null, null, segments[i]._fitPoints, segments[i]._splineClosed));
+            if (isClosed && chain.length > 2) {
+                const closeDist = this._dist(chain[0], chain[chain.length - 1]);
+                if (closeDist > 0.01) {
+                    seams.push({ x1: chain[chain.length - 1].x, y1: chain[chain.length - 1].y, x2: chain[0].x, y2: chain[0].y, distance: closeDist });
+                }
+                chain[chain.length - 1] = { x: chain[0].x, y: chain[0].y };
+            }
+            result.push(this._createContour(chain, segments[i].layer, isClosed, segments[i].type, segments[i]._splineData, null, null, segments[i]._fitPoints, segments[i]._splineClosed, seams));
 
             // Fortschritts-Log
             if (logProgress) {
@@ -1190,17 +1350,18 @@ const DXFParser = {
         return result;
     },
 
-    _createContour(points, layer, isClosed, sourceType, splineData, center, radius, fitPoints, splineClosed) {
+    _createContour(points, layer, isClosed, sourceType, splineData, center, radius, fitPoints, splineClosed, entitySeams) {
         const name = `Contour_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
         if (typeof CamContour !== 'undefined') {
             const contour = new CamContour(points, { name, layer, isClosed, _fitPoints: fitPoints || null, _splineClosed: splineClosed ?? null });
             contour.sourceType = sourceType;
+            contour.entitySeams = entitySeams || [];
             if (splineData) contour._splineData = splineData;
             if (center) contour._center = center;
             if (radius) contour._radius = radius;
             return contour;
         }
-        const result = { points, layer, isClosed, name, sourceType };
+        const result = { points, layer, isClosed, name, sourceType, entitySeams: entitySeams || [] };
         if (splineData) result._splineData = splineData;
         if (fitPoints) { result._fitPoints = fitPoints; result._splineClosed = splineClosed; }
         if (center) result._center = center;

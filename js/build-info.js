@@ -1,37 +1,37 @@
 /**
- * CeraCUT Build Info V6.21
- * Version: V6.21
- * Last Modified: 2026-06-23 MEZ
- * Build: 20260623-multidoc
+ * CeraCUT Build Info V6.29
+ * Version: V6.29
+ * Last Modified: 2026-06-24 MEZ
+ * Build: 20260624-dxfsaveencoding
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.21',
-    build: '20260623-multidoc',
-    date: '2026-06-23',
-    time: '03:00 MEZ',
+    version: '6.29',
+    build: '20260624-dxfsaveencoding',
+    date: '2026-06-24',
+    time: '14:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '53c2618',
-        date: '2026-06-23 18:27:31 +0200',
-        message: 'feat: Multi-Dokument-Tabs — mehrere DXF-Dateien gleichzeitig offen'
+        hash: 'ac8e1b4',
+        date: '2026-06-24 08:42:23 +0200',
+        message: 'fix: DXF-Speichern (FSAPI) schrieb UTF-8 statt ANSI_1252 — AutoCAD-Import scheiterte weiterhin'
     },
 
     modules: {
-        'dxf-parser':         { version: '3.12', build: '20260623-bugfixaudit' },
-        'geometry':           { version: '2.12', build: '20260623-bugfixaudit' },
-        'pipeline':           { version: '3.7', build: '20260316-gapdetect' },
-        'cam-contour':        { version: '5.10', build: '20260623-multidoc' },
+        'dxf-parser':         { version: '3.15', build: '20260624-gapfix' },
+        'geometry':           { version: '2.13', build: '20260624-gapfix' },
+        'pipeline':           { version: '3.8', build: '20260624-gapfix' },
+        'cam-contour':        { version: '5.11', build: '20260624-gapfix' },
         'canvas-renderer':    { version: '3.37', build: '20260623-autocadfeel' },
-        'undo-manager':       { version: '1.1', build: '20260309-wizard' },
+        'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
         'sinumerik-pp':       { version: '1.7', build: '20260623-bugfixaudit' },
-        'command-line':       { version: '1.4', build: '20260623-autocadfeel' },
+        'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.4', build: '20260623-bugfixaudit' },
         'geometry-ops':       { version: '2.5', build: '20260323-boundary' },
-        'drawing-tools':      { version: '2.11', build: '20260623-autocadfeel' },
+        'drawing-tools':      { version: '2.13', build: '20260624-rotatecopy-polarinput' },
         'drawing-tools-ext':  { version: '1.8', build: '20260623-bugfixaudit' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
@@ -39,8 +39,8 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.8', build: '20260623-dxfblockowner' },
         'lead-profiles':      { version: '1.1', build: '20260315-intarsia20' },
-        'app':                { version: '6.17', build: '20260623-multidoc' },
-        'document-manager':   { version: '1.0', build: '20260623-multidoc' },
+        'app':                { version: '6.19', build: '20260624-dxfsaveencoding' },
+        'document-manager':   { version: '1.1', build: '20260623-camsetupgate' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
         'debug-monitor':      { version: '1.1', build: '20260324-gitcommit' },
@@ -58,6 +58,15 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.29: Fix — DXF-Speichern via File System Access API (Strg+S / Strg+Shift+S, der Standard-Speicherpfad in Chrome/Edge) schrieb den DXF-Inhalt als rohen JS-String in den Writable-Stream. Der Browser kodiert das intern als UTF-8, obwohl der Header $DWGCODEPAGE=ANSI_1252 deklariert — Umlaute/Sonderzeichen (z.B. in Layer-Namen) wurden dadurch als Mehrbyte-UTF-8 statt Einzelbyte-ANSI geschrieben und von AutoCAD beim Import als beschädigt zurückgewiesen. Der Download-Fallback (generateDownload/Blob) war seit je davon nicht betroffen, da er bereits _encodeAnsi1252() nutzte — daher blieben frühere BLOCK/ENDBLK- und Pflicht-Sektionen-Fixes wirkungslos. Beide FSAPI-Pfade schreiben jetzt ebenfalls über _encodeAnsi1252() kodierte Bytes (app V6.19)',
+        'V6.28: Feat — Polar-Koordinaten-Eingabe ("50<45" / "@50<45") in der Command-Line — AutoCAD-Standard für Distanz+Winkel, fehlte bisher komplett und betraf Line/Polyline/Rectangle/Move/Copy/Rotate/Scale gleichermaßen (command-line V1.5)',
+        'V6.28: Feat — RotateTool (R/RO/ROTATE): fehlende AutoCAD-Option [C]opy nachgerüstet (Original bleibt erhalten, rotierte Kopie wird hinzugefügt) — gleiches Muster wie zuvor bei ScaleTool (drawing-tools V2.13)',
+        'V6.27: Feat — ScaleTool (S/SC/SCALE): fehlende AutoCAD-Optionen [C]opy (Original bleibt erhalten, skalierte Kopie wird hinzugefügt) und [R]eference (Referenzlänge + neue Länge per Punkt-Klick oder Zahlenwert, optional [P]oints für die neue Länge) nachgerüstet (drawing-tools V2.12)',
+        'V6.26: Feat — Cross-Dokument Copy/Paste (wie AutoCAD): Konturen können per Strg+C in einem Tab kopiert und per Strg+V in einem anderen Tab eingefügt werden. ClipboardManager-Payload ist jetzt ein geteiltes statisches Feld statt einer pro-Dokument-Instanz; Paste landet weiterhin korrekt auf dem Undo-Stack des Ziel-Dokuments. Fehlende Layer im Ziel-Dokument werden automatisch angelegt (undo-manager V1.2)',
+        'V6.25: Fix — Falsch-positive Gap-Marker (orange gestrichelt) bei DXF-Import: Gap-Erkennung scannte bisher blind jeden Punktabstand > 2mm in der fertigen Konturpunktliste, was normale Arc-Sehnenlaengen (grosser Radius → bewusst grobe Tessellierung) und einzelne kurze LINE-Kanten faelschlich als Luecke meldete. Neu: chainContours() zeichnet echte Naht-Distanzen zwischen verschiedenen Source-Entities auf (entitySeams[]), Gap-Klassifizierung nutzt nur noch diese (dxf-parser V3.15, ceracut-pipeline V3.8, cam-contour V5.11, geometry V2.13: toter Code MicroHealing.findInternalGaps() entfernt)',
+        'V6.24: Fix — CAM-Export-Artefakt "Anschussfahnen": gesetzte Anschussfahnen werden von manchen CAM-Systemen beim DXF-Export als redundante Arc-Duplikate bzw. freihaengende Kurz-Stubs exportiert, was das Chaining verwirrte (Konturen blieben faelschlich offen). Neue Vorverarbeitung entfernt diese Artefakte vor dem Chaining (dxf-parser V3.14)',
+        'V6.23: Fix — dxf-parser.js _parseLine/_parseCircle/_parseArc/_parseEllipse: hartes 30-Zeilen-Lookahead-Limit entfernt; ARC-Entities mit vollem AutoCAD-Eigenschaftssatz (Handle/Owner/Linetype/Color/Lineweight) wurden stillschweigend verworfen (Endwinkel Code 51 fiel ausserhalb des Limits) → Rundungsecken fehlten, Konturen blieben fälschlich offen (dxf-parser V3.13)',
+        'V6.22: Fix — CAM-Funktionen (Bearbeitung/Reihenfolge/Extras/Export-Tab, CAM-Kontextmenü) waren sofort nach DXF-Öffnen aktiv statt erst nach abgeschlossenem Setup (Referenz+Nullpunkt); Compatibility-Shim hatte currentStep hart auf 4 erzwungen und damit Step-Gating ausgehebelt — neue, von currentStep entkoppelte app.isSetupComplete()-Prüfung (app V6.18, document-manager V1.1)',
         'V6.21: Feat — Multi-Dokument-Tabs: mehrere DXF-Dateien gleichzeitig offen (wie AutoCAD), neuer document-manager.js V1.0 (Document/DocumentManager, Swap-Pattern)',
         'V6.21: Feat — Tabs werden in eigener IndexedDB "ceracut-tabs" persistiert und beim Neuladen wiederhergestellt (Undo-Historie bewusst ausgenommen)',
         'V6.21: Feat — CamContour V5.10: toJSON()/fromJSON() für Dokument-Persistenz (denylist-basiert, Cache-Felder ausgeschlossen)',

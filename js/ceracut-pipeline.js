@@ -1,8 +1,12 @@
 /**
- * CeraCUT V3.7 - Processing Pipeline
- * Last Modified: 2026-03-16 MEZ
- * Build: 20260316-gapdetect
+ * CeraCUT V3.8 - Processing Pipeline
+ * Last Modified: 2026-06-24 MEZ
+ * Build: 20260624-gapfix
  *
+ * V3.8: Fix — _classifyGaps() nutzt jetzt c.entitySeams (echte Naht-Distanzen aus
+ *       DXFParser.chainContours()) statt MicroHealing.findInternalGaps(c.points). Der alte
+ *       blinde Punktlisten-Scan markierte faelschlich grobe Arc-Tessellierung und kurze
+ *       LINE-Kanten als Gap (orange Marker ohne echten Defekt).
  * V3.7: Gap Detection — Klassifizierung (healed/healable/open), Gap-Marker-Daten auf CamContour
  * V3.6: Hatch-Konturen (cuttingMode='none') von Topologie/Slit/Offset ausgeschlossen
  * V3.5: Validation Engine — Pre-Export-Prüfung (Gap, Ecken, Waisen, Kollisionen, Offene Konturen)
@@ -46,6 +50,7 @@ const CeraCutPipeline = {
                 if (c.sourceType) cam.sourceType = c.sourceType;
                 if (c._splineData) cam._splineData = c._splineData;
                 if (c._fitPoints) { cam._fitPoints = c._fitPoints; cam._splineClosed = c._splineClosed; }
+                if (c.entitySeams) cam.entitySeams = c.entitySeams;
                 return cam;
             }
             c.kerfWidth = this.kerfWidth;
@@ -638,8 +643,11 @@ const CeraCutPipeline = {
                 }
             }
 
-            // Interne Gaps (Sprünge innerhalb der Punktliste)
-            const internalGaps = MicroHealing.findInternalGaps(c.points);
+            // V3.8: Interne Gaps — nur echte Naehte zwischen verschiedenen Source-Entities
+            // (aus DXFParser.chainContours()), NICHT mehr blinder Punktlisten-Scan. Der alte
+            // Scan markierte faelschlich auch normale Arc-Sehnenlaengen (grosser Radius →
+            // bewusst grobe Tessellierung) und einzelne kurze LINE-Kanten als "Gap".
+            const internalGaps = c.entitySeams || [];
             for (const ig of internalGaps) {
                 const perimeter = this._calculatePerimeter(c.points);
                 const isHealable = ig.distance <= this.GAP_HEALABLE_MAX &&

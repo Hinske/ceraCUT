@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CeraCUT V6.21 — Wasserstrahl CAM</title>
+    <title>CeraCUT V6.29 — Wasserstrahl CAM</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="styles.css?v=20260623-autocadfeel">
     <link rel="stylesheet" href="properties-panel-styles.css?v=20260315-ctxmenu">
@@ -39,7 +39,7 @@
             </button>
         </div>
         <span class="title-text">
-            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V6.21 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
+            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V6.29 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
         </span>
         <div class="title-right">
             <span class="version-badge">SINUMERIK 840D</span>
@@ -1442,23 +1442,23 @@
 <!-- Scripts -->
 <!-- DebugMonitor: MUSS als ERSTES geladen werden — fängt alle Fehler ab -->
 <script src="js/debug-monitor.js?v=20260324-gitcommit"></script>
-<script src="js/build-info.js?v=20260623-multidoc"></script>
+<script src="js/build-info.js?v=20260624-dxfsaveencoding"></script>
 <script src="js/constants.js?v=20260623-autocadfeel"></script>
-<script src="js/geometry.js?v=20260623-bugfixaudit"></script>
+<script src="js/geometry.js?v=20260624-gapfix"></script>
 <script src="js/arc-fitting.js?v=20260316-quietlogs"></script>
-<script src="js/dxf-parser.js?v=20260623-bugfixaudit"></script>
-<script src="js/cam-contour.js?v=20260623-multidoc"></script>
+<script src="js/dxf-parser.js?v=20260624-gapfix"></script>
+<script src="js/cam-contour.js?v=20260624-gapfix"></script>
 <script src="js/lead-profiles.js?v=20260316-quietlogs"></script>
 <script src="js/cerajet-engine.js?v=20260316-quietlogs"></script>
-<script src="js/ceracut-pipeline.js?v=20260316-gapdetect"></script>
+<script src="js/ceracut-pipeline.js?v=20260624-gapfix"></script>
 <script src="js/canvas-renderer.js?v=20260623-autocadfeel"></script>
-<script src="js/undo-manager.js?v=20260316-quietlogs"></script>
+<script src="js/undo-manager.js?v=20260624-crossdocpaste"></script>
 <script src="js/sinumerik-postprocessor.js?v=20260623-bugfixaudit"></script>
-<script src="js/command-line.js?v=20260623-autocadfeel"></script>
+<script src="js/command-line.js?v=20260624-polarinput"></script>
 <script src="js/dynamic-input.js?v=20260623-autocadfeel"></script>
 <script src="js/snap-manager.js?v=20260623-bugfixaudit"></script>
 <script src="js/geometry-ops.js?v=20260323-splinetool"></script>
-<script src="js/drawing-tools.js?v=20260623-autocadfeel"></script>
+<script src="js/drawing-tools.js?v=20260624-rotatecopy-polarinput"></script>
 <script src="js/layer-manager.js?v=20260324-undofix"></script>
 <script src="js/dxf-writer.js?v=20260623-dxfblockowner"></script>
 <script src="js/tool-manager.js?v=20260316-quietlogs"></script>
@@ -1469,7 +1469,7 @@
 <script src="js/default-font.js?v=20260315-bugfix35"></script>
 <script src="js/text-tool.js?v=20260316-quietlogs"></script>
 <script src="js/image-underlay.js?v=20260316-quietlogs"></script>
-<script src="js/document-manager.js?v=20260623-multidoc"></script>
+<script src="js/document-manager.js?v=20260623-camsetupgate"></script>
 <script src="js/dimension-tool.js?v=20260326-dimedit"></script>
 <script src="js/measure-tool.js?v=20260325-curvcheck"></script>
 <script src="js/cnc-reader.js?v=20260316-quietlogs"></script>
@@ -1483,7 +1483,7 @@
 <script src="js/quality-zones.js?v=20260316-quietlogs"></script>
 <script src="js/project-manager.js?v=20260316-quietlogs"></script>
 <script src="js/dxf-browser.js?v=20260316-quietlogs"></script>
-<script src="js/app.js?v=20260623-multidoc"></script>
+<script src="js/app.js?v=20260624-dxfsaveencoding"></script>
 
 <!-- Hidden Image Input -->
 <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/bmp,image/webp" hidden>
@@ -1501,9 +1501,18 @@
     const ribbonToStep = { file: 1, cad: 1, setup: 2, bearbeitung: 4, order: 5, extras: 4, export: 6, view: null };
     const ribbonToName = { file: 'Datei laden', cad: 'Zeichnen', setup: 'Setup', bearbeitung: 'Bearbeitung', order: 'Reihenfolge', extras: 'Extras', export: 'Export', view: 'Ansicht' };
 
+    // V6.21: CAM-Tabs — erst klickbar nach abgeschlossenem Setup (Referenz + Nullpunkt)
+    const CAM_TABS = ['bearbeitung', 'order', 'extras', 'export'];
+
     ribbonTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             const target = tab.dataset.ribbon;
+
+            // V6.21: CAM-Tab vor abgeschlossenem Setup sperren
+            if (CAM_TABS.includes(target) && !(window.app?.isSetupComplete?.())) {
+                window.app?.showToast?.('Bitte zuerst im Setup-Tab Referenz und Nullpunkt festlegen', 'warning');
+                return;
+            }
 
             // Update tab active state
             ribbonTabs.forEach(t => t.classList.remove('active'));
@@ -1554,6 +1563,13 @@
                 if (startHint && (this.fileLoaded || this.contours?.length)) {
                     startHint.classList.add('hidden');
                 }
+                // V6.21: CAM-Tabs visuell sperren, solange Setup nicht abgeschlossen ist
+                const unlocked = this.isSetupComplete?.();
+                document.querySelectorAll('.ribbon-tab[data-ribbon]').forEach(t => {
+                    if (CAM_TABS.includes(t.dataset.ribbon)) {
+                        t.classList.toggle('cam-locked', !unlocked);
+                    }
+                });
             };
             
             // CRITICAL FIX: goToStep — im Ribbon-UI gibt es keine Steps mehr.
@@ -1598,7 +1614,10 @@
                 tab.addEventListener('click', () => {
                     const ribbon = tab.dataset.ribbon;
                     if (!window.app?.renderer) return;
-                    
+
+                    // V6.21: CAM-Tab vor abgeschlossenem Setup sperren (Modus/Step NICHT umschalten)
+                    if (CAM_TABS.includes(ribbon) && !window.app.isSetupComplete?.()) return;
+
                     // V5.0: DrawMode beenden wenn Tab gewechselt wird (sonst keine Selektion möglich!)
                     if (ribbon !== 'draw' && window.app.drawingTools?.drawMode) {
                         window.app.drawingTools.exitDrawMode();

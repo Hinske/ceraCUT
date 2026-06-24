@@ -1,7 +1,10 @@
 /**
- * CeraCUT V2.12 - Geometry Kernel
- * Last Modified: 2026-06-23 UTC
- * Build: 20260623-bugfixaudit
+ * CeraCUT V2.13 - Geometry Kernel
+ * Last Modified: 2026-06-24 UTC
+ * Build: 20260624-gapfix
+ * V2.13: Cleanup — MicroHealing.findInternalGaps() entfernt (toter Code). Wurde nur von
+ *        ceracut-pipeline.js:_classifyGaps() aufgerufen, das jetzt c.entitySeams (echte
+ *        Naht-Distanzen aus DXFParser.chainContours()) statt blindem Punktlisten-Scan nutzt.
  * V2.12: Fix — offsetPolygon() const-Reassignment-Crash bei NaN-Intersection (const→let)
  *
  * Mathematics over Guesswork
@@ -1117,29 +1120,6 @@ const MicroHealing = {
     });
 
     return { healed: finalHealed, stats };
-  },
-
-  /**
-   * V2.9: Findet interne Gaps (Sprünge) in einer Punktliste
-   * @param {Array} points - Punktliste
-   * @param {number} threshold - Mindestabstand für Gap (default: 2.0mm)
-   * @returns {Array} [{index, x1,y1, x2,y2, distance}]
-   */
-  findInternalGaps(points, threshold = 2.0) {
-    if (!points || points.length < 2) return [];
-    const gaps = [];
-    for (let i = 0; i < points.length - 1; i++) {
-      const d = Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
-      if (d > threshold) {
-        gaps.push({
-          index: i,
-          x1: points[i].x, y1: points[i].y,
-          x2: points[i + 1].x, y2: points[i + 1].y,
-          distance: d
-        });
-      }
-    }
-    return gaps;
   },
 
   /**
