@@ -1,30 +1,30 @@
 /**
- * CeraCUT Build Info V6.35
- * Version: V6.35
+ * CeraCUT Build Info V6.36
+ * Version: V6.36
  * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-kerfflipleadfix
+ * Build: 20260624-cornerleadfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.35',
-    build: '20260624-kerfflipleadfix',
+    version: '6.36',
+    build: '20260624-cornerleadfix',
     date: '2026-06-24',
-    time: '21:05 MEZ',
+    time: '21:50 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '5005968',
-        date: '2026-06-24 19:01:01 +0200',
-        message: 'fix: kerfFlipped wurde in Lead-Waste-Side-Normale ignoriert — Innen-Lead schnitt ins Werkstück'
+        hash: 'eee1f95',
+        date: '2026-06-24 19:21:17 +0200',
+        message: 'fix: Lead an Konturecken konnte ins Werkstück schneiden; Startpunkt nur auf Ecken verschiebbar'
     },
 
     modules: {
         'dxf-parser':         { version: '3.15', build: '20260624-gapfix' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.8', build: '20260624-gapfix' },
-        'cam-contour':        { version: '5.13', build: '20260624-kerfflipleadfix' },
+        'cam-contour':        { version: '5.14', build: '20260624-cornerleadfix' },
         'canvas-renderer':    { version: '3.39', build: '20260624-leadoverhaul' },
         'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
         'sinumerik-pp':       { version: '1.8', build: '20260624-leadoverhaul' },
@@ -63,6 +63,20 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.36: Fix — Lead an Konturecken (insb. konkave "Innenecken") schnitt teils ins ' +
+        'Werkstück: getLeadInPath()/getLeadOutPath() leiteten Tangente/Normale bisher nur aus ' +
+        'der auslaufenden Kante ab. Neue _getCornerSafeLeadBasis() (cam-contour.js) bildet den ' +
+        'Bisektor aus einlaufender UND auslaufender Kanten-Normale; degeneriert auf gerader ' +
+        'Strecke zur alten Normale (keine Verhaltensaenderung dort). Linearer Lead-Winkel wird ' +
+        'an erkannten Ecken zusaetzlich auf 90° (rein senkrecht in die Verschnittflaeche) ' +
+        'erzwungen, da ein flacher/tangentialer Winkel an Ecken unsicher ist — eigene ' +
+        'vorzeichen-unabhaengige Ecken-Erkennung, da die bestehende _isAtCorner() konvex/' +
+        'konkav-blind ist. Zusaetzlich: setStartPoint() snappte bisher immer auf den naechsten ' +
+        'existierenden Vertex statt auf die tatsaechliche Drag-Position — auf langen geraden ' +
+        'Kanten ohne Zwischenpunkte (z.B. aus DXF) konnte der Startpunkt dadurch nur auf ' +
+        'Eckpunkte springen. Jetzt wird bei Bedarf ein neuer Punkt exakt an der Drag-Position ' +
+        'eingefuegt; Snap auf existierenden Vertex nur noch in dessen unmittelbarer Naehe ' +
+        '(cam-contour V5.14)',
         'V6.35: Fix — _getWasteSideNormal() (cam-contour.js) ignorierte das kerfFlipped-Flag ' +
         '("Kompensation auf Gegenseite"): getKerfOffsetPolyline() und _getKerfCode() (G41/G42) ' +
         'kehren beim Kerf-Flip eines Lochs die Verschnittseite korrekt um, die Lead-Waste-Side-' +

@@ -1,5 +1,22 @@
 /**
- * CeraCUT CamContour V5.13 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.14 - IGEMS-konformes Lead-In/Out System
+ * V5.14: Fix — Lead an Konturecken (v.a. konkave "Innenecken") konnte ins Werkstück
+ *        schneiden: getLeadInPath()/getLeadOutPath() berechneten Tangente/Normale bisher
+ *        NUR aus der auslaufenden Kante — an einer Ecke zeigt das teils auf die falsche
+ *        Seite. Neue _getCornerSafeLeadBasis() bildet den Bisektor aus einlaufender UND
+ *        auslaufender Kanten-Normale (degeneriert auf gerader Strecke zur alten Normale,
+ *        keine Verhaltensaenderung dort). Zusaetzlich: linearer Lead-Winkel wird an
+ *        erkannten Ecken auf 90° (rein senkrecht in die Verschnittflaeche) erzwungen,
+ *        da ein flacher/tangentialer Winkel an Ecken generell unsicher ist — eigene
+ *        vorzeichen-unabhaengige Ecken-Erkennung (Tangenten-Dot-Product), da die
+ *        bestehende _isAtCorner() konvex/konkav-blind ist und genau die fraglichen
+ *        Innenecken-Faelle nicht erkennt.
+ *        Ausserdem: setStartPoint() snappte bisher IMMER auf den naechsten existierenden
+ *        Vertex statt auf die tatsaechliche Drag-Position — auf langen geraden Kanten
+ *        ohne Zwischenpunkte (z.B. aus DXF) konnte der Startpunkt dadurch nur auf die
+ *        Eckpunkte springen, nie dazwischen. Jetzt: Punkt wird bei Bedarf exakt an der
+ *        Drag-Position eingefuegt (Segment-Split), Snap auf Vertex nur noch in dessen
+ *        unmittelbarer Naehe (MIN_SEGMENT-Toleranz).
  * V5.13: Fix — _getWasteSideNormal() ignorierte kerfFlipped ("Kompensation auf
  *        Gegenseite"): getKerfOffsetPolyline() kehrte bei kerfFlipped=true die
  *        Verschnittseite korrekt um, die Lead-Normale tat das nicht — Innen-Leads
@@ -293,6 +310,42 @@ class CamContour {
         return { x: nx, y: ny };
     }
 
+    /**
+     * V5.14: Eckpunkt-sichere Tangente/Normale fuer Lead-Berechnung an einem Vertex.
+     *
+     * _getWasteSideNormal() betrachtet nur EINE Kante (die uebergebene Tangente). An
+     * einem Eckpunkt ist das unzureichend: die einlaufende und auslaufende Kante zeigen
+     * in unterschiedliche Richtungen, und besonders an konkaven ("Innenecken") Ecken kann
+     * eine allein auf der Ausgangskante basierende Normale auf die FALSCHE Seite zeigen
+     * (ins Werkstueck statt in die Verschnittflaeche) — siehe Lessons 2026-06-24.
+     *
+     * Fix: Normale = Bisektor der Verschnitt-Normalen BEIDER angrenzender Kanten. Auf
+     * geraden Strecken (t_in ≈ t_out) ist das Ergebnis identisch zur Einzelkanten-Normale
+     * (keine Verhaltensaenderung), an Ecken zeigt der Bisektor zuverlaessig in den
+     * tatsaechlichen Verschnitt-Keil — auch wenn dieser an einer Innenecke sehr schmal ist.
+     *
+     * @param {{x,y}} vertex - Punkt an dem die Tangenten zusammentreffen
+     * @param {{x,y}} tangentIn - Richtung der EINLAUFENDEN Kante (zeigt zum vertex hin)
+     * @param {{x,y}} tangentOut - Richtung der AUSLAUFENDEN Kante (zeigt vom vertex weg)
+     * @returns {{tangent:{x,y}, normal:{x,y}}}
+     */
+    _getCornerSafeLeadBasis(vertex, tangentIn, tangentOut) {
+        const normalIn = this._getWasteSideNormal(vertex, tangentIn);
+        const normalOut = this._getWasteSideNormal(vertex, tangentOut);
+
+        let bx = normalIn.x + normalOut.x;
+        let by = normalIn.y + normalOut.y;
+        const bLen = Math.hypot(bx, by);
+
+        // Degenerierter Fall (~180°-Spitze, Normalen heben sich fast auf): Ausgangskante behalten
+        const normal = bLen > 0.01 ? { x: bx / bLen, y: by / bLen } : normalOut;
+        // Tangente aus Normale rekonstruieren — Umkehrung von _getWasteSideNormal's
+        // Links-Normale-Beziehung (-ty,tx): tangent = (ny, -nx)
+        const tangent = { x: normal.y, y: -normal.x };
+
+        return { tangent, normal };
+    }
+
     // ════════════════════════════════════════════════════════════════
     // CORNER DETECTION
     // ════════════════════════════════════════════════════════════════
@@ -444,12 +497,22 @@ class CamContour {
 
         const entry = pts[0];
         const next = pts[1];
+        const prevPt = pts[pts.length - 2]; // closed: pts[length-1] === pts[0]
 
         const dx = next.x - entry.x, dy = next.y - entry.y;
         const len = Math.hypot(dx, dy);
-        const tangent = len > 0.0001 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 };
+        const tangentOut = len > 0.0001 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 };
 
-        const normal = this._getWasteSideNormal(entry, tangent);
+        const dxIn = entry.x - prevPt.x, dyIn = entry.y - prevPt.y;
+        const lenIn = Math.hypot(dxIn, dyIn);
+        const tangentIn = lenIn > 0.0001 ? { x: dxIn / lenIn, y: dyIn / lenIn } : tangentOut;
+
+        // V5.14: Eckpunkt-Bisektor statt nur Ausgangskante (siehe _getCornerSafeLeadBasis)
+        const { tangent, normal } = this._getCornerSafeLeadBasis(entry, tangentIn, tangentOut);
+        // V5.14: Eigene, vorzeichen-unabhaengige Ecken-Erkennung fuer die Winkel-Sicherheit
+        // (_isAtCorner() ist Konvex/Konkav-blind und miss-klassifiziert genau die Innenecken-
+        // Faelle, um die es hier geht — siehe Lessons 2026-06-24). >14° Tangentenabweichung.
+        const isSharpVertexCorner = (tangentIn.x * tangentOut.x + tangentIn.y * tangentOut.y) < 0.97;
 
         // DYNAMIC LEAD (B.2): effektive Länge berechnen
         // DYNAMIC LEAD (B.2): temporär effektive Länge setzen, nach Berechnung wiederherstellen
@@ -465,11 +528,16 @@ class CamContour {
         if (cornerAngle > 120 && effectiveType === 'arc') {
             effectiveType = 'linear';
         }
+        // V5.14: An scharfen Ecken ist ein flacher/tangentialer Lead-Winkel unsicher (die
+        // Bisektor-Tangente ist nur eine 90°-Rotation der sicheren Normalen, KEINE
+        // garantiert kollisionsfreie Richtung) — Winkel auf 90° (rein normal/senkrecht
+        // in die Verschnittflaeche) erzwingen, unabhaengig vom konfigurierten leadInAngle.
+        const safeLinearAngle = isSharpVertexCorner ? 90 : this.leadInAngle;
 
         let leadPath;
         switch (effectiveType) {
             case 'linear':
-                leadPath = this._calcLinearLeadIn(entry, tangent, normal);
+                leadPath = this._calcLinearLeadIn(entry, tangent, normal, safeLinearAngle);
                 leadPath = this._shortenLeadIfCollision(leadPath, pts);
                 break;
             case 'arc':
@@ -521,10 +589,13 @@ class CamContour {
 
     /**
      * LINEAR LEAD-IN - Gerade vom Pierce-Punkt zur Kontur
+     * @param {number} [angleOverride] - V5.14: ersetzt this.leadInAngle (z.B. an scharfen
+     *        Ecken auf 90° erzwungen — ein flacher/tangentialer Winkel ist dort unsicher,
+     *        siehe getLeadInPath CORNER DETECTION)
      */
-    _calcLinearLeadIn(entry, tangent, normal) {
+    _calcLinearLeadIn(entry, tangent, normal, angleOverride) {
         const length = this.leadInLength;
-        const angleRad = this.leadInAngle * Math.PI / 180;
+        const angleRad = (angleOverride !== undefined ? angleOverride : this.leadInAngle) * Math.PI / 180;
 
         const approachX = normal.x * Math.sin(angleRad) - tangent.x * Math.cos(angleRad);
         const approachY = normal.y * Math.sin(angleRad) - tangent.y * Math.cos(angleRad);
@@ -925,7 +996,8 @@ class CamContour {
 
         // 1. Overcut-Endpunkt bestimmen
         const overcut = this.getOvercutPath();
-        let exitPoint, exitTangent;
+        let exitPoint, exitTangent, normal;
+        let isSharpVertexCorner = false;
 
         if (overcut?.points?.length >= 2) {
             const op = overcut.points;
@@ -934,16 +1006,30 @@ class CamContour {
             const dx = exitPoint.x - prev.x, dy = exitPoint.y - prev.y;
             const len = Math.hypot(dx, dy);
             exitTangent = len > 0.001 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 };
+            // Bei Overcut liegt der Exit-Punkt i.d.R. NICHT mehr exakt auf dem Start-
+            // Vertex (pts[0]) — die auslaufende Kante fuer einen Eckpunkt-Bisektor ist
+            // hier nicht eindeutig bestimmbar, daher Einzelkanten-Normale wie bisher.
+            normal = this._getWasteSideNormal(exitPoint, exitTangent);
         } else {
             exitPoint = { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y };
             const prev = pts[pts.length - 2];
             const dx = exitPoint.x - prev.x, dy = exitPoint.y - prev.y;
             const len = Math.hypot(dx, dy);
             exitTangent = len > 0.001 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 };
-        }
 
-        // 2. Normale zur Verschnittseite
-        const normal = this._getWasteSideNormal(exitPoint, exitTangent);
+            // V5.14: Ohne Overcut liegt der Exit-Punkt exakt auf dem Start-Vertex (pts[0])
+            // — Eckpunkt-Bisektor wie bei getLeadInPath anwenden (auslaufende Kante = pts[0]→pts[1]).
+            const next = pts[1];
+            const dxOut = next.x - exitPoint.x, dyOut = next.y - exitPoint.y;
+            const lenOut = Math.hypot(dxOut, dyOut);
+            const tangentOut = lenOut > 0.0001 ? { x: dxOut / lenOut, y: dyOut / lenOut } : exitTangent;
+            // V5.14: siehe getLeadInPath — vorzeichen-unabhaengige Ecken-Erkennung VOR
+            // dem Ueberschreiben von exitTangent durch die Bisektor-Tangente pruefen.
+            isSharpVertexCorner = (exitTangent.x * tangentOut.x + exitTangent.y * tangentOut.y) < 0.97;
+            const basis = this._getCornerSafeLeadBasis(exitPoint, exitTangent, tangentOut);
+            normal = basis.normal;
+            exitTangent = basis.tangent;
+        }
 
         // 3. CORNER DETECTION: Nur an sehr scharfen Ecken (>120°) Linear erzwingen
         const cornerAngle = this._isAtCorner(pts);
@@ -951,12 +1037,14 @@ class CamContour {
         if (cornerAngle > 120 && effectiveType === 'arc') {
             effectiveType = 'linear';
         }
+        // V5.14: siehe getLeadInPath — flacher Winkel an scharfen Ecken unsicher
+        const safeLinearAngle = isSharpVertexCorner ? 90 : this.leadOutAngle;
 
         // 4. Lead-Out berechnen
         let leadPath;
         switch (effectiveType) {
             case 'linear':
-                leadPath = this._calcLinearLeadOut(exitPoint, exitTangent, normal);
+                leadPath = this._calcLinearLeadOut(exitPoint, exitTangent, normal, safeLinearAngle);
                 leadPath = this._shortenLeadIfCollision(leadPath, pts);
                 break;
             case 'arc':
@@ -1054,9 +1142,12 @@ class CamContour {
         return altPath;
     }
 
-    _calcLinearLeadOut(exit, tangent, normal) {
+    /**
+     * @param {number} [angleOverride] - V5.14: siehe _calcLinearLeadIn
+     */
+    _calcLinearLeadOut(exit, tangent, normal, angleOverride) {
         const length = this.leadOutLength;
-        const angleRad = this.leadOutAngle * Math.PI / 180;
+        const angleRad = (angleOverride !== undefined ? angleOverride : this.leadOutAngle) * Math.PI / 180;
 
         const departX = normal.x * Math.sin(angleRad) + tangent.x * Math.cos(angleRad);
         const departY = normal.y * Math.sin(angleRad) + tangent.y * Math.cos(angleRad);
@@ -1879,22 +1970,41 @@ class CamContour {
         const result = Geometry.closestPointOnPolyline(worldPoint, this.points);
         if (!result) return;
 
+        // V5.14 Fix: Bisher wurde immer der naechstliegende EXISTIERENDE Vertex gewaehlt
+        // statt der tatsaechlichen Drag-Position auf der Kontur — auf langen geraden
+        // Kanten ohne Zwischenpunkte (z.B. aus DXF) konnte der Startpunkt dadurch nur
+        // auf die beiden Eckpunkte des Segments springen, NIE auf einen Punkt dazwischen.
+        const segIdx = result.segmentIndex;
         const n = this.points.length - 1; // Letzter = erster bei closed
-        let bestIdx = 0;
-        let bestDist = Infinity;
-        for (let i = 0; i < n; i++) {
-            const d = Math.hypot(
-                this.points[i].x - result.point.x,
-                this.points[i].y - result.point.y
-            );
-            if (d < bestDist) { bestDist = d; bestIdx = i; }
+        const p1 = this.points[segIdx];
+        const p2 = this.points[(segIdx + 1) % (n + 1)];
+        const distToP1 = Geometry.distance(result.point, p1);
+        const distToP2 = Geometry.distance(result.point, p2);
+        // Snap auf existierenden Vertex nur in dessen unmittelbarer Naehe (MIN_SEGMENT-
+        // Toleranz) — sonst wuerde jeder Drag in Richtung Ecke einen Mikro-Punkt knapp
+        // daneben einfuegen statt exakt auf der Ecke zu landen.
+        const SNAP_DIST = (typeof CeraCUT !== 'undefined' && CeraCUT.TOLERANCES?.MIN_SEGMENT) || 1.0;
+
+        let pts = this.points;
+        let bestIdx;
+        if (distToP1 <= SNAP_DIST && distToP1 <= distToP2) {
+            bestIdx = segIdx;
+        } else if (distToP2 <= SNAP_DIST) {
+            bestIdx = (segIdx + 1) % n;
+        } else {
+            // Drag-Position liegt auf einer geraden Strecke zwischen zwei Vertices —
+            // neuen Punkt exakt dort einfuegen (Segment splitten), statt zu snappen.
+            pts = this.points.slice();
+            pts.splice(segIdx + 1, 0, { x: result.point.x, y: result.point.y });
+            bestIdx = segIdx + 1;
         }
 
-        if (bestIdx === 0) return;
+        if (bestIdx === 0 && pts === this.points) return;
 
+        const newN = pts.length - 1;
         const rotated = [];
-        for (let i = 0; i < n; i++) {
-            rotated.push(this.points[(bestIdx + i) % n]);
+        for (let i = 0; i < newN; i++) {
+            rotated.push(pts[(bestIdx + i) % newN]);
         }
         rotated.push({ x: rotated[0].x, y: rotated[0].y });
         this.points = rotated;
