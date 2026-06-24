@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CeraCUT — Anmelden</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="styles.css?v=20260624-userlogin">
+    <style>
+        html, body { height: 100%; margin: 0; }
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--viewport-bg);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        .login-card {
+            width: 320px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 28px 28px 24px;
+        }
+        .login-brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .login-brand svg { width: 22px; height: 22px; }
+        .login-brand span { font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
+        .login-field { margin-bottom: 14px; }
+        .login-field label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .login-field input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 7px 8px;
+            background: var(--panel-input-bg);
+            border: 1px solid var(--panel-input-border);
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+        .login-field input:focus { outline: none; border-color: var(--accent-blue); }
+        .login-submit {
+            width: 100%;
+            padding: 8px;
+            margin-top: 6px;
+            background: var(--accent-blue);
+            border: 1px solid var(--accent-blue);
+            color: #fff;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .login-submit:hover { background: #005fa3; }
+        .login-error {
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--accent-red);
+            min-height: 14px;
+        }
+    </style>
+</head>
+<body>
+    <form class="login-card" id="login-form" autocomplete="on">
+        <div class="login-brand">
+            <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="1" stroke="#4fc3f7" stroke-width="1.5" fill="none"/><path d="M4 8h8M8 4v8" stroke="#4fc3f7" stroke-width="1.2"/></svg>
+            <span>CeraCUT — Anmelden</span>
+        </div>
+        <div class="login-field">
+            <label for="login-username">Benutzername</label>
+            <input type="text" id="login-username" name="username" autocomplete="username" autofocus required>
+        </div>
+        <div class="login-field">
+            <label for="login-password">Passwort</label>
+            <input type="password" id="login-password" name="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="login-submit">Anmelden</button>
+        <div class="login-error" id="login-error"></div>
+    </form>
+    <script src="js/login.js?v=20260624-userlogin"></script>
+</body>
+</html>

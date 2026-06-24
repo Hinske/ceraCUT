@@ -4,14 +4,20 @@
  * Ermöglicht das Browsen und Laden von DXF-Dateien vom Server-Netzlaufwerk
  * über die /api/dxf/* Endpunkte von server.js.
  *
- * Version: V1.0
- * Last Modified: 2026-03-15
+ * Version: V1.1
+ * V1.1: Zuletzt-Pfad pro User (_userKey(), Login/User-Management V6.32)
+ * Last Modified: 2026-06-24
  */
+
+/** Pro-User-Namespacing für localStorage-Keys (V6.32 Login/User-Management). */
+function _userKey(base) {
+    return (typeof window !== 'undefined' && window.CeraCutCurrentUser) ? base + '::' + window.CeraCutCurrentUser : base;
+}
 
 class DXFBrowser {
     constructor(app) {
         this.app = app;
-        this.currentPath = localStorage.getItem('ceracut-dxf-browser-path') || '';
+        this.currentPath = localStorage.getItem(_userKey('ceracut-dxf-browser-path')) || '';
         this.overlay = null;
         this.isAvailable = null; // null = ungeprüft
     }
@@ -108,7 +114,7 @@ class DXFBrowser {
      */
     async loadDirectory(dirPath) {
         this.currentPath = dirPath;
-        localStorage.setItem('ceracut-dxf-browser-path', dirPath);
+        localStorage.setItem(_userKey('ceracut-dxf-browser-path'), dirPath);
         const listEl = this.overlay?.querySelector('.dxf-browser-list');
         const statusEl = this.overlay?.querySelector('.dxf-browser-status');
         if (!listEl) return;

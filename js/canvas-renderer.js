@@ -1,7 +1,8 @@
 /**
- * CeraCUT V3.37 - Canvas Renderer
+ * CeraCUT V3.38 - Canvas Renderer
  * Features: Selection, Lead-In/Out, Overcut, Micro-Joints, Travel Paths, Order Numbers,
  *           Startpunkt-Drag im Anschuss-Modus, SLIT Support
+ * V3.38: Theme-Key pro User (_userKey(), Login/User-Management V6.32)
  * V3.37: AutoCAD-Grip-Stil (hohle Quadrate, Cold/Hover/Hot) + Vollbild-Fadenkreuz bei aktivem Tool
  * V3.36: edgeOnly — Window-Selection + Rechtsklick funktionieren im Inneren geschlossener Konturen
  * V3.35: _notifyStateChange() nach Grip-Edit → Undo-Buttons aktualisieren sich korrekt
@@ -28,7 +29,8 @@
  * V3.11: Image Underlay Rendering
  * V3.5: Ghost-Preview + Window-Selection Rendering
  * V3.4: Drawing-Overlay + SnapManager-Rendering
- * Last Modified: 2026-03-16 MEZ
+ * Last Modified: 2026-06-24 MEZ
+ * Build: 20260624-userlogin
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -115,6 +117,11 @@ const CANVAS_THEMES = {
     }
 };
 
+/** Pro-User-Namespacing für localStorage-Keys (V6.32 Login/User-Management). */
+function _userKey(base) {
+    return (typeof window !== 'undefined' && window.CeraCutCurrentUser) ? base + '::' + window.CeraCutCurrentUser : base;
+}
+
 class CanvasRenderer {
     static TOLERANCE = {
         SNAP: 8,       // Reduziert von 12 — weniger aggressives Snapping
@@ -170,7 +177,7 @@ class CanvasRenderer {
         this._hasSelection = false; // Schneller Check ohne .some() bei jedem Render
 
         // Starte mit gespeichertem Theme oder Dark als Default
-        const savedTheme = (typeof localStorage !== 'undefined' && localStorage.getItem('ceracut-theme')) || 'dark';
+        const savedTheme = (typeof localStorage !== 'undefined' && localStorage.getItem(_userKey('ceracut-theme'))) || 'dark';
         this.colors = Object.assign({}, CANVAS_THEMES[savedTheme] || CANVAS_THEMES.dark);
         this._currentTheme = savedTheme;
 

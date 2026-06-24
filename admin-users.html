@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CeraCUT — Benutzerverwaltung</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="styles.css?v=20260624-userlogin">
+    <style>
+        html, body { margin: 0; background: var(--viewport-bg); color: var(--text-primary); font-family: 'Segoe UI', Arial, sans-serif; }
+        .admin-shell { max-width: 720px; margin: 0 auto; padding: 24px; }
+        .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+        .admin-header h1 { font-size: 16px; font-weight: 600; margin: 0; }
+        .admin-header a { color: var(--accent-blue); text-decoration: none; font-size: 13px; }
+        .admin-card { background: var(--bg-card); border: 1px solid var(--border-color); padding: 16px; margin-bottom: 20px; }
+        .admin-card h2 { font-size: 13px; margin: 0 0 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        table.user-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table.user-table th, table.user-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border-color); }
+        table.user-table th { color: var(--text-muted); font-weight: 500; }
+        table.user-table button { background: none; border: 1px solid var(--border-color); color: var(--text-primary); padding: 3px 8px; font-size: 12px; cursor: pointer; margin-right: 4px; }
+        table.user-table button:hover { border-color: var(--accent-blue); }
+        table.user-table button.danger:hover { border-color: var(--accent-red); color: var(--accent-red); }
+        .form-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+        .form-row .field { flex: 1; min-width: 140px; }
+        .form-row label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+        .form-row input, .form-row select {
+            width: 100%; box-sizing: border-box; padding: 6px 8px;
+            background: var(--panel-input-bg); border: 1px solid var(--panel-input-border);
+            color: var(--text-primary); font-size: 13px;
+        }
+        .admin-submit { padding: 7px 16px; background: var(--accent-blue); border: 1px solid var(--accent-blue); color: #fff; font-size: 13px; cursor: pointer; }
+        .admin-submit:hover { background: #005fa3; }
+        .admin-msg { margin-top: 10px; font-size: 12px; min-height: 14px; }
+        .admin-msg.error { color: var(--accent-red); }
+        .admin-msg.success { color: var(--accent-green); }
+        #no-access { display: none; text-align: center; margin-top: 60px; color: var(--text-muted); }
+    </style>
+</head>
+<body>
+    <div class="admin-shell" id="admin-shell">
+        <div class="admin-header">
+            <h1>CeraCUT — Benutzerverwaltung</h1>
+            <a href="/">&larr; zurück zur App</a>
+        </div>
+
+        <div class="admin-card">
+            <h2>Neuen Benutzer anlegen</h2>
+            <form id="create-form">
+                <div class="form-row">
+                    <div class="field">
+                        <label for="new-username">Benutzername</label>
+                        <input type="text" id="new-username" required>
+                    </div>
+                    <div class="field">
+                        <label for="new-password">Passwort</label>
+                        <input type="password" id="new-password" required minlength="4">
+                    </div>
+                    <div class="field">
+                        <label for="new-role">Rolle</label>
+                        <select id="new-role">
+                            <option value="user">Benutzer</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="admin-submit">Anlegen</button>
+                <div class="admin-msg" id="create-msg"></div>
+            </form>
+        </div>
+
+        <div class="admin-card">
+            <h2>Benutzer</h2>
+            <table class="user-table">
+                <thead>
+                    <tr><th>Benutzername</th><th>Rolle</th><th>Erstellt</th><th>Aktionen</th></tr>
+                </thead>
+                <tbody id="user-table-body"></tbody>
+            </table>
+            <div class="admin-msg" id="list-msg"></div>
+        </div>
+    </div>
+
+    <div id="no-access">
+        <p>Kein Zugriff — diese Seite ist nur für Administratoren.</p>
+        <p><a href="/" style="color: var(--accent-blue)">&larr; zurück zur App</a></p>
+    </div>
+
+    <script src="js/admin-users.js?v=20260624-userlogin"></script>
+</body>
+</html>

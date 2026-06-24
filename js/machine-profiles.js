@@ -1,23 +1,30 @@
 /**
- * CeraCUT Machine Profiles V1.0
+ * CeraCUT Machine Profiles V1.1
  *
  * Maschinenpark-Verwaltung fuer Wasserstrahl-CAM Software.
  * Verwaltet CNC-Maschinenprofile mit Arbeitsbereich, Druckparametern,
  * Postprozessor-Einstellungen, Achskonfiguration und M-Code-Mappings.
  *
  * Persistenz via LocalStorage, Export/Import als JSON.
+ * V1.1: Aktive Profil-Auswahl (ACTIVE_KEY) pro User (_userKey()) — die Profil-
+ *       Liste selbst (STORAGE_KEY) bleibt firmenweit geteilt (Login/User-Management V6.32)
  *
- * Last Modified: 2026-03-09
- * Build: 20260309
+ * Last Modified: 2026-06-24
+ * Build: 20260624-userlogin
  */
 
 const MachineProfiles = (() => {
     'use strict';
 
-    const VERSION = '1.0';
+    const VERSION = '1.1';
     const STORAGE_KEY = 'ceracut_machine_profiles';
     const ACTIVE_KEY = 'ceracut_active_profile';
     const PREFIX = `[MachineProfiles V${VERSION}]`;
+
+    /** Pro-User-Namespacing für die aktive Profil-Auswahl (Profil-Liste bleibt global). */
+    function _userKey(base) {
+        return (typeof window !== 'undefined' && window.CeraCutCurrentUser) ? base + '::' + window.CeraCutCurrentUser : base;
+    }
 
     // ════════════════════════════════════════════════════════════════
     // REQUIRED FIELDS fuer Validierung
@@ -452,7 +459,7 @@ const MachineProfiles = (() => {
                 data.push(profile);
             }
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-            localStorage.setItem(ACTIVE_KEY, _activeProfileId || '');
+            localStorage.setItem(_userKey(ACTIVE_KEY), _activeProfileId || '');
             console.log(`${PREFIX} Gespeichert: ${data.length} Profile`);
         } catch (e) {
             console.error(`${PREFIX} Fehler beim Speichern:`, e);
@@ -476,7 +483,7 @@ const MachineProfiles = (() => {
                 }
             }
 
-            _activeProfileId = localStorage.getItem(ACTIVE_KEY) || null;
+            _activeProfileId = localStorage.getItem(_userKey(ACTIVE_KEY)) || null;
 
             // Aktives Profil validieren
             if (_activeProfileId && !_profiles.has(_activeProfileId)) {

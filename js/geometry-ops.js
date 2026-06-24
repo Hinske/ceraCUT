@@ -1,15 +1,19 @@
 /**
- * CeraCUT GeometryOps V2.5 — Geometry Operations Engine
+ * CeraCUT GeometryOps V2.6 — Geometry Operations Engine
  * Foundation für Tier 3+5 CAD Tools
  *
+ * V2.6: chamferPolyline() hinzugefügt (Pendant zu filletPolyline, für RectangleTool
+ *       Chamfer-Option). Fix: filletPolyline()/chamferPolyline() verarbeiteten bei
+ *       geschlossenen Konturen (letzter Punkt = Duplikat des ersten) die erste Ecke
+ *       doppelt (endIdx war n-1 statt n-2) — betraf auch das bestehende FilletTool.
  * V2.5: Boundary from Seed Point — DCEL-basierter Planar Graph, Face-Tracing (AutoCAD BOUNDARY)
  * V2.2: Arabeske (Laternenfliese) — 8 Kreisbögen, _arcThrough3Points, _circumscribedCircle
  * V2.1: Stabiler _trimClosedBetween (Index-basiert), trimContourPreview für Hover
  * V2.0: Fillet, Chamfer, Trim, Extend, Offset, Boolean, N-gon, Obround Algorithmen
  * V1.0: Segment-Modell, Intersection, Split, Explode, Join
  *
- * Last Modified: 2026-03-23 MEZ
- * Build: 20260323-boundary
+ * Last Modified: 2026-06-24 MEZ
+ * Build: 20260624-cadimprovements7
  */
 
 const GeometryOps = {
@@ -374,7 +378,10 @@ const GeometryOps = {
         const newPoints = [];
         const n = points.length;
         const startIdx = isClosed ? 0 : 1;
-        const endIdx = isClosed ? n - 1 : n - 2;
+        // V2.6 Fix: bei geschlossener Kontur ist points[n-1] === points[0]
+        // (Schließpunkt-Duplikat) — endIdx war n-1, hat dadurch die erste Ecke
+        // doppelt verarbeitet (einmal bei i=0, einmal beim Duplikat bei i=n-1).
+        const endIdx = n - 2;
 
         // Erster Punkt (bei offener Kontur: unverändert)
         if (!isClosed) {
@@ -434,6 +441,52 @@ const GeometryOps = {
             y: pCorner.y + (d2y / len2) * dist2
         };
         return { cut1, cut2 };
+    },
+
+    /**
+     * Wendet Chamfer auf eine gesamte Polyline an (alle Ecken, gleicher Abstand
+     * auf beiden Segmenten) — Pendant zu filletPolyline().
+     * @param {Array} points — Polyline-Punkte
+     * @param {boolean} isClosed — Geschlossen?
+     * @param {number} dist — Chamfer-Abstand
+     * @returns {Array} Neue Punkte mit gefasten Ecken
+     */
+    chamferPolyline(points, isClosed, dist) {
+        if (!points || points.length < 3 || dist <= 0) return points;
+        const newPoints = [];
+        const n = points.length;
+        const startIdx = isClosed ? 0 : 1;
+        // Siehe filletPolyline() — gleicher Fix: points[n-1] === points[0] bei geschlossener Kontur
+        const endIdx = n - 2;
+
+        if (!isClosed) {
+            newPoints.push({ x: points[0].x, y: points[0].y });
+        }
+
+        for (let i = startIdx; i <= endIdx; i++) {
+            const prevIdx = isClosed ? (i - 1 + n - 1) % (n - 1) : i - 1;
+            const nextIdx = isClosed ? (i + 1) % (n - 1) : i + 1;
+            const pPrev = points[prevIdx];
+            const pCorner = points[i];
+            const pNext = points[nextIdx];
+
+            const chamfer = this.computeChamfer(pPrev, pCorner, pNext, dist, dist);
+            if (chamfer) {
+                newPoints.push(chamfer.cut1, chamfer.cut2);
+            } else {
+                newPoints.push({ x: pCorner.x, y: pCorner.y });
+            }
+        }
+
+        if (!isClosed) {
+            newPoints.push({ x: points[n - 1].x, y: points[n - 1].y });
+        }
+
+        if (isClosed && newPoints.length > 2) {
+            newPoints.push({ x: newPoints[0].x, y: newPoints[0].y });
+        }
+
+        return newPoints;
     },
 
     // ════════════════════════════════════════════════════════════════

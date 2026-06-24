@@ -3,10 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CeraCUT V6.31 — Wasserstrahl CAM</title>
+    <title>CeraCUT V6.33 — Wasserstrahl CAM</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="styles.css?v=20260623-autocadfeel">
+    <link rel="stylesheet" href="styles.css?v=20260624-userlogin">
     <link rel="stylesheet" href="properties-panel-styles.css?v=20260315-ctxmenu">
+    <script>
+        // V6.32: Login/User-Management — Server injiziert window.CeraCutCurrentUser
+        // bereits in den HTML-Response (vor diesem Script-Tag, siehe server.js
+        // _injectCurrentUser). _userKey() macht Theme/Area-Classes pro User.
+        function _userKey(base) {
+            return window.CeraCutCurrentUser ? base + '::' + window.CeraCutCurrentUser : base;
+        }
+        // Weiches Fallback: existiert der per-User-Key noch nicht, einmalig den
+        // alten globalen Key übernehmen und sofort unter dem neuen Key sichern
+        // (kein Server-seitiges Migrations-Script, rein lokaler Read-Through).
+        function _userKeyReadThrough(base) {
+            const key = _userKey(base);
+            if (localStorage.getItem(key) === null) {
+                const legacy = localStorage.getItem(base);
+                if (legacy !== null) localStorage.setItem(key, legacy);
+            }
+            return key;
+        }
+    </script>
 </head>
 <body>
 <div class="app-container">
@@ -39,10 +58,13 @@
             </button>
         </div>
         <span class="title-text">
-            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V6.31 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
+            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V6.33 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
         </span>
         <div class="title-right">
             <span class="version-badge">SINUMERIK 840D</span>
+            <a id="admin-users-link" href="admin-users.html" title="Benutzer verwalten" style="display:none;color:var(--text-muted);font-size:11px;text-decoration:none;margin-left:10px;">👤 Benutzer</a>
+            <span id="current-user-badge" class="user-badge" title="Angemeldet als"></span>
+            <button id="btn-logout" title="Abmelden" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px;margin-left:6px;">⏻</button>
         </div>
     </div>
 
@@ -1021,11 +1043,11 @@
         <!-- ═══ Design / Theme ═══ -->
         <div class="ribbon-group">
             <div class="ribbon-group-content">
-                <div class="ribbon-btn-lg" id="btn-theme-light" title="Hell-Modus (Light)" onclick="document.documentElement.removeAttribute('data-theme');localStorage.setItem('ceracut-theme','light');document.getElementById('btn-theme-light').classList.add('active');document.getElementById('btn-theme-dark').classList.remove('active');if(window.app?.renderer)window.app.renderer.setTheme('light');else if(window.renderer)window.renderer.setTheme('light');console.debug('[CeraCUT] Theme: light');">
+                <div class="ribbon-btn-lg" id="btn-theme-light" title="Hell-Modus (Light)" onclick="document.documentElement.removeAttribute('data-theme');localStorage.setItem(_userKey('ceracut-theme'),'light');document.getElementById('btn-theme-light').classList.add('active');document.getElementById('btn-theme-dark').classList.remove('active');if(window.app?.renderer)window.app.renderer.setTheme('light');else if(window.renderer)window.renderer.setTheme('light');console.debug('[CeraCUT] Theme: light');">
                     <div class="icon"><svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="7" fill="#f5c842" stroke="#e8a020" stroke-width="1.5"/><line x1="16" y1="2" x2="16" y2="6" stroke="#e8a020" stroke-width="2"/><line x1="16" y1="26" x2="16" y2="30" stroke="#e8a020" stroke-width="2"/><line x1="2" y1="16" x2="6" y2="16" stroke="#e8a020" stroke-width="2"/><line x1="26" y1="16" x2="30" y2="16" stroke="#e8a020" stroke-width="2"/><line x1="6.1" y1="6.1" x2="8.9" y2="8.9" stroke="#e8a020" stroke-width="2"/><line x1="23.1" y1="23.1" x2="25.9" y2="25.9" stroke="#e8a020" stroke-width="2"/><line x1="23.1" y1="6.1" x2="25.9" y2="8.9" stroke="#e8a020" stroke-width="2"/><line x1="6.1" y1="23.1" x2="8.9" y2="25.9" stroke="#e8a020" stroke-width="2"/></svg></div>
                     <span class="label">Hell</span>
                 </div>
-                <div class="ribbon-btn-lg" id="btn-theme-dark" title="Dunkel-Modus (Dark)" onclick="document.documentElement.setAttribute('data-theme','dark');localStorage.setItem('ceracut-theme','dark');document.getElementById('btn-theme-dark').classList.add('active');document.getElementById('btn-theme-light').classList.remove('active');if(window.app?.renderer)window.app.renderer.setTheme('dark');else if(window.renderer)window.renderer.setTheme('dark');console.debug('[CeraCUT] Theme: dark');">
+                <div class="ribbon-btn-lg" id="btn-theme-dark" title="Dunkel-Modus (Dark)" onclick="document.documentElement.setAttribute('data-theme','dark');localStorage.setItem(_userKey('ceracut-theme'),'dark');document.getElementById('btn-theme-dark').classList.add('active');document.getElementById('btn-theme-light').classList.remove('active');if(window.app?.renderer)window.app.renderer.setTheme('dark');else if(window.renderer)window.renderer.setTheme('dark');console.debug('[CeraCUT] Theme: dark');">
                     <div class="icon"><svg viewBox="0 0 32 32" fill="none"><path d="M10 6 A12 12 0 1 0 26 22 A9 9 0 1 1 10 6z" fill="#4fc3f7" stroke="#2196f3" stroke-width="1.5"/></svg></div>
                     <span class="label">Dunkel</span>
                 </div>
@@ -1442,23 +1464,23 @@
 <!-- Scripts -->
 <!-- DebugMonitor: MUSS als ERSTES geladen werden — fängt alle Fehler ab -->
 <script src="js/debug-monitor.js?v=20260324-gitcommit"></script>
-<script src="js/build-info.js?v=20260624-ttt-apollonius"></script>
+<script src="js/build-info.js?v=20260624-cadimprovements7"></script>
 <script src="js/constants.js?v=20260623-autocadfeel"></script>
 <script src="js/geometry.js?v=20260624-gapfix"></script>
 <script src="js/arc-fitting.js?v=20260316-quietlogs"></script>
 <script src="js/dxf-parser.js?v=20260624-gapfix"></script>
 <script src="js/cam-contour.js?v=20260624-gapfix"></script>
-<script src="js/lead-profiles.js?v=20260316-quietlogs"></script>
+<script src="js/lead-profiles.js?v=20260624-userlogin"></script>
 <script src="js/cerajet-engine.js?v=20260316-quietlogs"></script>
 <script src="js/ceracut-pipeline.js?v=20260624-gapfix"></script>
-<script src="js/canvas-renderer.js?v=20260623-autocadfeel"></script>
+<script src="js/canvas-renderer.js?v=20260624-userlogin"></script>
 <script src="js/undo-manager.js?v=20260624-crossdocpaste"></script>
 <script src="js/sinumerik-postprocessor.js?v=20260623-bugfixaudit"></script>
 <script src="js/command-line.js?v=20260624-polarinput"></script>
 <script src="js/dynamic-input.js?v=20260623-autocadfeel"></script>
 <script src="js/snap-manager.js?v=20260623-bugfixaudit"></script>
-<script src="js/geometry-ops.js?v=20260323-splinetool"></script>
-<script src="js/drawing-tools.js?v=20260624-ttt-apollonius"></script>
+<script src="js/geometry-ops.js?v=20260624-cadimprovements7"></script>
+<script src="js/drawing-tools.js?v=20260624-cadimprovements7"></script>
 <script src="js/layer-manager.js?v=20260324-undofix"></script>
 <script src="js/dxf-writer.js?v=20260624-orphanlayer"></script>
 <script src="js/tool-manager.js?v=20260316-quietlogs"></script>
@@ -1478,12 +1500,12 @@
 <script src="js/nesting.js?v=20260316-quietlogs"></script>
 <script src="js/toolpath-simulator.js?v=20260316-quietlogs"></script>
 <script src="js/cost-calculator.js?v=20260623-bugfixaudit"></script>
-<script src="js/machine-profiles.js?v=20260316-quietlogs"></script>
+<script src="js/machine-profiles.js?v=20260624-userlogin"></script>
 <script src="js/bridge-cutting.js?v=20260316-quietlogs"></script>
 <script src="js/quality-zones.js?v=20260316-quietlogs"></script>
 <script src="js/project-manager.js?v=20260316-quietlogs"></script>
-<script src="js/dxf-browser.js?v=20260316-quietlogs"></script>
-<script src="js/app.js?v=20260624-dxfsaveencoding"></script>
+<script src="js/dxf-browser.js?v=20260624-userlogin"></script>
+<script src="js/app.js?v=20260624-cadimprovements7"></script>
 
 <!-- Hidden Image Input -->
 <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/bmp,image/webp" hidden>
@@ -3349,7 +3371,7 @@
 
             // Aus localStorage laden oder Default
             try {
-                const saved = JSON.parse(localStorage.getItem('ceracut_area_classes'));
+                const saved = JSON.parse(localStorage.getItem(_userKeyReadThrough('ceracut_area_classes')));
                 origApp.settings.areaClasses = (saved && saved.length === 6) ? saved : JSON.parse(JSON.stringify(defaultAreaClasses));
             } catch(e) {
                 origApp.settings.areaClasses = JSON.parse(JSON.stringify(defaultAreaClasses));
@@ -3422,7 +3444,7 @@
             });
             areaClassApplyBtn?.addEventListener('click', () => {
                 readAreaClassTable();
-                localStorage.setItem('ceracut_area_classes', JSON.stringify(origApp.settings.areaClasses));
+                localStorage.setItem(_userKey('ceracut_area_classes'), JSON.stringify(origApp.settings.areaClasses));
                 areaClassPopup.style.display = 'none';
                 origApp._captureLeadSnapshot?.();
                 origApp._applyLeadValues?.();
@@ -3675,7 +3697,7 @@
     
     // ── Theme Toggle — beim Laden gespeichertes Theme wiederherstellen ──
     (function() {
-        const saved = localStorage.getItem('ceracut-theme');
+        const saved = localStorage.getItem(_userKeyReadThrough('ceracut-theme'));
         if (saved === 'dark') {
             document.documentElement.setAttribute('data-theme', 'dark');
             // Buttons korrekt setzen (nach DOM-Ready)

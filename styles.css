@@ -229,6 +229,12 @@ html, body {
     letter-spacing: 0.5px;
 }
 
+.user-badge {
+    font-size: 11px;
+    color: var(--text-muted, #888888);
+    margin-left: 10px;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    RIBBON TAB STRIP
    ═══════════════════════════════════════════════════════════════ */

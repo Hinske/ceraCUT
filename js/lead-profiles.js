@@ -1,23 +1,30 @@
 /**
- * CeraCUT Lead Profiles V1.1
+ * CeraCUT Lead Profiles V1.2
  *
  * Profil-basierte Lead-Verwaltung für Wasserstrahl-CAM.
  * Built-in Profile für typische Material/Dicke-Kombinationen.
  * Batch-Engine wendet Profile regelbasiert auf Konturen an.
  *
  * Persistenz via localStorage.
+ * V1.2: Aktive Profil-Auswahl (ACTIVE_KEY) pro User (_userKey()) — die Profil-
+ *       Liste selbst (STORAGE_KEY) bleibt firmenweit geteilt (Login/User-Management V6.32)
  *
- * Last Modified: 2026-03-15
- * Build: 20260315-intarsia20
+ * Last Modified: 2026-06-24
+ * Build: 20260624-userlogin
  */
 
 const LeadProfiles = (() => {
     'use strict';
 
-    const VERSION = '1.1';
+    const VERSION = '1.2';
     const STORAGE_KEY = 'ceracut_lead_profiles';
     const ACTIVE_KEY = 'ceracut_active_lead_profile';
     const PREFIX = `[LeadProfiles V${VERSION}]`;
+
+    /** Pro-User-Namespacing für die aktive Profil-Auswahl (Profil-Liste bleibt global). */
+    function _userKey(base) {
+        return (typeof window !== 'undefined' && window.CeraCutCurrentUser) ? base + '::' + window.CeraCutCurrentUser : base;
+    }
 
     // ════════════════════════════════════════════════════════════════
     // INTERNER STATE
@@ -284,7 +291,7 @@ const LeadProfiles = (() => {
         }
 
         // Aktives Profil laden
-        _activeProfileId = localStorage.getItem(ACTIVE_KEY) || 'builtin-stahl-mittel';
+        _activeProfileId = localStorage.getItem(_userKey(ACTIVE_KEY)) || 'builtin-stahl-mittel';
         console.debug(`${PREFIX} Initialisiert — ${_profiles.length} Profile, aktiv: ${_activeProfileId}`);
     }
 
@@ -316,7 +323,7 @@ const LeadProfiles = (() => {
     function setActive(id) {
         _activeProfileId = id;
         try {
-            localStorage.setItem(ACTIVE_KEY, id);
+            localStorage.setItem(_userKey(ACTIVE_KEY), id);
         } catch (e) { /* silent */ }
         console.log(`${PREFIX} Aktives Profil: ${id}`);
     }
@@ -350,7 +357,7 @@ const LeadProfiles = (() => {
         _saveCustomToStorage();
         if (_activeProfileId === id) {
             _activeProfileId = 'builtin-stahl-mittel';
-            localStorage.setItem(ACTIVE_KEY, _activeProfileId);
+            localStorage.setItem(_userKey(ACTIVE_KEY), _activeProfileId);
         }
         console.log(`${PREFIX} Benutzerprofil gelöscht: ${id}`);
         return true;

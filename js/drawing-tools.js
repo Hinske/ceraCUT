@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.14
+ * CeraCUT Drawing & Modification Tools V2.15
  * AutoCAD-style CAD Tools für CeraCUT
  *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
@@ -12,6 +12,16 @@
  * - Window-Selection (Drag-Rechteck)
  * - Integration mit CommandLine + SnapManager + UndoManager
  *
+ * V2.15: CAD-Improvements Abschnitt 7 komplett — LineTool Fortsetzung vom letzten
+ *        Endpunkt (Enter ohne Eingabe, DrawingToolManager._lastDrawEndpoint),
+ *        ModificationTool ALL/L (Letzte) Selektionsoptionen, RectangleTool
+ *        Fillet/Chamfer/Rotation (F/C/R, nutzt GeometryOps.filletPolyline/
+ *        chamferPolyline + ModificationTool.rotatePoints), PolylineTool
+ *        Bogen-Modus (A) tatsächlich funktional (3-Punkt-Bogen pro Segment via
+ *        segments[] statt flachem points[]), ArcTool 7 neue Konstruktionsarten
+ *        (SCE/SCA/SCL/SEA/SED/SER/CSE) nach CircleTool-Submodus-Vorbild.
+ *        _calcArcFrom3Points/_tessellateArc auf ArcTool statisch gemacht (von
+ *        PolylineTool mitgenutzt).
  * V2.14: CircleTool TTT (Tan,Tan,Tan) fertiggestellt — verallgemeinertes Apollonius-Problem
  *        über Newton-Raphson auf (x,y,r), 8 Vorzeichen-Kombinationen für innen-/außen-tangential
  *        pro Objekt (Linie oder Kreis, beliebig gemischt), Lösungsauswahl wie TTR über Nähe
@@ -31,7 +41,7 @@
  * V1.0: Initiale 5 Zeichentools
  * Created: 2026-02-13 MEZ
  * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-ttt-apollonius
+ * Build: 20260624-cadimprovements7
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -54,6 +64,13 @@ class DrawingToolManager {
 
         // V2.3: Previous Selection — letzte Selektion merken
         this._previousSelection = [];
+
+        // V2.15: Letzter Endpunkt eines gezeichneten Line/Arc/Polyline-Segments
+        // (manager-weit, übersteht Tool-Neustarts) — für LineTool "Fortsetzung
+        // vom letzten Endpunkt" bei leerem Enter. Nicht zu verwechseln mit
+        // getLastPoint() (pro Tool, nur für Ortho/relative Eingabe INNERHALB
+        // einer Operation).
+        this._lastDrawEndpoint = null;
 
         // Gezeichnete Entities (werden bei "Apply" zu Konturen)
         this.entities = [];
@@ -294,7 +311,26 @@ class DrawingToolManager {
         this.entities.push(entity);
         this.snapManager?.setDrawingEntities(this.entities);
         this.commandLine?.log(`✓ ${entity.type} erstellt`, 'success');
+        this._updateLastDrawEndpoint(entity);
         this.renderer?.render();
+    }
+
+    /** V2.15: Letzten Endpunkt für "LineTool Fortsetzung" merken (RECTANGLE/CIRCLE: kein sinnvoller Fortsetzungspunkt). */
+    _updateLastDrawEndpoint(entity) {
+        switch (entity.type) {
+            case 'LINE':
+                this._lastDrawEndpoint = { x: entity.end.x, y: entity.end.y };
+                break;
+            case 'ARC':
+                this._lastDrawEndpoint = { x: entity.endPoint.x, y: entity.endPoint.y };
+                break;
+            case 'POLYLINE':
+                if (!entity.closed && entity.points?.length > 0) {
+                    const last = entity.points[entity.points.length - 1];
+                    this._lastDrawEndpoint = { x: last.x, y: last.y };
+                }
+                break;
+        }
     }
 
     /** Letzte Entity entfernen (Undo innerhalb des Zeichnens) */
@@ -1175,17 +1211,20 @@ class ModificationTool extends BaseTool {
         } else {
             // Verb-Noun: Auswahl-Phase starten
             this.state = 'select';
-            this.cmd?.setPrompt(`${this.getToolName()} — Objekte wählen (Klick/Fenster, P=Vorherige, Enter = fertig):`);
+            this.cmd?.setPrompt(`${this.getToolName()} — Objekte wählen (Klick/Fenster, P=Vorherige, ALL=Alle, L=Letzte, Enter = fertig):`);
         }
     }
 
-    // V2.3: "P" = Previous Selection in der Auswahl-Phase
+    // V2.3: "P" = Previous Selection / V2.15: "ALL" = alle Konturen, "L" = zuletzt erzeugte Kontur
     acceptsOption(opt) {
-        return opt === 'P' && this.state === 'select';
+        return this.state === 'select' && ['P', 'ALL', 'L'].includes(opt.toUpperCase());
     }
 
     handleOption(option) {
-        if (option === 'P' && this.state === 'select') {
+        if (this.state !== 'select') return;
+        const opt = option.toUpperCase();
+
+        if (opt === 'P') {
             this.manager.restorePreviousSelection();
             const selected = this.manager.getSelectedContours();
             if (selected.length > 0) {
@@ -1193,6 +1232,40 @@ class ModificationTool extends BaseTool {
                 this.selectionLocked = true;
                 this._onSelectionComplete(this.selectedContours);
             }
+            return;
+        }
+
+        if (opt === 'ALL') {
+            const all = (this.manager.app?.contours || []).filter(c => !c.isReference);
+            if (all.length === 0) {
+                this.cmd?.log('Keine Konturen vorhanden', 'error');
+                return;
+            }
+            this.manager.app.contours.forEach(c => { c.isSelected = false; });
+            for (const c of all) { c.isSelected = true; }
+            this.manager.renderer?.render();
+            this.manager.app?.updateContourPanel?.();
+            this.cmd?.log(`${all.length} Kontur(en) selektiert (ALL)`, 'info');
+            this.selectedContours = [...all];
+            this.selectionLocked = true;
+            this._onSelectionComplete(this.selectedContours);
+            return;
+        }
+
+        if (opt === 'L') {
+            const last = this.manager.app?.lastCreatedContour;
+            if (!last || !this.manager.app?.contours?.includes(last)) {
+                this.cmd?.log('Keine zuletzt erzeugte Kontur verfügbar', 'error');
+                return;
+            }
+            this.manager.app.contours.forEach(c => { c.isSelected = false; });
+            last.isSelected = true;
+            this.manager.renderer?.render();
+            this.manager.app?.updateContourPanel?.();
+            this.cmd?.log('1 Kontur selektiert (Last)', 'info');
+            this.selectedContours = [last];
+            this.selectionLocked = true;
+            this._onSelectionComplete(this.selectedContours);
             return;
         }
     }
@@ -2657,6 +2730,15 @@ class LineTool extends BaseTool {
 
     finish() {
         if (this.points.length === 0) {
+            // V2.15: AutoCAD-Verhalten — Enter ohne Eingabe setzt vom letzten
+            // gezeichneten Linie/Bogen/Polylinie-Endpunkt fort (statt Tool zu beenden).
+            if (this.manager._lastDrawEndpoint) {
+                this.points.push({ ...this.manager._lastDrawEndpoint });
+                this.cmd?.log('→ Fortgesetzt vom letzten Endpunkt', 'info');
+                this.cmd?.setPrompt(`LINIE — Nächster Punkt [dx,dy / Länge / Undo / Enter=Fertig]: (1 Pkt)`);
+                this.manager.renderer?.render();
+                return;
+            }
             this.manager.rubberBand = null;
             this.manager._setDefaultPrompt();
             this.manager.activeTool = null;
@@ -3401,11 +3483,35 @@ class RectangleTool extends BaseTool {
     constructor(manager) {
         super(manager);
         this.corner1 = null;
+        // V2.15: Fillet/Chamfer/Rotation — wie AutoCAD RECTANG, gegenseitig exklusiv,
+        // bleiben für die Dauer der Tool-Instanz gesetzt (mehrere Rechtecke in Folge)
+        this.filletRadius = 0;
+        this.chamferDist = 0;
+        this.rotation = 0; // Grad, Pivot = corner1
+        this._pendingCornerOption = null; // 'fillet' | 'chamfer' | 'rotation' | null
     }
 
     start() {
-        this.cmd?.setPrompt('RECHTECK — Erste Ecke angeben:');
-        this.cmd?.log('🔷 Rechteck: 2 gegenüberliegende Ecken', 'info');
+        this.cmd?.setPrompt('RECHTECK — Erste Ecke angeben [F=Fillet/C=Chamfer/R=Rotation]:');
+        this.cmd?.log('🔷 Rechteck: 2 gegenüberliegende Ecken, F=Fillet, C=Chamfer, R=Rotation', 'info');
+    }
+
+    acceptsOption(opt) {
+        return ['F', 'C', 'R'].includes(opt.toUpperCase());
+    }
+
+    handleOption(option) {
+        const opt = option.toUpperCase();
+        if (opt === 'F') {
+            this._pendingCornerOption = 'fillet';
+            this.cmd?.setPrompt('RECHTECK — Fillet-Radius eingeben (0 = aus):');
+        } else if (opt === 'C') {
+            this._pendingCornerOption = 'chamfer';
+            this.cmd?.setPrompt('RECHTECK — Chamfer-Abstand eingeben (0 = aus):');
+        } else if (opt === 'R') {
+            this._pendingCornerOption = 'rotation';
+            this.cmd?.setPrompt('RECHTECK — Rotationswinkel in Grad eingeben:');
+        }
     }
 
     handleClick(point) {
@@ -3425,10 +3531,39 @@ class RectangleTool extends BaseTool {
     }
 
     handleDistance(value) {
+        if (this._pendingCornerOption === 'fillet') {
+            this.filletRadius = Math.max(0, value);
+            this.chamferDist = 0;
+            this._pendingCornerOption = null;
+            this.cmd?.log(`→ Fillet-Radius ${this.filletRadius.toFixed(1)} mm`, 'info');
+            this._restoreCornerPrompt();
+            return;
+        }
+        if (this._pendingCornerOption === 'chamfer') {
+            this.chamferDist = Math.max(0, value);
+            this.filletRadius = 0;
+            this._pendingCornerOption = null;
+            this.cmd?.log(`→ Chamfer-Abstand ${this.chamferDist.toFixed(1)} mm`, 'info');
+            this._restoreCornerPrompt();
+            return;
+        }
+        if (this._pendingCornerOption === 'rotation') {
+            this.rotation = value;
+            this._pendingCornerOption = null;
+            this.cmd?.log(`→ Rotation ${this.rotation.toFixed(1)}°`, 'info');
+            this._restoreCornerPrompt();
+            return;
+        }
         if (this.corner1) {
             this.cmd?.log(`→ Quadrat ${value.toFixed(1)} × ${value.toFixed(1)} mm`, 'info');
             this._createRectangle({ x: this.corner1.x + value, y: this.corner1.y + value });
         }
+    }
+
+    _restoreCornerPrompt() {
+        this.cmd?.setPrompt(this.corner1
+            ? 'RECHTECK — Gegenüberliegende Ecke oder Breite,Höhe (z.B. 100,50):'
+            : 'RECHTECK — Erste Ecke angeben [F=Fillet/C=Chamfer/R=Rotation]:');
     }
 
     handleRawInput(value) {
@@ -3445,18 +3580,30 @@ class RectangleTool extends BaseTool {
 
     _createRectangle(corner2) {
         const p1 = this.corner1, p2 = corner2;
+        let points = [
+            { x: p1.x, y: p1.y }, { x: p2.x, y: p1.y },
+            { x: p2.x, y: p2.y }, { x: p1.x, y: p2.y },
+            { x: p1.x, y: p1.y }
+        ];
+
+        // Rotation zuerst (Pivot = 1. Eckpunkt), danach Fillet/Chamfer auf die rotierten Ecken
+        if (this.rotation) {
+            ModificationTool.rotatePoints(points, p1.x, p1.y, this.rotation * Math.PI / 180);
+        }
+        if (this.filletRadius > 0) {
+            points = GeometryOps.filletPolyline(points, true, this.filletRadius);
+        } else if (this.chamferDist > 0) {
+            points = GeometryOps.chamferPolyline(points, true, this.chamferDist);
+        }
+
         this.manager.addEntity({
             type: 'RECTANGLE',
-            points: [
-                { x: p1.x, y: p1.y }, { x: p2.x, y: p1.y },
-                { x: p2.x, y: p2.y }, { x: p1.x, y: p2.y },
-                { x: p1.x, y: p1.y }
-            ],
+            points,
             closed: true
         });
         this.manager.rubberBand = null;
         this.corner1 = null;
-        this.cmd?.setPrompt('RECHTECK — Erste Ecke angeben (Enter/Rechtsklick=Fertig):');
+        this.cmd?.setPrompt('RECHTECK — Erste Ecke angeben [F=Fillet/C=Chamfer/R=Rotation] (Enter/Rechtsklick=Fertig):');
     }
 
     finish() {
@@ -3479,71 +3626,156 @@ class RectangleTool extends BaseTool {
 class ArcTool extends BaseTool {
     constructor(manager) {
         super(manager);
+        this.subMode = '3p'; // '3p' | 'sce' | 'sca' | 'scl' | 'sea' | 'sed' | 'ser' | 'cse'
         this.p1 = null;
         this.p2 = null;
     }
 
+    getToolName() { return 'BOGEN'; }
+
     start() {
-        this.cmd?.setPrompt('BOGEN — Startpunkt angeben:');
-        this.cmd?.log('⭕ Bogen: 3 Punkte (Start → Mitte → Ende)', 'info');
+        this.subMode = '3p';
+        this.p1 = null;
+        this.p2 = null;
+        this.cmd?.setPrompt('BOGEN — Startpunkt angeben [SCE/SCA/SCL/SEA/SED/SER/CSE]:');
+        this.cmd?.log('⭕ Bogen: 3 Punkte (Start→Mitte→Ende), oder SCE/SCA/SCL/SEA/SED/SER/CSE für weitere Konstruktionsarten', 'info');
+    }
+
+    acceptsOption(opt) {
+        return ['SCE', 'SCA', 'SCL', 'SEA', 'SED', 'SER', 'CSE'].includes(opt.toUpperCase());
+    }
+
+    handleOption(option) {
+        const opt = option.toUpperCase();
+        if (!['SCE', 'SCA', 'SCL', 'SEA', 'SED', 'SER', 'CSE'].includes(opt)) return;
+        this.subMode = opt.toLowerCase();
+        this.p1 = null;
+        this.p2 = null;
+
+        const prompts = {
+            sce: ['BOGEN SCE — Startpunkt angeben:', '⭕ Start,Center,End: Bogen verläuft immer CCW von Start zu End'],
+            sca: ['BOGEN SCA — Startpunkt angeben:', '⭕ Start,Center,Angle: Winkel in Grad nach den 2 Klicks eingeben'],
+            scl: ['BOGEN SCL — Startpunkt angeben:', '⭕ Start,Center,Chordlänge: Sehnenlänge nach den 2 Klicks eingeben (negativ = Hauptbogen)'],
+            sea: ['BOGEN SEA — Startpunkt angeben:', '⭕ Start,End,Angle: Winkel in Grad nach den 2 Klicks eingeben'],
+            sed: ['BOGEN SED — Startpunkt angeben:', '⭕ Start,End,Direction: Tangentenwinkel in Grad nach den 2 Klicks eingeben'],
+            ser: ['BOGEN SER — Startpunkt angeben:', '⭕ Start,End,Radius: Radius nach den 2 Klicks eingeben (negativ = Hauptbogen)'],
+            cse: ['BOGEN CSE — Mittelpunkt angeben:', '⭕ Center,Start,End: Bogen verläuft immer CCW von Start zu End']
+        };
+        const [prompt, log] = prompts[this.subMode];
+        this.cmd?.setPrompt(prompt);
+        this.cmd?.log(log, 'info');
     }
 
     handleClick(point) {
-        if (!this.p1) {
-            this.p1 = { x: point.x, y: point.y };
-            this.cmd?.setPrompt('BOGEN — Zweiten Punkt angeben:');
-        } else if (!this.p2) {
-            this.p2 = { x: point.x, y: point.y };
-            this.cmd?.setPrompt('BOGEN — Endpunkt angeben:');
-        } else {
-            this._createArc(point);
+        if (this.subMode === '3p') {
+            if (!this.p1) {
+                this.p1 = { x: point.x, y: point.y };
+                this.cmd?.setPrompt('BOGEN — Zweiten Punkt angeben:');
+            } else if (!this.p2) {
+                this.p2 = { x: point.x, y: point.y };
+                this.cmd?.setPrompt('BOGEN — Endpunkt angeben:');
+            } else {
+                this._finishArc(ArcTool._calcArcFrom3Points(this.p1, this.p2, point));
+            }
+            return;
+        }
+
+        // ── SCE/CSE: 3 Klicks, sofortiger Abschluss beim 3. Klick ──
+        if (this.subMode === 'sce' || this.subMode === 'cse') {
+            if (!this.p1) {
+                this.p1 = { x: point.x, y: point.y };
+                this.cmd?.setPrompt(this.subMode === 'sce' ? 'BOGEN SCE — Mittelpunkt angeben:' : 'BOGEN CSE — Startpunkt angeben:');
+            } else if (!this.p2) {
+                this.p2 = { x: point.x, y: point.y };
+                this.cmd?.setPrompt('BOGEN — Endpunkt angeben:');
+            } else {
+                const arc = this.subMode === 'sce'
+                    ? ArcTool._arcFromCenterStartEnd(this.p2, this.p1, point)   // p1=Start, p2=Center
+                    : ArcTool._arcFromCenterStartEnd(this.p1, this.p2, point);  // p1=Center, p2=Start
+                this._finishArc(arc);
+            }
+            return;
+        }
+
+        // ── SCA/SCL/SEA/SED/SER: 2 Klicks, dann numerischer Wert via handleDistance ──
+        if (['sca', 'scl', 'sea', 'sed', 'ser'].includes(this.subMode)) {
+            if (!this.p1) {
+                this.p1 = { x: point.x, y: point.y };
+                const second = (this.subMode === 'sca' || this.subMode === 'scl') ? 'Mittelpunkt' : 'Endpunkt';
+                this.cmd?.setPrompt(`BOGEN — ${second} angeben:`);
+            } else if (!this.p2) {
+                this.p2 = { x: point.x, y: point.y };
+                const valueLabel = {
+                    sca: 'Winkel in Grad', scl: 'Sehnenlänge', sea: 'Winkel in Grad',
+                    sed: 'Tangentenwinkel in Grad', ser: 'Radius'
+                }[this.subMode];
+                this.cmd?.setPrompt(`BOGEN — ${valueLabel} eingeben:`);
+            }
+            return;
         }
     }
 
+    handleDistance(value) {
+        if (!this.p1 || !this.p2) return;
+        let arc = null;
+        switch (this.subMode) {
+            case 'sca': arc = ArcTool._arcFromSCA(this.p1, this.p2, value); break;
+            case 'scl': arc = ArcTool._arcFromSCL(this.p1, this.p2, value); break;
+            case 'sea': arc = ArcTool._arcFromSEA(this.p1, this.p2, value); break;
+            case 'sed': arc = ArcTool._arcFromSED(this.p1, this.p2, value); break;
+            case 'ser': arc = ArcTool._arcFromSER(this.p1, this.p2, value); break;
+            default: return;
+        }
+        if (!arc) {
+            this.cmd?.log('Mit diesen Werten ist kein Bogen möglich', 'error');
+            return;
+        }
+        this._finishArc(arc);
+    }
+
     handleMouseMove(point) {
-        if (this.p1 && this.p2) {
-            const arc = this._calcArcFrom3Points(this.p1, this.p2, point);
-            if (arc) {
-                this.manager.rubberBand = { type: 'arc', data: arc };
-            }
-        } else if (this.p1) {
+        if (this.subMode === '3p' && this.p1 && this.p2) {
+            const arc = ArcTool._calcArcFrom3Points(this.p1, this.p2, point);
+            if (arc) this.manager.rubberBand = { type: 'arc', data: arc };
+        } else if ((this.subMode === 'sce' || this.subMode === 'cse') && this.p1 && this.p2) {
+            const arc = this.subMode === 'sce'
+                ? ArcTool._arcFromCenterStartEnd(this.p2, this.p1, point)
+                : ArcTool._arcFromCenterStartEnd(this.p1, this.p2, point);
+            this.manager.rubberBand = { type: 'arc', data: arc };
+        } else if (this.p1 && !this.p2) {
             this.manager.rubberBand = { type: 'line', data: { start: this.p1, end: point } };
+        } else if (this.p1 && this.p2) {
+            // Numerische-Wert-Modi (SCA/SCL/SEA/SED/SER): kein Live-Bogen-Preview möglich,
+            // da der Bogen erst durch den eingegebenen Zahlenwert bestimmt ist.
+            this.manager.rubberBand = { type: 'line', data: { start: this.p1, end: this.p2 } };
         }
         this.manager.renderer?.render();
     }
 
-    _createArc(p3) {
-        const arc = this._calcArcFrom3Points(this.p1, this.p2, p3);
+    /** Bogen fertigstellen: tessellieren, Entity erzeugen, State zurücksetzen. */
+    _finishArc(arc) {
         if (!arc) {
             this.cmd?.log('Punkte sind kollinear — kein Bogen möglich', 'error');
             return;
         }
-
-        const pts = [];
-        const n = 32;
-        let startA = arc.startAngle, endA = arc.endAngle;
-        if (arc.ccw) { if (endA <= startA) endA += Math.PI * 2; }
-        else { if (startA <= endA) startA += Math.PI * 2; }
-
-        for (let i = 0; i <= n; i++) {
-            const t = i / n;
-            const a = arc.ccw ? startA + t * (endA - startA) : startA - t * (startA - endA);
-            pts.push({ x: arc.center.x + arc.radius * Math.cos(a), y: arc.center.y + arc.radius * Math.sin(a) });
-        }
+        const pts = ArcTool._tessellateArc(arc);
+        const startPt = { x: arc.center.x + arc.radius * Math.cos(arc.startAngle), y: arc.center.y + arc.radius * Math.sin(arc.startAngle) };
+        const endPt = { x: arc.center.x + arc.radius * Math.cos(arc.endAngle), y: arc.center.y + arc.radius * Math.sin(arc.endAngle) };
 
         this.manager.addEntity({
             type: 'ARC', center: arc.center, radius: arc.radius,
             startAngle: arc.startAngle, endAngle: arc.endAngle, ccw: arc.ccw,
-            startPoint: { ...this.p1 }, endPoint: { ...p3 }, midPoint: { ...this.p2 },
+            startPoint: startPt, endPoint: endPt,
             points: pts
         });
         this.manager.rubberBand = null;
         this.p1 = null;
         this.p2 = null;
-        this.cmd?.setPrompt('BOGEN — Startpunkt angeben (Enter=Fertig):');
+        this.cmd?.setPrompt(`BOGEN — Startpunkt angeben [${this.subMode.toUpperCase()}] (Enter=Fertig):`);
     }
 
-    _calcArcFrom3Points(p1, p2, p3) {
+    /** Bogen aus 3 Punkten (Start, Durchgang, Ende) berechnen. Statisch, da auch von PolylineTool genutzt. */
+    static _calcArcFrom3Points(p1, p2, p3) {
         const ax = p1.x, ay = p1.y, bx = p2.x, by = p2.y, cx = p3.x, cy = p3.y;
         const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
         if (Math.abs(d) < 1e-10) return null;
@@ -3559,6 +3791,128 @@ class ArcTool extends BaseTool {
             endAngle: Math.atan2(cy - uy, cx - ux),
             ccw: cross > 0
         };
+    }
+
+    /** Bogen-Objekt (aus _calcArcFrom3Points) in n+1 Punkte interpolieren. Statisch, auch von PolylineTool genutzt. */
+    static _tessellateArc(arc, n = 32) {
+        const pts = [];
+        let startA = arc.startAngle, endA = arc.endAngle;
+        if (arc.ccw) { if (endA <= startA) endA += Math.PI * 2; }
+        else { if (startA <= endA) startA += Math.PI * 2; }
+
+        for (let i = 0; i <= n; i++) {
+            const t = i / n;
+            const a = arc.ccw ? startA + t * (endA - startA) : startA - t * (startA - endA);
+            pts.push({ x: arc.center.x + arc.radius * Math.cos(a), y: arc.center.y + arc.radius * Math.sin(a) });
+        }
+        return pts;
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // V2.15: ZUSÄTZLICHE BOGEN-KONSTRUKTIONEN (SCE/SCA/SCL/SEA/SED/SER/CSE)
+    // ════════════════════════════════════════════════════════════════
+
+    /** Center,Start,End → Bogen. Wird sowohl für SCE (C=p2) als auch CSE (C=p1) genutzt. Immer CCW (AutoCAD-Konvention). */
+    static _arcFromCenterStartEnd(center, start, end) {
+        const radius = Math.hypot(start.x - center.x, start.y - center.y);
+        return {
+            center, radius,
+            startAngle: Math.atan2(start.y - center.y, start.x - center.x),
+            endAngle: Math.atan2(end.y - center.y, end.x - center.x),
+            ccw: true
+        };
+    }
+
+    /** Start,Center,Angle(Grad) → Bogen. Vorzeichen des Winkels bestimmt Richtung. */
+    static _arcFromSCA(start, center, angleDeg) {
+        const radius = Math.hypot(start.x - center.x, start.y - center.y);
+        if (radius < 1e-10) return null;
+        const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+        const endAngle = startAngle + angleDeg * Math.PI / 180;
+        return { center, radius, startAngle, endAngle, ccw: angleDeg >= 0 };
+    }
+
+    /** Start,Center,Sehnenlänge → Bogen. Positiv = Minor-Arc (CCW), negativ = Major-Arc (CW), gleicher Endpunkt. */
+    static _arcFromSCL(start, center, chordLen) {
+        const radius = Math.hypot(start.x - center.x, start.y - center.y);
+        if (radius < 1e-10) return null;
+        const ratio = Math.abs(chordLen) / (2 * radius);
+        if (ratio > 1) return null; // Sehne länger als Durchmesser — nicht möglich
+        const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+        const thetaMinor = 2 * Math.asin(ratio);
+        return { center, radius, startAngle, endAngle: startAngle + thetaMinor, ccw: chordLen >= 0 };
+    }
+
+    /** Start,End,eingeschlossener Winkel(Grad) → Bogen. Positiv = CCW von Start zu End, negativ = CW. */
+    static _arcFromSEA(start, end, angleDeg) {
+        const dx = end.x - start.x, dy = end.y - start.y;
+        const d = Math.hypot(dx, dy);
+        if (d < 1e-10) return null;
+        const theta = angleDeg * Math.PI / 180;
+        const sinHalf = Math.sin(Math.abs(theta) / 2);
+        if (Math.abs(sinHalf) < 1e-9) return null;
+        const radius = d / (2 * sinHalf);
+        const ux = dx / d, uy = dy / d;
+        const nx = -uy, ny = ux; // Links-Normale
+        const h = radius * Math.cos(theta / 2);
+        const sign = Math.sign(theta) || 1;
+        const mx = (start.x + end.x) / 2, my = (start.y + end.y) / 2;
+        const center = { x: mx + sign * h * nx, y: my + sign * h * ny };
+        return {
+            center, radius,
+            startAngle: Math.atan2(start.y - center.y, start.x - center.x),
+            endAngle: Math.atan2(end.y - center.y, end.x - center.x),
+            ccw: theta > 0
+        };
+    }
+
+    /** Start,End,Tangentenrichtung bei Start(Grad) → Bogen. Eindeutig lösbar (eine lineare Gleichung). */
+    static _arcFromSED(start, end, dirDeg) {
+        const dirRad = dirDeg * Math.PI / 180;
+        const Dx = Math.cos(dirRad), Dy = Math.sin(dirRad);
+        const Nx = -Dy, Ny = Dx; // Links-Normale der Tangente
+        const sex = start.x - end.x, sey = start.y - end.y;
+        const denom = 2 * (Nx * sex + Ny * sey);
+        if (Math.abs(denom) < 1e-9) return null; // Endpunkt liegt auf der Tangente
+        const t = -(sex * sex + sey * sey) / denom;
+        const center = { x: start.x + t * Nx, y: start.y + t * Ny };
+        const radius = Math.abs(t);
+        if (radius < 1e-10) return null;
+        return {
+            center, radius,
+            startAngle: Math.atan2(start.y - center.y, start.x - center.x),
+            endAngle: Math.atan2(end.y - center.y, end.x - center.x),
+            ccw: t > 0
+        };
+    }
+
+    /** Start,End,Radius → Bogen. Positiv = Minor-Arc, negativ = Major-Arc, immer CCW von Start zu End. */
+    static _arcFromSER(start, end, radiusVal) {
+        const dx = end.x - start.x, dy = end.y - start.y;
+        const d = Math.hypot(dx, dy);
+        if (d < 1e-10) return null;
+        const radius = Math.abs(radiusVal);
+        if (radius < d / 2 - 1e-9) return null; // Radius zu klein für diese 2 Punkte
+        const ux = dx / d, uy = dy / d;
+        const nx = -uy, ny = ux;
+        const h = Math.sqrt(Math.max(0, radius * radius - (d / 2) * (d / 2)));
+        const mx = (start.x + end.x) / 2, my = (start.y + end.y) / 2;
+        const candidates = [
+            { x: mx + h * nx, y: my + h * ny },
+            { x: mx - h * nx, y: my - h * ny }
+        ];
+        let best = null;
+        for (const center of candidates) {
+            const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+            const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
+            let sweep = endAngle - startAngle;
+            while (sweep < 0) sweep += Math.PI * 2;
+            while (sweep >= Math.PI * 2) sweep -= Math.PI * 2;
+            if (!best || (radiusVal >= 0 ? sweep < best.sweep : sweep > best.sweep)) {
+                best = { center, startAngle, endAngle, sweep };
+            }
+        }
+        return { center: best.center, radius, startAngle: best.startAngle, endAngle: best.endAngle, ccw: true };
     }
 
     finish() {
@@ -3579,9 +3933,16 @@ class ArcTool extends BaseTool {
 class PolylineTool extends BaseTool {
     constructor(manager) {
         super(manager);
-        this.points = [];
+        this.startPoint = null;
+        // V2.15: segments[] statt flachem points[] — jedes Element ist
+        // {type:'line', p} oder {type:'arc', through, end}. Im Bogen-Modus
+        // braucht ein Segment 2 Klicks (Durchgangspunkt + Endpunkt), analog
+        // ArcTools 3-Punkt-Bogen (Start = letzter Vertex). _calcArcFrom3Points/
+        // _tessellateArc sind dafür auf ArcTool statisch gemacht worden.
+        this.segments = [];
         this.mode = 'line';
         this.closed = false;
+        this._arcThrough = null; // Bogen-Modus: 1. der 2 Klicks (Durchgangspunkt) zwischengespeichert
     }
 
     start() {
@@ -3589,39 +3950,104 @@ class PolylineTool extends BaseTool {
         this.cmd?.log('🔷 Polylinie: Punkte setzen, A=Bogen, L=Linie, C=Schließen, Enter=Fertig', 'info');
     }
 
-    handleClick(point) {
-        this.points.push({ x: point.x, y: point.y });
+    /** Letzter committeter Vertex (Start, falls noch keine Segmente). */
+    _lastVertex() {
+        if (this.segments.length === 0) return this.startPoint;
+        const last = this.segments[this.segments.length - 1];
+        return last.type === 'arc' ? last.end : last.p;
+    }
 
-        if (this.points.length === 1) {
+    /** Anzahl committeter Vertices (Start + ein pro Segment). */
+    _vertexCount() {
+        return this.startPoint ? this.segments.length + 1 : 0;
+    }
+
+    /** segments[] in einen flachen Punkte-Array auflösen (Bogen-Segmente tesselliert). */
+    _flattenPoints() {
+        const pts = [];
+        if (!this.startPoint) return pts;
+        pts.push({ x: this.startPoint.x, y: this.startPoint.y });
+        let prev = this.startPoint;
+        for (const seg of this.segments) {
+            if (seg.type === 'line') {
+                pts.push({ x: seg.p.x, y: seg.p.y });
+                prev = seg.p;
+            } else {
+                const arc = ArcTool._calcArcFrom3Points(prev, seg.through, seg.end);
+                if (arc) {
+                    const arcPts = ArcTool._tessellateArc(arc);
+                    // arcPts[0] ≈ prev — nicht doppelt anhängen
+                    for (let i = 1; i < arcPts.length; i++) pts.push(arcPts[i]);
+                } else {
+                    pts.push({ x: seg.end.x, y: seg.end.y });
+                }
+                prev = seg.end;
+            }
+        }
+        return pts;
+    }
+
+    handleClick(point) {
+        if (!this.startPoint) {
+            this.startPoint = { x: point.x, y: point.y };
             this.cmd?.setPrompt('POLYLINIE — Nächster Punkt [A=Bogen/L=Linie/C=Schließen/Undo]:');
-        } else {
-            this.cmd?.setPrompt(`POLYLINIE — Nächster Punkt [A/L/C/Undo]: (${this.points.length} Punkte, Modus: ${this.mode === 'arc' ? 'Bogen' : 'Linie'})`);
+            this.manager.renderer?.render();
+            return;
         }
 
+        if (this.mode === 'arc') {
+            if (!this._arcThrough) {
+                this._arcThrough = { x: point.x, y: point.y };
+                this.cmd?.setPrompt('POLYLINIE — Bogen: Endpunkt angeben:');
+                this.manager.renderer?.render();
+                return;
+            }
+            const arc = ArcTool._calcArcFrom3Points(this._lastVertex(), this._arcThrough, point);
+            if (!arc) {
+                this.cmd?.log('Punkte sind kollinear — kein Bogen möglich, erneut versuchen', 'error');
+                this._arcThrough = null;
+                return;
+            }
+            this.segments.push({ type: 'arc', through: this._arcThrough, end: { x: point.x, y: point.y } });
+            this._arcThrough = null;
+        } else {
+            this.segments.push({ type: 'line', p: { x: point.x, y: point.y } });
+        }
+
+        const count = this._vertexCount();
+        const closeHint = count >= 3 ? ' / C=Schließen' : '';
+        this.cmd?.setPrompt(`POLYLINIE — Nächster Punkt [A/L${closeHint}/Undo]: (${count} Punkte, Modus: ${this.mode === 'arc' ? 'Bogen' : 'Linie'})`);
         this.manager.renderer?.render();
     }
 
     handleMouseMove(point) {
-        if (this.points.length > 0) {
+        if (this.startPoint) {
+            // Vereinfachte Live-Vorschau: bereits committete Segmente (inkl. tessellierter
+            // Bögen) + gerade Cursor-Linie zum nächsten Klick — auch während eines
+            // Bogen-Segments (kein echtes Bogen-Rubberband für den 2. Klick, um den
+            // bestehenden 'polyline'-Rubberband-Typ im Renderer unverändert zu lassen).
             this.manager.rubberBand = {
                 type: 'polyline',
-                data: { points: this.points, cursorPoint: point }
+                data: { points: this._flattenPoints(), cursorPoint: point }
             };
             this.manager.renderer?.render();
         }
     }
 
-    acceptsOption(opt) { return ['A', 'L', 'C', 'U'].includes(opt); }
+    acceptsOption(opt) { return ['A', 'L', 'C', 'U'].includes(opt.toUpperCase()); }
 
     handleOption(option) {
-        switch (option) {
+        const opt = option.toUpperCase();
+        switch (opt) {
             case 'A':
                 this.mode = 'arc';
+                this._arcThrough = null;
                 this.cmd?.log('Modus: Bogen', 'info');
-                this.cmd?.setPrompt('POLYLINIE — Nächster Punkt [Bogen-Modus] [L=Linie/C=Schließen]:');
+                this.cmd?.setPrompt('POLYLINIE — Durchgangspunkt angeben [Bogen-Modus] [L=Linie/C=Schließen]:');
                 break;
             case 'L':
                 this.mode = 'line';
+                this._arcThrough = null;
                 this.cmd?.log('Modus: Linie', 'info');
                 this.cmd?.setPrompt('POLYLINIE — Nächster Punkt [Linien-Modus] [A=Bogen/C=Schließen]:');
                 break;
@@ -3631,12 +4057,12 @@ class PolylineTool extends BaseTool {
     }
 
     handleRawInput(value) {
-        if (this.points.length === 0) return false;
+        if (!this.startPoint) return false;
         const trimmed = value.trim();
         if (trimmed.startsWith('@')) return false;
         const parts = trimmed.split(/[,\s]+/).map(Number);
         if (parts.length === 2 && parts.every(n => !isNaN(n))) {
-            const last = this.points[this.points.length - 1];
+            const last = this._lastVertex();
             this.cmd?.log(`→ Relativ (${parts[0]}, ${parts[1]}) mm`, 'info');
             this.handleClick({ x: last.x + parts[0], y: last.y + parts[1] });
             return true;
@@ -3645,21 +4071,33 @@ class PolylineTool extends BaseTool {
     }
 
     handleUndo() {
-        if (this.points.length > 0) {
-            this.points.pop();
-            this.cmd?.log('↩ Letzter Punkt entfernt', 'info');
+        if (this._arcThrough) {
+            this._arcThrough = null;
+            this.cmd?.log('↩ Bogen-Durchgangspunkt entfernt', 'info');
+            this.manager.renderer?.render();
+            return;
+        }
+        if (this.segments.length > 0) {
+            this.segments.pop();
+            this.cmd?.log('↩ Letztes Segment entfernt', 'info');
+            this.manager.renderer?.render();
+            return;
+        }
+        if (this.startPoint) {
+            this.startPoint = null;
+            this.cmd?.log('↩ Startpunkt entfernt', 'info');
             this.manager.renderer?.render();
         }
     }
 
     _close() {
-        if (this.points.length < 3) { this.cmd?.log('Mindestens 3 Punkte zum Schließen', 'error'); return; }
+        if (this._vertexCount() < 3) { this.cmd?.log('Mindestens 3 Punkte zum Schließen', 'error'); return; }
         this.closed = true;
         this._createPolyline();
     }
 
     finish() {
-        if (this.points.length < 2) {
+        if (this.segments.length === 0) {
             this.cmd?.log('Polylinie: Mindestens 2 Punkte benötigt', 'error');
             this.manager.rubberBand = null;
             this.manager.activeTool = null;
@@ -3670,7 +4108,7 @@ class PolylineTool extends BaseTool {
     }
 
     _createPolyline() {
-        const finalPoints = this.points.map(p => ({ x: p.x, y: p.y }));
+        const finalPoints = this._flattenPoints();
         if (this.closed) finalPoints.push({ x: finalPoints[0].x, y: finalPoints[0].y });
 
         this.manager.addEntity({ type: 'POLYLINE', points: finalPoints, closed: this.closed });
@@ -3682,12 +4120,16 @@ class PolylineTool extends BaseTool {
     }
 
     cancel() {
-        this.points = [];
+        this.startPoint = null;
+        this.segments = [];
+        this._arcThrough = null;
         super.cancel();
     }
 
     getLastPoint() {
-        return this.points.length > 0 ? this.points[this.points.length - 1] : null;
+        if (this._arcThrough) return this._arcThrough;
+        if (this.segments.length > 0) return this._lastVertex();
+        return this.startPoint;
     }
 }
 

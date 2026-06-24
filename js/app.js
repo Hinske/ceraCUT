@@ -1,5 +1,11 @@
 /**
- * CeraCUT V6.19 - Main Application
+ * CeraCUT V6.21 - Main Application
+ * V6.21: Feat — lastCreatedContour-Tracking in addDrawnEntities() für ModificationTool
+ *        "L" (Last) Selektionsoption (CAD-Improvements Abschnitt 7).
+ * V6.20: Feat — Login/User-Management: currentUser-Feld (aus window.CeraCutCurrentUser,
+ *        von server.js synchron in index.html injiziert), _initUserBadge() zeigt
+ *        eingeloggten User in der Titelleiste + bindet Logout-Button (POST /api/auth/logout
+ *        → Redirect /login.html), "Benutzer verwalten"-Link nur bei Rolle admin sichtbar.
  * V6.19: Fix — saveDXF()/saveDXFAs() schrieben result.content als rohen String in den
  *        FileSystemWritableFileStream (File System Access API). Der Browser kodiert das
  *        als UTF-8, der DXF-Header deklariert aber $DWGCODEPAGE=ANSI_1252 — Umlaute in
@@ -40,7 +46,7 @@
  * V3.14: CAM-Tab Redesign — Außen/Innen-Lead, Material-Gruppe, Piercing-Typen, Speed-Info
  * V4.5: IGEMS 4-Slot Lead-System — Alternativ-Lead Fallback bei Kollision
  * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-dxfsaveencoding
+ * Build: 20260624-cadimprovements7
  */
 
 // XSS Protection
@@ -170,11 +176,42 @@ class CeraCutApp {
         // V6.20: Multi-Dokument-Tabs (mehrere DXF gleichzeitig offen, IndexedDB-Persistenz)
         this.documentManager = (typeof DocumentManager !== 'undefined') ? new DocumentManager(this) : null;
 
+        // V6.32: Login/User-Management — von server.js synchron in index.html injiziert
+        this.currentUser = window.CeraCutCurrentUser
+            ? { username: window.CeraCutCurrentUser, role: window.CeraCutCurrentRole }
+            : null;
+
+        // Für ModificationTool "L" (Last) — zuletzt erzeugte Kontur
+        this.lastCreatedContour = null;
+
         // V3.1: Verifikation dass Undo-Integration geladen ist
         this.init();
     }
-    
+
+    /** V6.32: Zeigt eingeloggten User in der Titelleiste, bindet Logout-Button. */
+    _initUserBadge() {
+        const badge = document.getElementById('current-user-badge');
+        const logoutBtn = document.getElementById('btn-logout');
+        const adminLink = document.getElementById('admin-users-link');
+
+        if (badge && this.currentUser) {
+            badge.textContent = `👤 ${this.currentUser.username}`;
+        }
+        if (adminLink && this.currentUser?.role === 'admin') {
+            adminLink.style.display = 'inline';
+        }
+        logoutBtn?.addEventListener('click', async () => {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+            } catch (err) {
+                console.warn('[App V6.32] Logout-Request fehlgeschlagen:', err);
+            }
+            window.location.href = '/login.html';
+        });
+    }
+
     init() {
+        this._initUserBadge();  // V6.32: Titelleiste — window.CeraCutCurrentUser ist bereits synchron vom Server gesetzt
         this.initRenderer();
         this.initDrawingTools();  // V3.4
         this.bindNavigationEvents();
@@ -747,7 +784,11 @@ class CeraCutApp {
             );
             this.undoManager.execute(addCmd);
         }
-        
+
+        // Für ModificationTool "L" (Last) — zuletzt erzeugte Kontur merken
+        this.lastCreatedContour = camContours[camContours.length - 1];
+
+
         // V3.5-fix: fileLoaded setzen damit Step-Navigation funktioniert (auch ohne DXF-Import)
         if (!this.fileLoaded) {
             this.fileLoaded = true;

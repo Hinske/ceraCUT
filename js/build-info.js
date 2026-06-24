@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.31
- * Version: V6.31
+ * CeraCUT Build Info V6.33
+ * Version: V6.33
  * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-ttt-apollonius
+ * Build: 20260624-cadimprovements7
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.31',
-    build: '20260624-ttt-apollonius',
+    version: '6.33',
+    build: '20260624-cadimprovements7',
     date: '2026-06-24',
-    time: '16:00 MEZ',
+    time: '18:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '8353ae9',
-        date: '2026-06-24 10:13:45 +0200',
-        message: 'feat: CircleTool TTT (Tan,Tan,Tan) fertiggestellt — Apollonius-Problem via Newton-Raphson'
+        hash: '5c59b57',
+        date: '2026-06-24 16:29:59 +0200',
+        message: 'feat: Login + Benutzerverwaltung, CAD-Tools Abschnitt 7 komplett'
     },
 
     modules: {
@@ -25,21 +25,21 @@ const CERACUT_BUILD = {
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.8', build: '20260624-gapfix' },
         'cam-contour':        { version: '5.11', build: '20260624-gapfix' },
-        'canvas-renderer':    { version: '3.37', build: '20260623-autocadfeel' },
+        'canvas-renderer':    { version: '3.38', build: '20260624-userlogin' },
         'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
         'sinumerik-pp':       { version: '1.7', build: '20260623-bugfixaudit' },
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.4', build: '20260623-bugfixaudit' },
-        'geometry-ops':       { version: '2.5', build: '20260323-boundary' },
-        'drawing-tools':      { version: '2.14', build: '20260624-ttt-apollonius' },
+        'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
+        'drawing-tools':      { version: '2.15', build: '20260624-cadimprovements7' },
         'drawing-tools-ext':  { version: '1.8', build: '20260623-bugfixaudit' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.9', build: '20260624-orphanlayer' },
-        'lead-profiles':      { version: '1.1', build: '20260315-intarsia20' },
-        'app':                { version: '6.19', build: '20260624-dxfsaveencoding' },
+        'lead-profiles':      { version: '1.2', build: '20260624-userlogin' },
+        'app':                { version: '6.21', build: '20260624-cadimprovements7' },
         'document-manager':   { version: '1.1', build: '20260623-camsetupgate' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
@@ -47,17 +47,24 @@ const CERACUT_BUILD = {
         'nesting':            { version: '1.1', build: '20260315-bugfix35' },
         'toolpath-simulator': { version: '1.0', build: '20260309' },
         'cost-calculator':    { version: '1.2', build: '20260623-bugfixaudit' },
-        'machine-profiles':   { version: '1.0', build: '20260309' },
+        'machine-profiles':   { version: '1.1', build: '20260624-userlogin' },
         'bridge-cutting':     { version: '1.0', build: '20260309' },
         'quality-zones':      { version: '1.1', build: '20260315-bugfix35' },
         'cam-tools':          { version: '1.3', build: '20260324-undofix' },
         'advanced-tools':     { version: '1.6', build: '20260323-boundary' },
         'arc-fitting':        { version: '3.1', build: '20260315-bugfix35' },
         'measure-tool':       { version: '1.2', build: '20260325-curvcheck' },
-        'dimension-tool':     { version: '2.4', build: '20260326-dimedit' }
+        'dimension-tool':     { version: '2.4', build: '20260326-dimedit' },
+        'dxf-browser':        { version: '1.1', build: '20260624-userlogin' },
+        'server':             { version: '1.4', build: '20260624-userlogin' },
+        'user-store':         { version: '1.0', build: '20260624-userlogin' },
+        'session-store':      { version: '1.0', build: '20260624-userlogin' },
+        'auth-helper':        { version: '1.0', build: '20260624-userlogin' }
     },
 
     changes: [
+        'V6.33: Feat — CAD-Improvements Abschnitt 7 komplett abgearbeitet: LineTool setzt bei Enter ohne Eingabe vom letzten Linie/Bogen/Polylinie-Endpunkt fort (DrawingToolManager._lastDrawEndpoint, AutoCAD-LASTPOINT-Verhalten); ModificationTool (Move/Copy/Rotate/Mirror/Scale/Offset/Erase/Explode/Join) akzeptiert jetzt ALL (alle Konturen) und L (zuletzt erzeugte Kontur, app.lastCreatedContour) zusätzlich zu P (Vorherige); RectangleTool bekommt F(illet)/C(hamfer)/R(otation)-Optionen vor der 2. Ecke (nutzt GeometryOps.filletPolyline/neues chamferPolyline + ModificationTool.rotatePoints); PolylineTool-Bogen-Modus (A) erzeugt jetzt tatsächlich Bögen (3-Punkt-Bogen pro Segment: letzter Vertex + Durchgangspunkt + Endpunkt, segments[] statt flachem points[]); ArcTool bekommt 7 neue Konstruktionsarten (SCE/SCA/SCL/SEA/SED/SER/CSE) nach dem CircleTool-Submodus-Vorbild — alle Formeln vorab gegen bekannte geometrische Fälle verifiziert. Nebenbei gefixt: GeometryOps.filletPolyline() verarbeitete bei geschlossenen Konturen die erste Ecke doppelt (off-by-one bei der Schließpunkt-Erkennung) — betraf auch das bestehende FilletTool (geometry-ops V2.6, drawing-tools V2.15, app V6.21)',
+        'V6.32: Feat — Login + Benutzerverwaltung: Cookie-Session (server.js, lib/user-store.js, lib/session-store.js, lib/auth.js), neue Routen /api/auth/{login,logout,me} + /api/admin/users* (Rolle admin), / und /api/dxf/* sind jetzt gegated. Server injiziert window.CeraCutCurrentUser direkt in index.html (vor allen Script-Tags), damit Theme/aktives Lead-/Maschinen-Profil pro User schon beim ersten Render korrekt aufgelöst werden (kein Async-Fetch-Wettlauf mit den selbstinitialisierenden IIFEs in lead-profiles.js/machine-profiles.js). Neue Seiten login.html + admin-users.html. Profil-Listen (Maschinenpark, Lead-Presets) bleiben firmenweit geteilt, nur die aktive Auswahl ist pro User (app V6.20, canvas-renderer V3.38, machine-profiles V1.1, lead-profiles V1.2, dxf-browser V1.1, server V1.4)',
         'V6.31: Feat — CircleTool TTT (Tan,Tan,Tan) fertiggestellt: 3 beliebige Tangenten-Objekte (Linie/Kreis gemischt) anklicken, Kreis wird automatisch berechnet. Verallgemeinertes Apollonius-Problem über Newton-Raphson auf (x,y,r) mit 8 Vorzeichen-Kombinationen (innen-/außen-tangential pro Objekt), Lösungsauswahl wie beim bestehenden TTR-Tool über Nähe zu den 3 Klickpunkten. War zuvor nur ein Menüpunkt mit "noch nicht implementiert"-Warnung (drawing-tools V2.14)',
         'V6.30: Fix — DXF-Export: Entities mit Layer-Namen, die nie im LayerManager registriert wurden (z.B. Fallback-Layer "DRAW" aus BoundaryTool/drawing-tools.js bei fehlendem entity.layer), referenzierten im LAYER-Table einen nicht existierenden Eintrag (Code 8 ohne passenden LAYER-Record) — AutoCAD 2017 wies solche Dateien als beschädigt zurück. _writeLayerTable() ergänzt jetzt automatisch jeden von den exportierten Konturen tatsächlich genutzten Layer-Namen, der im LayerManager fehlt (dxf-writer V1.9)',
         'V6.29: Fix — DXF-Speichern via File System Access API (Strg+S / Strg+Shift+S, der Standard-Speicherpfad in Chrome/Edge) schrieb den DXF-Inhalt als rohen JS-String in den Writable-Stream. Der Browser kodiert das intern als UTF-8, obwohl der Header $DWGCODEPAGE=ANSI_1252 deklariert — Umlaute/Sonderzeichen (z.B. in Layer-Namen) wurden dadurch als Mehrbyte-UTF-8 statt Einzelbyte-ANSI geschrieben und von AutoCAD beim Import als beschädigt zurückgewiesen. Der Download-Fallback (generateDownload/Blob) war seit je davon nicht betroffen, da er bereits _encodeAnsi1252() nutzte — daher blieben frühere BLOCK/ENDBLK- und Pflicht-Sektionen-Fixes wirkungslos. Beide FSAPI-Pfade schreiben jetzt ebenfalls über _encodeAnsi1252() kodierte Bytes (app V6.19)',

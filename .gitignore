@@ -40,6 +40,9 @@ system-anweisung-*.md
 # TLS-Zertifikate (lokal generiert)
 certs/
 
+# User-Datenbank (Passwort-Hashes — niemals committen)
+data/
+
 # Fonts (Copyright, lokal via Syncthing)
 fonts/*.ttf
 fonts/*.TTF

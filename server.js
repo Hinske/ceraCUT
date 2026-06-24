@@ -1,9 +1,16 @@
 /**
- * CeraCUT Server V1.3
+ * CeraCUT Server V1.4
+ * V1.4: Feat — Login + User-Management: /, /index.html und /api/dxf/* sind jetzt
+ *       hinter einer Session (Cookie ceracut_session) gegated, neue Routen
+ *       /api/auth/{login,logout,me} + /api/admin/users* (Rolle admin). Beim
+ *       Ausliefern von index.html wird window.CeraCutCurrentUser per
+ *       String-Injection gesetzt (vor allen Script-Tags), damit Theme/Profil-
+ *       Auswahl beim ersten Render schon korrekt pro User aufgelöst werden kann.
+ *       Siehe lib/user-store.js, lib/session-store.js, lib/auth.js.
  * V1.3: Fix — safePath() prüft Symlink-Ziel via fs.realpathSync gegen DXF_ROOT,
  *       Content-Disposition-Header filtert CR/LF (Header-Injection)
- * Last Modified: 2026-06-23
- * Build: 20260623-bugfixaudit
+ * Last Modified: 2026-06-24
+ * Build: 20260624-userlogin
  *
  * Statischer Dateiserver + DXF-Browse-API für Netzlaufwerk-Zugriff.
  * Ersetzt `npx serve .` und stellt zusätzlich /api/dxf/* Endpunkte bereit.
@@ -13,16 +20,19 @@
  * (erfordert `openssl` im PATH).
  *
  * Umgebungsvariablen:
- *   PORT      — Server-Port (default: 5000)
- *   DXF_ROOT  — Wurzelverzeichnis für DXF-Dateien (default: /mnt/dxf)
- *   TLS_CERT  — Pfad zum Zertifikat (default: certs/server.crt)
- *   TLS_KEY   — Pfad zum privaten Schlüssel (default: certs/server.key)
- *   NO_HTTPS  — auf "1" setzen um HTTPS zu deaktivieren
+ *   PORT                 — Server-Port (default: 5000)
+ *   DXF_ROOT             — Wurzelverzeichnis für DXF-Dateien (default: /mnt/dxf)
+ *   TLS_CERT             — Pfad zum Zertifikat (default: certs/server.crt)
+ *   TLS_KEY              — Pfad zum privaten Schlüssel (default: certs/server.key)
+ *   NO_HTTPS             — auf "1" setzen um HTTPS zu deaktivieren
+ *   ADMIN_BOOTSTRAP_USER — Username für den ersten Admin (nur wirksam wenn data/users.json leer ist)
+ *   ADMIN_BOOTSTRAP_PASS — Passwort für den ersten Admin (siehe ADMIN_BOOTSTRAP_USER)
  *
  * Starten:
  *   node server.js                              # HTTPS (auto-generierte Certs)
  *   NO_HTTPS=1 node server.js                   # nur HTTP
  *   PORT=3000 DXF_ROOT=/pfad/zu/dxf node server.js
+ *   ADMIN_BOOTSTRAP_USER=admin ADMIN_BOOTSTRAP_PASS=changeme node server.js   # erster Start
  */
 
 const http = require('http');
@@ -32,6 +42,15 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 const { execSync } = require('child_process');
+
+const userStore = require('./lib/user-store');
+const {
+    getCurrentUser,
+    createSessionCookie,
+    clearSessionCookieHeader,
+    destroyCurrentSession,
+    readJSONBody
+} = require('./lib/auth');
 
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 const DXF_ROOT = path.resolve(process.env.DXF_ROOT || '/mnt/dxf');
@@ -298,10 +317,28 @@ function handleDXFFile(res, queryPath) {
     });
 }
 
+const INDEX_HTML_PATH = path.join(STATIC_ROOT, 'index.html');
+
+/**
+ * Injiziert window.CeraCutCurrentUser/-Role in index.html, direkt nach <head> —
+ * vor allen anderen Script-Tags. machine-profiles.js/lead-profiles.js initialisieren
+ * sich per IIFE beim Script-Parse (lange vor app.js); ein rein client-seitiger
+ * fetch('/api/auth/me') aus app.js wäre für deren Auswahl-Restore zu spät
+ * (Race Condition / Flash-of-wrong-theme). Der Server kennt den User bereits
+ * (Session-Cookie-Check), daher direkte String-Injection statt Async-Fetch.
+ */
+function _injectCurrentUser(resolvedPath, data, currentUser) {
+    if (resolvedPath !== INDEX_HTML_PATH) return data;
+    const html = data.toString('utf8');
+    const script = `<script>window.CeraCutCurrentUser = ${JSON.stringify(currentUser ? currentUser.username : null)};window.CeraCutCurrentRole = ${JSON.stringify(currentUser ? currentUser.role : null)};</script>`;
+    const injected = html.replace('<head>', '<head>\n' + script);
+    return Buffer.from(injected, 'utf8');
+}
+
 /**
  * Statische Dateien aus dem Projektverzeichnis ausliefern.
  */
-function handleStatic(req, res, pathname) {
+function handleStatic(req, res, pathname, currentUser) {
     // Default: index.html
     let filePath = path.join(STATIC_ROOT, pathname === '/' ? 'index.html' : pathname);
 
@@ -322,8 +359,9 @@ function handleStatic(req, res, pathname) {
                         res.writeHead(404);
                         return res.end('Not Found');
                     }
-                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                    res.end(data);
+                    const body = _injectCurrentUser(indexPath, data, currentUser);
+                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': body.length });
+                    res.end(body);
                 });
             }
             res.writeHead(404);
@@ -338,14 +376,85 @@ function handleStatic(req, res, pathname) {
                 res.writeHead(500);
                 return res.end('Internal Server Error');
             }
+            const body = _injectCurrentUser(resolved, data, currentUser);
             res.writeHead(200, {
                 'Content-Type': contentType,
-                'Content-Length': data.length,
+                'Content-Length': body.length,
                 'Cache-Control': 'no-cache',
             });
-            res.end(data);
+            res.end(body);
         });
     });
+}
+
+// ── Auth-Handler ─────────────────────────────────────────────────────
+
+/**
+ * API: POST /api/auth/login {username, password}
+ * Generischer Fehlertext bei "User nicht gefunden" UND "falsches Passwort" —
+ * kein User-Enumeration-Leak.
+ */
+async function handleLogin(req, res, isSecure) {
+    let body;
+    try {
+        body = await readJSONBody(req);
+    } catch {
+        return sendJSON(res, 400, { error: 'Ungültige Anfrage' });
+    }
+    const user = userStore.verifyCredentials(body.username, body.password);
+    if (!user) {
+        return sendJSON(res, 401, { error: 'Benutzername oder Passwort falsch' });
+    }
+    res.setHeader('Set-Cookie', createSessionCookie(user, isSecure));
+    sendJSON(res, 200, { username: user.username, role: user.role });
+}
+
+/** API: POST /api/auth/logout */
+function handleLogout(req, res, isSecure) {
+    destroyCurrentSession(req);
+    res.setHeader('Set-Cookie', clearSessionCookieHeader(isSecure));
+    sendJSON(res, 200, { ok: true });
+}
+
+/** API: /api/admin/users* — nur für Rolle 'admin' (Gate erfolgt im Aufrufer) */
+async function handleAdminUsers(req, res, pathname) {
+    if (pathname === '/api/admin/users' && req.method === 'GET') {
+        return sendJSON(res, 200, { users: userStore.listUsers() });
+    }
+
+    if (pathname === '/api/admin/users' && req.method === 'POST') {
+        let body;
+        try { body = await readJSONBody(req); } catch { return sendJSON(res, 400, { error: 'Ungültige Anfrage' }); }
+        try {
+            return sendJSON(res, 200, { user: userStore.createUser(body) });
+        } catch (err) {
+            return sendJSON(res, 400, { error: err.message });
+        }
+    }
+
+    if (pathname === '/api/admin/users/delete' && req.method === 'POST') {
+        let body;
+        try { body = await readJSONBody(req); } catch { return sendJSON(res, 400, { error: 'Ungültige Anfrage' }); }
+        try {
+            userStore.deleteUser(body.id);
+            return sendJSON(res, 200, { ok: true });
+        } catch (err) {
+            return sendJSON(res, 400, { error: err.message });
+        }
+    }
+
+    if (pathname === '/api/admin/users/reset-password' && req.method === 'POST') {
+        let body;
+        try { body = await readJSONBody(req); } catch { return sendJSON(res, 400, { error: 'Ungültige Anfrage' }); }
+        try {
+            userStore.resetPassword(body.id, body.newPassword);
+            return sendJSON(res, 200, { ok: true });
+        } catch (err) {
+            return sendJSON(res, 400, { error: err.message });
+        }
+    }
+
+    return sendJSON(res, 404, { error: 'Unbekannte Admin-Route' });
 }
 
 // ── Request-Handler ─────────────────────────────────────────────────
@@ -361,22 +470,53 @@ function requestHandler(req, res) {
         return;
     }
 
-    // API-Routen
-    if (pathname === '/api/dxf/list' && req.method === 'GET') {
-        return handleDXFList(res, parsed.query.path || '');
+    const isSecure = !!(req.socket && req.socket.encrypted);
+    const currentUser = getCurrentUser(req); // null wenn nicht eingeloggt/Session abgelaufen
+
+    // ── Auth-Routen (immer erreichbar, auch ohne Login) ──
+    if (pathname === '/api/auth/login' && req.method === 'POST') {
+        return handleLogin(req, res, isSecure);
+    }
+    if (pathname === '/api/auth/me' && req.method === 'GET') {
+        return sendJSON(res, currentUser ? 200 : 401, currentUser || { error: 'Nicht angemeldet' });
+    }
+    if (pathname === '/api/auth/logout' && req.method === 'POST') {
+        return handleLogout(req, res, isSecure);
     }
 
-    if (pathname === '/api/dxf/file' && req.method === 'GET') {
-        return handleDXFFile(res, parsed.query.path || '');
-    }
-
-    // Health-Check
+    // Health-Check (ungated)
     if (pathname === '/api/health') {
         return sendJSON(res, 200, { status: 'ok', dxfRoot: DXF_ROOT, https: !!tlsCreds });
     }
 
+    // ── Admin-Routen: Login + Rolle 'admin' nötig ──
+    if (pathname.startsWith('/api/admin/')) {
+        if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
+        if (currentUser.role !== 'admin') return sendJSON(res, 403, { error: 'Nur für Admins' });
+        return handleAdminUsers(req, res, pathname);
+    }
+
+    // ── DXF-API: Login nötig (echte Kundendaten) ──
+    if (pathname === '/api/dxf/list' && req.method === 'GET') {
+        if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
+        return handleDXFList(res, parsed.query.path || '');
+    }
+    if (pathname === '/api/dxf/file' && req.method === 'GET') {
+        if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
+        return handleDXFFile(res, parsed.query.path || '');
+    }
+
+    // ── App-Shell: Login nötig — alle anderen statischen Assets (js/*.js, *.css,
+    //    Fonts) bleiben bewusst ungated (Anwendungscode, kein Geheimnis) ──
+    if (pathname === '/' || pathname === '/index.html') {
+        if (!currentUser) {
+            res.writeHead(302, { Location: '/login.html' });
+            return res.end();
+        }
+    }
+
     // Statische Dateien
-    handleStatic(req, res, pathname);
+    handleStatic(req, res, pathname, currentUser);
 }
 
 // ── Server erstellen ────────────────────────────────────────────────
@@ -445,4 +585,5 @@ function startServer() {
     }
 }
 
+userStore.bootstrapIfEmpty();
 startServer();

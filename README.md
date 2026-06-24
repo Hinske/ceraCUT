@@ -68,6 +68,35 @@ open index.html
 
 ---
 
+## Login & Benutzerverwaltung
+
+CeraCUT erfordert seit V6.32 ein Login (Cookie-basierte Session). Jeder Benutzer
+hat eigene UI/CAD-Praeferenzen (Theme, aktives Lead-/Maschinen-Profil,
+DXF-Browser-Pfad, Area-Classes) — Dokumente/Tabs/Workspace bleiben geteilt.
+
+### Ersten Admin-Account anlegen
+
+Beim ersten Start ohne vorhandene `data/users.json` per Umgebungsvariablen:
+
+```bash
+ADMIN_BOOTSTRAP_USER=admin ADMIN_BOOTSTRAP_PASS=changeme node server.js
+```
+
+Danach unter `/admin-users.html` (nur fuer Rolle `admin` sichtbar) weitere
+Benutzer anlegen, Passwoerter zuruecksetzen oder Benutzer loeschen. Die
+Bootstrap-Variablen sind nur beim allerersten Start wirksam (solange noch
+keine User existieren) — fuer alle folgenden Starts weglassen.
+
+### Hinweise
+- Sessions leben nur im Server-Prozess (In-Memory) — ein Server-Neustart
+  meldet alle Benutzer ab (Re-Login erforderlich).
+- Nur Admins koennen Passwoerter setzen/zuruecksetzen — kein Self-Service
+  "Passwort aendern" in dieser Version.
+- `data/users.json` enthaelt Passwort-Hashes (scrypt) — niemals committen
+  (bereits in `.gitignore`).
+
+---
+
 ## Tastenkuerzel
 
 ### Zeichnen
