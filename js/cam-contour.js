@@ -1,5 +1,11 @@
 /**
- * CeraCUT CamContour V5.12 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.13 - IGEMS-konformes Lead-In/Out System
+ * V5.13: Fix — _getWasteSideNormal() ignorierte kerfFlipped ("Kompensation auf
+ *        Gegenseite"): getKerfOffsetPolyline() kehrte bei kerfFlipped=true die
+ *        Verschnittseite korrekt um, die Lead-Normale tat das nicht — Innen-Leads
+ *        bei geflipptem Loch-Kerf zeigten dadurch ins Werkstück statt in die
+ *        (neue) Verschnittseite. Beide Stellen nutzen jetzt die neue
+ *        _isEffectivelyHole()-Methode als einzige Quelle der Wahrheit.
  * V5.12: Lead-Überarbeitung — (1) Radius-0-Guard in _calcArcLeadIn/_calcArcLeadOut
  *        (kollabierendes Bogenzentrum erzeugte entryAngle=atan2(0,0)=0 IMMER statt
  *        tangential zur Schnittrichtung), (2) Lead-Out Sicherheitsnetz-Parität mit
@@ -176,10 +182,7 @@ class CamContour {
         }
 
         const d = this.kerfWidth / 2;
-        // kerfFlipped: Kompensation auf Gegenseite (Loch→außen, Scheibe→innen)
-        const isHole = this.kerfFlipped
-            ? (this.cuttingMode !== 'hole')
-            : (this.cuttingMode === 'hole');
+        const isHole = this._isEffectivelyHole();
         const Area_Original = Math.abs(Geometry.getSignedArea(this.points));
 
         if (Area_Original < 0.01) {
@@ -246,6 +249,19 @@ class CamContour {
         return cacheResult({ points: finalOffset, flipped });
     }
 
+    /**
+     * V5.13: Einzige Quelle der Wahrheit für "ist diese Kontur (kerf-technisch) ein Loch?".
+     * kerfFlipped ("Kompensation auf Gegenseite") kehrt die Verschnittseite um — JEDE Stelle,
+     * die zwischen Loch/Scheibe-Verschnittseite unterscheidet (Kerf-Offset-Richtung, G41/G42,
+     * Lead-Waste-Side-Normale), MUSS diese Methode nutzen statt cuttingMode direkt zu prüfen.
+     * Sonst genau der Bug aus V5.13: eine Stelle vergisst kerfFlipped, Lead zeigt ins Werkstück.
+     */
+    _isEffectivelyHole() {
+        return this.kerfFlipped
+            ? (this.cuttingMode !== 'hole')
+            : (this.cuttingMode === 'hole');
+    }
+
     // ════════════════════════════════════════════════════════════════
     // WASTE-SIDE NORMAL (Centroid-basiert)
     // ════════════════════════════════════════════════════════════════
@@ -263,7 +279,7 @@ class CamContour {
 
         const signedArea = Geometry.getSignedArea(this.points);
         const isCW = signedArea > 0;
-        const isHole = this.cuttingMode === 'hole';
+        const isHole = this._isEffectivelyHole();
 
         // CW: Links-Normale zeigt EINWÄRTS, CCW: AUSWÄRTS
         // Disc (Waste=außen): Normale soll AUSWÄRTS → CW: flip

@@ -1,30 +1,30 @@
 /**
- * CeraCUT Build Info V6.34
- * Version: V6.34
+ * CeraCUT Build Info V6.35
+ * Version: V6.35
  * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-leadoverhaul
+ * Build: 20260624-kerfflipleadfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.34',
-    build: '20260624-leadoverhaul',
+    version: '6.35',
+    build: '20260624-kerfflipleadfix',
     date: '2026-06-24',
-    time: '20:15 MEZ',
+    time: '21:05 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'cab0996',
-        date: '2026-06-24 18:52:50 +0200',
-        message: 'fix: Lead-In/Out-System überarbeitet — Radius-0-Bug, Lead-Out-Parität, Profil-Robustheit'
+        hash: '5005968',
+        date: '2026-06-24 19:01:01 +0200',
+        message: 'fix: kerfFlipped wurde in Lead-Waste-Side-Normale ignoriert — Innen-Lead schnitt ins Werkstück'
     },
 
     modules: {
         'dxf-parser':         { version: '3.15', build: '20260624-gapfix' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.8', build: '20260624-gapfix' },
-        'cam-contour':        { version: '5.12', build: '20260624-leadoverhaul' },
+        'cam-contour':        { version: '5.13', build: '20260624-kerfflipleadfix' },
         'canvas-renderer':    { version: '3.39', build: '20260624-leadoverhaul' },
         'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
         'sinumerik-pp':       { version: '1.8', build: '20260624-leadoverhaul' },
@@ -63,6 +63,12 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.35: Fix — _getWasteSideNormal() (cam-contour.js) ignorierte das kerfFlipped-Flag ' +
+        '("Kompensation auf Gegenseite"): getKerfOffsetPolyline() und _getKerfCode() (G41/G42) ' +
+        'kehren beim Kerf-Flip eines Lochs die Verschnittseite korrekt um, die Lead-Waste-Side-' +
+        'Normale tat das nicht — Innen-Leads bei geflipptem Loch-Kerf zeigten dadurch ins ' +
+        'Werkstück statt in die tatsächliche Verschnittseite. isHole-Berechnung in ' +
+        '_getWasteSideNormal() jetzt identisch zu getKerfOffsetPolyline() (cam-contour V5.13)',
         'V6.34: Fix/Feat — Lead-In/Out-System überarbeitet (Audit ergab mehrere Bugs/Asymmetrien): ' +
         '(1) Radius-0-Bug: _calcArcLeadIn/_calcArcLeadOut kollabierten bei leadInRadius=0 (über Properties-Panel erreichbar, min="0") ' +
         'das Bogenzentrum auf den Entry-/Exit-Punkt, wodurch entryAngle=atan2(0,0)=0 IMMER galt statt tangential zur ' +
