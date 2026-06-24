@@ -130,10 +130,9 @@ CeraCUT hat 45+ Tools mit AutoCAD-konformem Workflow (Noun-Verb/Verb-Noun, Conti
 
 ## Phase 4: Fehlende AutoCAD-Tools
 
-### 4.1 Tan-Tan-Tan Kreis fertigstellen
-- [ ] 3 Tangenten → Kreis berechnen (Apollonius-Problem)
-- [ ] Stub in `drawing-tools.js` bereits vorhanden
-- **Datei:** `drawing-tools.js`, `geometry.js`
+### 4.1 Tan-Tan-Tan Kreis fertigstellen ✅ (V6.31)
+- [x] 3 Tangenten → Kreis berechnen (Apollonius-Problem) — Newton-Raphson auf (x,y,r), 8 Vorzeichen-Kombinationen, Lösungsauswahl wie TTR über Nähe zu den 3 Klickpunkten
+- **Datei:** `drawing-tools.js` V2.14 (`CircleTool._solveTTT`, `_newtonTTT`, `_solve3x3`, `_distToObj`, `_signedPerpDist`)
 
 ### 4.2 Spline-Vertex-Editing
 - [ ] Nach Erstellung: Kontrollpunkte verschiebbar

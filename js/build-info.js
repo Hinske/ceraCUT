@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.30
- * Version: V6.30
+ * CeraCUT Build Info V6.31
+ * Version: V6.31
  * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-orphanlayer
+ * Build: 20260624-ttt-apollonius
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.30',
-    build: '20260624-orphanlayer',
+    version: '6.31',
+    build: '20260624-ttt-apollonius',
     date: '2026-06-24',
-    time: '15:15 MEZ',
+    time: '16:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '9dca52f',
-        date: '2026-06-24 08:56:36 +0200',
-        message: 'fix: DXF-Export — Entities auf nie registriertem Fallback-Layer \'DRAW\' verletzten LAYER-Table'
+        hash: '8353ae9',
+        date: '2026-06-24 10:13:45 +0200',
+        message: 'feat: CircleTool TTT (Tan,Tan,Tan) fertiggestellt — Apollonius-Problem via Newton-Raphson'
     },
 
     modules: {
@@ -31,7 +31,7 @@ const CERACUT_BUILD = {
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.4', build: '20260623-bugfixaudit' },
         'geometry-ops':       { version: '2.5', build: '20260323-boundary' },
-        'drawing-tools':      { version: '2.13', build: '20260624-rotatecopy-polarinput' },
+        'drawing-tools':      { version: '2.14', build: '20260624-ttt-apollonius' },
         'drawing-tools-ext':  { version: '1.8', build: '20260623-bugfixaudit' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
@@ -58,6 +58,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.31: Feat — CircleTool TTT (Tan,Tan,Tan) fertiggestellt: 3 beliebige Tangenten-Objekte (Linie/Kreis gemischt) anklicken, Kreis wird automatisch berechnet. Verallgemeinertes Apollonius-Problem über Newton-Raphson auf (x,y,r) mit 8 Vorzeichen-Kombinationen (innen-/außen-tangential pro Objekt), Lösungsauswahl wie beim bestehenden TTR-Tool über Nähe zu den 3 Klickpunkten. War zuvor nur ein Menüpunkt mit "noch nicht implementiert"-Warnung (drawing-tools V2.14)',
         'V6.30: Fix — DXF-Export: Entities mit Layer-Namen, die nie im LayerManager registriert wurden (z.B. Fallback-Layer "DRAW" aus BoundaryTool/drawing-tools.js bei fehlendem entity.layer), referenzierten im LAYER-Table einen nicht existierenden Eintrag (Code 8 ohne passenden LAYER-Record) — AutoCAD 2017 wies solche Dateien als beschädigt zurück. _writeLayerTable() ergänzt jetzt automatisch jeden von den exportierten Konturen tatsächlich genutzten Layer-Namen, der im LayerManager fehlt (dxf-writer V1.9)',
         'V6.29: Fix — DXF-Speichern via File System Access API (Strg+S / Strg+Shift+S, der Standard-Speicherpfad in Chrome/Edge) schrieb den DXF-Inhalt als rohen JS-String in den Writable-Stream. Der Browser kodiert das intern als UTF-8, obwohl der Header $DWGCODEPAGE=ANSI_1252 deklariert — Umlaute/Sonderzeichen (z.B. in Layer-Namen) wurden dadurch als Mehrbyte-UTF-8 statt Einzelbyte-ANSI geschrieben und von AutoCAD beim Import als beschädigt zurückgewiesen. Der Download-Fallback (generateDownload/Blob) war seit je davon nicht betroffen, da er bereits _encodeAnsi1252() nutzte — daher blieben frühere BLOCK/ENDBLK- und Pflicht-Sektionen-Fixes wirkungslos. Beide FSAPI-Pfade schreiben jetzt ebenfalls über _encodeAnsi1252() kodierte Bytes (app V6.19)',
         'V6.28: Feat — Polar-Koordinaten-Eingabe ("50<45" / "@50<45") in der Command-Line — AutoCAD-Standard für Distanz+Winkel, fehlte bisher komplett und betraf Line/Polyline/Rectangle/Move/Copy/Rotate/Scale gleichermaßen (command-line V1.5)',

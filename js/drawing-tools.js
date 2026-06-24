@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.13
+ * CeraCUT Drawing & Modification Tools V2.14
  * AutoCAD-style CAD Tools für CeraCUT
  *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
@@ -12,6 +12,10 @@
  * - Window-Selection (Drag-Rechteck)
  * - Integration mit CommandLine + SnapManager + UndoManager
  *
+ * V2.14: CircleTool TTT (Tan,Tan,Tan) fertiggestellt — verallgemeinertes Apollonius-Problem
+ *        über Newton-Raphson auf (x,y,r), 8 Vorzeichen-Kombinationen für innen-/außen-tangential
+ *        pro Objekt (Linie oder Kreis, beliebig gemischt), Lösungsauswahl wie TTR über Nähe
+ *        zu den 3 Klickpunkten
  * V2.13: RotateTool — AutoCAD-Option [C]opy (Original bleibt erhalten, rotierte Kopie wird hinzugefügt)
  * V2.12: ScaleTool — AutoCAD-Optionen [C]opy (Original bleibt erhalten) und [R]eference
  *        (Referenzlänge/Neue Länge per Punkt oder Wert, optional [P]oints für neue Länge)
@@ -27,7 +31,7 @@
  * V1.0: Initiale 5 Zeichentools
  * Created: 2026-02-13 MEZ
  * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-rotatecopy-polarinput
+ * Build: 20260624-ttt-apollonius
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -2700,6 +2704,13 @@ class CircleTool extends BaseTool {
         this._ttrObj2 = null;
         this._ttrClickPt1 = null;   // Klickpunkt für Lösungsauswahl
         this._ttrClickPt2 = null;
+        // TTT State
+        this._tttObj1 = null;
+        this._tttObj2 = null;
+        this._tttObj3 = null;
+        this._tttClickPt1 = null;
+        this._tttClickPt2 = null;
+        this._tttClickPt3 = null;
     }
 
     getToolName() { return 'CIRCLE'; }
@@ -2757,7 +2768,18 @@ class CircleTool extends BaseTool {
             this.cmd?.setPrompt('KREIS TTR — 1. Tangenten-Objekt wählen (Linie oder Kreis):');
             this.cmd?.log('🔵 Tan,Tan,Radius: Klicke auf 2 Objekte, dann Radius eingeben', 'info');
         } else if (opt === 'TTT') {
-            this.cmd?.log('⚠ Tan,Tan,Tan ist noch nicht implementiert', 'warning');
+            this.subMode = 'ttt';
+            this.center = null;
+            this.p1 = null;
+            this.p2 = null;
+            this._tttObj1 = null;
+            this._tttObj2 = null;
+            this._tttObj3 = null;
+            this._tttClickPt1 = null;
+            this._tttClickPt2 = null;
+            this._tttClickPt3 = null;
+            this.cmd?.setPrompt('KREIS TTT — 1. Tangenten-Objekt wählen (Linie oder Kreis):');
+            this.cmd?.log('🔵 Tan,Tan,Tan: Klicke auf 3 Objekte — Kreis wird automatisch berechnet', 'info');
         }
     }
 
@@ -2829,6 +2851,50 @@ class CircleTool extends BaseTool {
                 const typeName = geom.type === 'circle' ? 'Kreis' : 'Linie';
                 this.cmd?.log(`2. Objekt: ${typeName}`, 'info');
                 this.cmd?.setPrompt('KREIS TTR — Radius angeben:');
+            }
+            return;
+        }
+
+        // ── TTT mode: Tan,Tan,Tan ──
+        if (this.subMode === 'ttt') {
+            const geom = CircleTool._findNearestGeometry(point, this.manager.app?.contours);
+            if (!geom) {
+                this.cmd?.log('Kein Objekt gefunden — näher an Linie oder Kreis klicken', 'error');
+                return;
+            }
+
+            if (!this._tttObj1) {
+                this._tttObj1 = geom;
+                this._tttClickPt1 = { x: point.x, y: point.y };
+                this.cmd?.log(`1. Objekt: ${geom.type === 'circle' ? 'Kreis' : 'Linie'}`, 'info');
+                this.cmd?.setPrompt('KREIS TTT — 2. Tangenten-Objekt wählen:');
+            } else if (!this._tttObj2) {
+                this._tttObj2 = geom;
+                this._tttClickPt2 = { x: point.x, y: point.y };
+                this.cmd?.log(`2. Objekt: ${geom.type === 'circle' ? 'Kreis' : 'Linie'}`, 'info');
+                this.cmd?.setPrompt('KREIS TTT — 3. Tangenten-Objekt wählen:');
+            } else {
+                this._tttObj3 = geom;
+                this._tttClickPt3 = { x: point.x, y: point.y };
+                this.cmd?.log(`3. Objekt: ${geom.type === 'circle' ? 'Kreis' : 'Linie'}`, 'info');
+
+                const result = CircleTool._solveTTT(
+                    this._tttObj1, this._tttObj2, this._tttObj3,
+                    this._tttClickPt1, this._tttClickPt2, this._tttClickPt3
+                );
+                if (result) {
+                    console.log(`[CircleTool TTT] Lösung: M(${result.x.toFixed(3)}, ${result.y.toFixed(3)}) R=${result.r.toFixed(3)}`);
+                    this._createCircle({ x: result.x, y: result.y }, result.r);
+                } else {
+                    this.cmd?.log('Kein tangentialer Kreis für diese 3 Objekte gefunden', 'error');
+                    this._tttObj1 = null;
+                    this._tttObj2 = null;
+                    this._tttObj3 = null;
+                    this._tttClickPt1 = null;
+                    this._tttClickPt2 = null;
+                    this._tttClickPt3 = null;
+                    this.cmd?.setPrompt('KREIS TTT — 1. Tangenten-Objekt wählen (Linie oder Kreis):');
+                }
             }
             return;
         }
@@ -2925,6 +2991,12 @@ class CircleTool extends BaseTool {
         this._ttrObj2 = null;
         this._ttrClickPt1 = null;
         this._ttrClickPt2 = null;
+        this._tttObj1 = null;
+        this._tttObj2 = null;
+        this._tttObj3 = null;
+        this._tttClickPt1 = null;
+        this._tttClickPt2 = null;
+        this._tttClickPt3 = null;
         this.mode = 'radius';
 
         if (this.subMode === 'center') {
@@ -2935,6 +3007,8 @@ class CircleTool extends BaseTool {
             this.cmd?.setPrompt('KREIS 3P — 1. Punkt (Enter/Rechtsklick=Fertig):');
         } else if (this.subMode === 'ttr') {
             this.cmd?.setPrompt('KREIS TTR — 1. Tangenten-Objekt wählen (Enter/Rechtsklick=Fertig):');
+        } else if (this.subMode === 'ttt') {
+            this.cmd?.setPrompt('KREIS TTT — 1. Tangenten-Objekt wählen (Enter/Rechtsklick=Fertig):');
         }
     }
 
@@ -3178,6 +3252,129 @@ class CircleTool extends BaseTool {
         return [
             { x: mx + px, y: my + py },
             { x: mx - px, y: my - py }
+        ];
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // TTT GEOMETRIE-SOLVER (Tan,Tan,Tan — verallgemeinertes Apollonius-Problem)
+    // ════════════════════════════════════════════════════════════════
+
+    /**
+     * Findet Mittelpunkt + Radius eines Kreises, der tangential an 3 Objekte
+     * (Linie oder Kreis, beliebig gemischt) anliegt. Anders als TTR ist der
+     * Radius hier ebenfalls unbekannt — daher Newton-Raphson auf (x,y,r) statt
+     * dem TTR-Offset+Intersect-Trick. Jede der 8 Vorzeichen-Kombinationen
+     * (innen/außen-tangential pro Objekt) wird als Startkandidat probiert,
+     * die beste Lösung ist die, die den 3 Klickpunkten am nächsten liegt.
+     */
+    static _solveTTT(obj1, obj2, obj3, clickPt1, clickPt2, clickPt3) {
+        const objs = [obj1, obj2, obj3];
+        const clicks = [clickPt1, clickPt2, clickPt3];
+
+        const x0 = (clickPt1.x + clickPt2.x + clickPt3.x) / 3;
+        const y0 = (clickPt1.y + clickPt2.y + clickPt3.y) / 3;
+        let r0 = 0;
+        for (const o of objs) r0 += CircleTool._distToObj({ x: x0, y: y0 }, o);
+        r0 = Math.max(r0 / 3, 1e-3);
+
+        const candidates = [];
+        for (const s1 of [-1, 1]) {
+            for (const s2 of [-1, 1]) {
+                for (const s3 of [-1, 1]) {
+                    const sol = CircleTool._newtonTTT(objs, [s1, s2, s3], x0, y0, r0);
+                    if (sol && sol.r > 1e-6) candidates.push(sol);
+                }
+            }
+        }
+        if (candidates.length === 0) return null;
+
+        const unique = [];
+        for (const c of candidates) {
+            if (!unique.some(u => Math.hypot(u.x - c.x, u.y - c.y) < 1e-6 && Math.abs(u.r - c.r) < 1e-6)) {
+                unique.push(c);
+            }
+        }
+
+        let best = null, bestScore = Infinity;
+        for (const c of unique) {
+            let score = 0;
+            for (const pt of clicks) score += Math.hypot(c.x - pt.x, c.y - pt.y);
+            if (score < bestScore) { bestScore = score; best = c; }
+        }
+        return best;
+    }
+
+    /** Unsignierter Abstand Punkt → Objekt (Linie oder Kreis) */
+    static _distToObj(P, obj) {
+        if (obj.type === 'line') return Math.abs(CircleTool._signedPerpDist(P, obj.p1, obj.p2));
+        return Math.abs(Math.hypot(P.x - obj.center.x, P.y - obj.center.y) - obj.radius);
+    }
+
+    /** Signierter Lotabstand Punkt → unendliche Linie durch p1,p2 */
+    static _signedPerpDist(P, p1, p2) {
+        const dx = p2.x - p1.x, dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 1e-12) return 0;
+        const nx = -dy / len, ny = dx / len;
+        return nx * (P.x - p1.x) + ny * (P.y - p1.y);
+    }
+
+    /**
+     * Newton-Raphson für (x,y,r): findet Kreis, dessen Mittelpunkt für jedes
+     * Objekt i das Residuum r_i(x,y) - s_i*r = 0 erfüllt (Linie: signierter
+     * Lotabstand; Kreis: |P-center_i| - (radius_i + s_i*r)). signs ist eine
+     * der 8 Kombinationen aus {-1,1}^3.
+     */
+    static _newtonTTT(objs, signs, x, y, r) {
+        for (let iter = 0; iter < 60; iter++) {
+            const R = [0, 0, 0];
+            const J = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+
+            for (let i = 0; i < 3; i++) {
+                const o = objs[i], s = signs[i];
+                if (o.type === 'line') {
+                    const dx = o.p2.x - o.p1.x, dy = o.p2.y - o.p1.y;
+                    const len = Math.hypot(dx, dy);
+                    if (len < 1e-12) return null;
+                    const nx = -dy / len, ny = dx / len;
+                    R[i] = nx * (x - o.p1.x) + ny * (y - o.p1.y) - s * r;
+                    J[i][0] = nx; J[i][1] = ny; J[i][2] = -s;
+                } else {
+                    const ddx = x - o.center.x, ddy = y - o.center.y;
+                    const dist = Math.hypot(ddx, ddy);
+                    if (dist < 1e-9) {
+                        R[i] = -(o.radius + s * r);
+                        J[i][0] = 1; J[i][1] = 0; J[i][2] = -s;
+                    } else {
+                        R[i] = dist - (o.radius + s * r);
+                        J[i][0] = ddx / dist; J[i][1] = ddy / dist; J[i][2] = -s;
+                    }
+                }
+            }
+
+            const delta = CircleTool._solve3x3(J, R.map(v => -v));
+            if (!delta) return null;
+            x += delta[0]; y += delta[1]; r += delta[2];
+            if (Math.hypot(delta[0], delta[1]) + Math.abs(delta[2]) < 1e-10) {
+                return { x, y, r: Math.abs(r) };
+            }
+        }
+        return null; // keine Konvergenz
+    }
+
+    /** 3x3-Gleichungssystem A*x=b via Cramersche Regel */
+    static _solve3x3(A, b) {
+        const det = (M) =>
+            M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1])
+            - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0])
+            + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+        const D = det(A);
+        if (Math.abs(D) < 1e-14) return null;
+        const replaceCol = (M, col, vec) => M.map((row, i) => row.map((v, j) => j === col ? vec[i] : v));
+        return [
+            det(replaceCol(A, 0, b)) / D,
+            det(replaceCol(A, 1, b)) / D,
+            det(replaceCol(A, 2, b)) / D
         ];
     }
 
