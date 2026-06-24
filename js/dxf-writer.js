@@ -1,5 +1,11 @@
 /**
- * CeraCUT DXF Writer V1.8
+ * CeraCUT DXF Writer V1.9
+ * V1.9: _writeLayerTable trägt jetzt jeden von einer Kontur referenzierten Layer-Namen
+ *       (Code 8) automatisch nach, falls er nicht im LayerManager registriert ist.
+ *       Ursache: Fallback-Layer 'DRAW' (drawing-tools.js/advanced-tools.js, z.B.
+ *       BoundaryTool) wird nie via layerManager.addLayer() angelegt — Entities landeten
+ *       so auf einem im LAYER-Table undefinierten Layer, was AutoCAD 2017 als defekte
+ *       Datei zurückwies.
  * V1.8: BLOCK/ENDBLK in BLOCKS-Sektion bekommen Owner-Handle (330) zum BLOCK_RECORD —
  *       AC1015 verlangt eine lückenlose Owner-Kette, AutoCAD 2017 wies Dateien ohne
  *       diesen Pointer als beschädigt zurück. OBJECTS-Root-Dictionary erhält 330=0.
@@ -23,8 +29,8 @@
  * V1.4: AC1015 ohne Handles (crashte AutoCAD)
  *
  * Created: 2026-02-15 MEZ
- * Last Modified: 2026-06-23 MEZ
- * Build: 20260623-dxfblockowner
+ * Last Modified: 2026-06-24 MEZ
+ * Build: 20260624-orphanlayer
  */
 
 class DXFWriter {
@@ -65,7 +71,7 @@ class DXFWriter {
         this._writeSectionStart('TABLES');
         this._writeVportTable();
         this._writeLineTypeTable();
-        this._writeLayerTable(layerManager, stats);
+        this._writeLayerTable(layerManager, stats, contours);
         this._writeStyleTable();
         this._writeViewTable();
         this._writeUcsTable();
@@ -239,8 +245,25 @@ class DXFWriter {
         this._write(0, 'ENDTAB');
     }
 
-    _writeLayerTable(layerManager, stats) {
+    _writeLayerTable(layerManager, stats, contours) {
         const layers = layerManager ? layerManager.getAllLayers() : [{ name: '0', color: '#ffffff', lineType: 'Continuous' }];
+
+        // Jede von einer Kontur referenzierte Layer MUSS einen Table-Eintrag haben —
+        // AutoCAD weist Dateien mit Entities auf undefinierten Layern zurück (Code 8
+        // ohne passenden LAYER-Record). Fallback-Layer-Namen (z.B. 'DRAW' aus
+        // drawing-tools.js/advanced-tools.js) werden nie im LayerManager registriert,
+        // also hier defensiv nachgetragen.
+        const knownNames = new Set(layers.map(l => l.name));
+        if (contours) {
+            for (const contour of contours) {
+                const name = contour.layer || '0';
+                if (!knownNames.has(name)) {
+                    knownNames.add(name);
+                    layers.push({ name, color: '#ffffff', lineType: 'Continuous' });
+                }
+            }
+        }
+
         const tableH = this._nextHandle();
 
         this._write(0, 'TABLE');

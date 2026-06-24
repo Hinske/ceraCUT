@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.29
- * Version: V6.29
+ * CeraCUT Build Info V6.30
+ * Version: V6.30
  * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-dxfsaveencoding
+ * Build: 20260624-orphanlayer
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.29',
-    build: '20260624-dxfsaveencoding',
+    version: '6.30',
+    build: '20260624-orphanlayer',
     date: '2026-06-24',
-    time: '14:30 MEZ',
+    time: '15:15 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'ac8e1b4',
-        date: '2026-06-24 08:42:23 +0200',
-        message: 'fix: DXF-Speichern (FSAPI) schrieb UTF-8 statt ANSI_1252 — AutoCAD-Import scheiterte weiterhin'
+        hash: '9dca52f',
+        date: '2026-06-24 08:56:36 +0200',
+        message: 'fix: DXF-Export — Entities auf nie registriertem Fallback-Layer \'DRAW\' verletzten LAYER-Table'
     },
 
     modules: {
@@ -37,7 +37,7 @@ const CERACUT_BUILD = {
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
-        'dxf-writer':         { version: '1.8', build: '20260623-dxfblockowner' },
+        'dxf-writer':         { version: '1.9', build: '20260624-orphanlayer' },
         'lead-profiles':      { version: '1.1', build: '20260315-intarsia20' },
         'app':                { version: '6.19', build: '20260624-dxfsaveencoding' },
         'document-manager':   { version: '1.1', build: '20260623-camsetupgate' },
@@ -58,6 +58,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.30: Fix — DXF-Export: Entities mit Layer-Namen, die nie im LayerManager registriert wurden (z.B. Fallback-Layer "DRAW" aus BoundaryTool/drawing-tools.js bei fehlendem entity.layer), referenzierten im LAYER-Table einen nicht existierenden Eintrag (Code 8 ohne passenden LAYER-Record) — AutoCAD 2017 wies solche Dateien als beschädigt zurück. _writeLayerTable() ergänzt jetzt automatisch jeden von den exportierten Konturen tatsächlich genutzten Layer-Namen, der im LayerManager fehlt (dxf-writer V1.9)',
         'V6.29: Fix — DXF-Speichern via File System Access API (Strg+S / Strg+Shift+S, der Standard-Speicherpfad in Chrome/Edge) schrieb den DXF-Inhalt als rohen JS-String in den Writable-Stream. Der Browser kodiert das intern als UTF-8, obwohl der Header $DWGCODEPAGE=ANSI_1252 deklariert — Umlaute/Sonderzeichen (z.B. in Layer-Namen) wurden dadurch als Mehrbyte-UTF-8 statt Einzelbyte-ANSI geschrieben und von AutoCAD beim Import als beschädigt zurückgewiesen. Der Download-Fallback (generateDownload/Blob) war seit je davon nicht betroffen, da er bereits _encodeAnsi1252() nutzte — daher blieben frühere BLOCK/ENDBLK- und Pflicht-Sektionen-Fixes wirkungslos. Beide FSAPI-Pfade schreiben jetzt ebenfalls über _encodeAnsi1252() kodierte Bytes (app V6.19)',
         'V6.28: Feat — Polar-Koordinaten-Eingabe ("50<45" / "@50<45") in der Command-Line — AutoCAD-Standard für Distanz+Winkel, fehlte bisher komplett und betraf Line/Polyline/Rectangle/Move/Copy/Rotate/Scale gleichermaßen (command-line V1.5)',
         'V6.28: Feat — RotateTool (R/RO/ROTATE): fehlende AutoCAD-Option [C]opy nachgerüstet (Original bleibt erhalten, rotierte Kopie wird hinzugefügt) — gleiches Muster wie zuvor bei ScaleTool (drawing-tools V2.13)',

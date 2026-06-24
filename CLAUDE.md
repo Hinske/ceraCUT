@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-06-24
-> **Version:** V6.29
-> **Build:** 20260624-dxfsaveencoding
+> **Version:** V6.30
+> **Build:** 20260624-orphanlayer
 
 ---
 
@@ -194,7 +194,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | Feld | Wert |
 |------|------|
 | Name | CeraCUT / CeraCUT |
-| Version | **V6.29** — Build 20260624-dxfsaveencoding (2026-06-24, 14:30 MEZ) |
+| Version | **V6.30** — Build 20260624-orphanlayer (2026-06-24, 15:15 MEZ) |
 | Typ | Wasserstrahl-CAM Software |
 | Zweck | DXF → Sinumerik 840D CNC-Code für Wasserstrahlschneiden |
 | Firma | Cerasell GmbH |
@@ -226,7 +226,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Dynamic Input** | `dynamic-input.js` | **V1.1** | Koordinaten/Distanz/Winkel HUD am Cursor |
 | **Snap Manager** | `snap-manager.js` | **V1.4** | 9 Snap-Typen + Ortho (F8), Snap-Indikatoren |
 | **Layer Manager** | `layer-manager.js` | **V1.2** | AutoCAD-Style Layers, ACI-Farben, Sichtbarkeit, Lock, Drag-to-Reorder |
-| **DXF Writer** | `dxf-writer.js` | **V1.8** | DXF R12 (AC1009) Export, ANSI_1252 Encoding, Kreis-Validierung |
+| **DXF Writer** | `dxf-writer.js` | **V1.9** | DXF R12 (AC1009) Export, ANSI_1252 Encoding, Kreis-Validierung |
 | **SVG Parser** | `svg-parser.js` | — | SVG-Import |
 | **CNC Reader** | `cnc-reader.js` | — | CNC-Datei Import |
 | **Properties Panel** | `properties-panel.js` | **V1.5** | Kontur-Eigenschaften im Kontextmenu, Piercing, Lead-In, Area-Class, Batch-Editing, Hatch-Schraffur (Panel-Refresh-Fix), Live Preview, Material-Dropdown |
@@ -245,7 +245,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **ProjectManager** | `project-manager.js` | **V1.0** | Workspace-Verwaltung, FSAPI Directory, Auto-Save, CNC-Unterordner, IndexedDB |
 | **DXF Browser** | `dxf-browser.js` | **V1.1** | Server-DXF-Browse Modal, Breadcrumb-Navigation, Pfad-Persistenz (localStorage) |
 | **Server** | `server.js` | **V1.3** | Node.js HTTPS-Server, Auto-TLS (Self-Signed), DXF-Browse-API, Dual-Protocol (HTTP+HTTPS auf einem Port), Symlink-/Header-Injection-Schutz |
-| **Build-Info** | `build-info.js` | **V6.29** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V6.30** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.10 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -273,9 +273,9 @@ ceraCUT/
 ├── styles.css                         ← Dark Theme (CeraCUT Blue)
 ├── properties-panel-styles.css        ← Properties Panel Styles
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V6.29
+│   ├── build-info.js                  ← Versions-Banner V6.30
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
-│   ├── app.js                         ← Hauptanwendung V6.29 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
+│   ├── app.js                         ← Hauptanwendung V6.30 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.15 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.13
 │   ├── geometry-ops.js                ← GeometryOps V2.5 (Intersection, Arabeske, splitAndOverlap)
@@ -296,7 +296,7 @@ ceraCUT/
 │   ├── cam-tools.js                   ← CAM-Werkzeuge
 │   ├── tool-manager.js               ← Tool-Routing V2.2
 │   ├── layer-manager.js              ← Layer-System V1.2 (Drag-to-Reorder)
-│   ├── dxf-writer.js                 ← DXF R12 Export V1.8 (UTF-8, Kreis-Validierung)
+│   ├── dxf-writer.js                 ← DXF R12 Export V1.9 (UTF-8, Kreis-Validierung)
 │   ├── svg-parser.js                  ← SVG-Import
 │   ├── cnc-reader.js                  ← CNC-Import
 │   ├── properties-panel.js            ← Eigenschaften-Panel V1.5 (Kontextmenu-Modus)
@@ -524,7 +524,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   tool-manager: V2.2 (20260216-0015)
   layer-manager: V1.2 (20260324-undofix)
   text-tool: V1.2 (20260312-textimport)
-  dxf-writer: V1.8 (20260623-dxfblockowner)
+  dxf-writer: V1.9 (20260624-orphanlayer)
   lead-profiles: V1.1 (20260315-intarsia20)
   app: V6.19 (20260624-dxfsaveencoding)
   document-manager: V1.1 (20260623-camsetupgate)
