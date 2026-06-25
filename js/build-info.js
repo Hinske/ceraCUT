@@ -1,30 +1,30 @@
 /**
- * CeraCUT Build Info V6.41
- * Version: V6.41
+ * CeraCUT Build Info V6.42
+ * Version: V6.42
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-automulticollision
+ * Build: 20260625-narrowhalflead
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.41',
-    build: '20260625-automulticollision',
+    version: '6.42',
+    build: '20260625-narrowhalflead',
     date: '2026-06-25',
-    time: '11:15 MEZ',
+    time: '11:40 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'bfed3a8',
-        date: '2026-06-25 08:21:26 +0200',
-        message: 'feat: Website-Icon ergänzt; Multi-Kontur-Kollisionsprüfung läuft jetzt automatisch nach Lead-Apply'
+        hash: 'e3d2c2d',
+        date: '2026-06-25 08:38:59 +0200',
+        message: 'feat: Lead bei engen Konturen nur bis zur Hälfte der Kanten-Distanz kürzen'
     },
 
     modules: {
         'dxf-parser':         { version: '3.15', build: '20260624-gapfix' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
-        'cam-contour':        { version: '5.16', build: '20260625-cornerleadangle0' },
+        'cam-contour':        { version: '5.17', build: '20260625-narrowhalflead' },
         'canvas-renderer':    { version: '3.40', build: '20260625-arcleadsweepfix' },
         'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
         'sinumerik-pp':       { version: '1.8', build: '20260624-leadoverhaul' },
@@ -63,6 +63,12 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.42: Feat — Bei engen Konturen (Selbst-Kollision: gegenüberliegende Kante derselben ' +
+        'Kontur sehr nah, z.B. schmale Stege/Nuten) wird der Lead jetzt nur bis zur HÄLFTE der ' +
+        'Distanz zur Kante gekürzt statt bis zur Kante selbst — der Pierce-Punkt bleibt damit ' +
+        'mittig im engen Freiraum statt durch Kerf-Toleranzen real auf/jenseits der ' +
+        'gegenüberliegenden Kante zu landen (_shortenLeadIfCollision + neue ' +
+        '_truncatePathToHalfLength(), cam-contour V5.17).',
         'V6.41: Feat — Multi-Kontur-Kollisionsprüfung (CamContour.checkAllCollisions) lief ' +
         'bisher nur über den manuellen "Multi-Collision"-Button im CAM-Ribbon. autoPlaceStartPoint() ' +
         'nutzt Nachbar-Clearance nur fürs Scoring, der finale Lead/Alt-Lead konnte trotzdem in eine ' +

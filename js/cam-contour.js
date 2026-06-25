@@ -1,5 +1,11 @@
 /**
- * CeraCUT CamContour V5.16 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.17 - IGEMS-konformes Lead-In/Out System
+ * V5.17: Feat — Bei engen Konturen (Selbst-Kollision in _shortenLeadIfCollision, d.h.
+ *        gegenueberliegende Kante derselben Kontur sehr nah) wird der Lead jetzt nur bis
+ *        zur HAELFTE der Distanz zur Kante gekuerzt statt bis zur Kante selbst — der Pierce-
+ *        Punkt bleibt damit in der Mitte des engen Freiraums statt durch Kerf-Toleranzen
+ *        real auf/jenseits der gegenueberliegenden Kante zu landen. Neue
+ *        _truncatePathToHalfLength() Helper.
  * V5.16: Feat — Linearer Lead-Winkel an Ecken (isSharpVertexCorner) jetzt 0° (rein
  *        tangential zum Eck-Bisektor) statt vorher 90° (senkrecht zur Verschnittflaeche).
  *        Auf Anfrage: an 90°-Ecken soll der Lead entlang der Eck-Diagonale anlaufen statt
@@ -1385,22 +1391,57 @@ class CamContour {
                     newPoints.push(lPts[i]);
                 }
                 newPoints.push(bestHit.point);
-                leadPath.points = newPoints;
-                leadPath.endPoint = bestHit.point;
+                // V6.42: Bei engen Konturen (Selbst-Kollision = gegenueberliegende Kante
+                // derselben Kontur sehr nah) nur bis zur HAELFTE der Distanz zur Kante
+                // kuerzen, nicht bis zur Kante selbst — sonst landet der Pierce-Punkt durch
+                // Kerf-Toleranzen real auf/jenseits der gegenueberliegenden Kante. newPoints
+                // ist bereits Anschluss-zuerst geordnet (Anschluss bleibt fix).
+                const halfPoints = this._truncatePathToHalfLength(newPoints);
+                leadPath.points = halfPoints;
+                leadPath.endPoint = halfPoints[halfPoints.length - 1];
             } else {
                 // Lead-In: Behalte Schnittpunkt bis Ende (Kontur-Anschluss)
                 const newPoints = [bestHit.point];
                 for (let i = bestHit.li + 1; i < lPts.length; i++) {
                     newPoints.push(lPts[i]);
                 }
-                leadPath.points = newPoints;
-                leadPath.piercingPoint = bestHit.point;
+                // V6.42: siehe oben — newPoints ist hier Anschluss-zuletzt geordnet (Treffer
+                // zuerst, Kontur-Anschluss am Ende), daher umgedreht kuerzen und zurueckdrehen.
+                const halfPoints = this._truncatePathToHalfLength([...newPoints].reverse()).reverse();
+                leadPath.points = halfPoints;
+                leadPath.piercingPoint = halfPoints[0];
             }
             leadPath.shortened = true;
             leadPath.effectiveLength = this._pathLength(leadPath.points);
         }
 
         return leadPath;
+    }
+
+    /**
+     * V6.42: Kuerzt einen Pfad auf die HAELFTE seiner aktuellen Laenge. points[0] ist
+     * der fixe Anschlusspunkt (Kontur-Seite), das letzte Element der bisherige Endpunkt
+     * (z.B. Kollisionspunkt mit der gegenueberliegenden Kante) — der neue Endpunkt liegt
+     * exakt in der Mitte zwischen beiden, nicht an der Kante selbst.
+     */
+    _truncatePathToHalfLength(points) {
+        const total = this._pathLength(points);
+        const target = total / 2;
+        if (!(target > 0)) return [points[0]];
+        let acc = 0;
+        for (let i = 1; i < points.length; i++) {
+            const segLen = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+            if (acc + segLen >= target) {
+                const t = segLen > 1e-9 ? (target - acc) / segLen : 0;
+                const cut = {
+                    x: points[i - 1].x + t * (points[i].x - points[i - 1].x),
+                    y: points[i - 1].y + t * (points[i].y - points[i - 1].y)
+                };
+                return [...points.slice(0, i), cut];
+            }
+            acc += segLen;
+        }
+        return points;
     }
 
     /**
