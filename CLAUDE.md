@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-06-25
-> **Version:** V6.47
-> **Build:** 20260625-deletedcontourguard
+> **Version:** V6.49
+> **Build:** 20260625-chainsplinedataloss
 
 ---
 
@@ -194,7 +194,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | Feld | Wert |
 |------|------|
 | Name | CeraCUT / CeraCUT |
-| Version | **V6.47** — Build 20260625-deletedcontourguard (2026-06-25, 16:05 MEZ) |
+| Version | **V6.49** — Build 20260625-chainsplinedataloss (2026-06-25, 17:10 MEZ) |
 | Typ | Wasserstrahl-CAM Software |
 | Zweck | DXF → Sinumerik 840D CNC-Code für Wasserstrahlschneiden |
 | Firma | Cerasell GmbH |
@@ -208,7 +208,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **App** | `app.js` | **V6.25** | Wizard, Kontextmenu, Export-Modal, Undo (Granular per Kontur), ToolManager, Click-Routing, Window-Selection, DynamicInput, Print, FSAPI-Save, ProjectManager, CAM-Kontextmenu, Lead-Profiles, Intarsien V2.0, Layer-Visibility→Pipeline, Validation Engine, Multi-Material Export, Hatch-Entity, Undo/Redo-Button-Click, Snap-Modi-Statusbar, Cycle-Selection |
 | **Geometry** | `geometry.js` | **V2.13** | Vektoren, SplineUtils (De Boor), MicroHealing (5-Stage), Shoelace, interiorPoint |
 | **GeometryOps** | `geometry-ops.js` | **V2.6** | Intersection, Segment-Modell, Arabeske, circumscribedCircle, splitAndOverlap, Boundary (DCEL Planar Graph), filletPolyline/chamferPolyline |
-| **DXF-Parser** | `dxf-parser.js` | **V3.16** | DXF → Entities, SPLINE-Tessellation, Deque-Chaining, Layer-aware, TEXT/MTEXT, TEXT-Glyphs, Center/Radius-Passthrough, R12-Layer-Table, HATCH-Skip |
+| **DXF-Parser** | `dxf-parser.js` | **V3.18** | DXF → Entities, SPLINE-Tessellation, Deque-Chaining, Layer-aware, TEXT/MTEXT, TEXT-Glyphs, Center/Radius-Passthrough, R12-Layer-Table, HATCH-Skip |
 | **CAMContour** | `cam-contour.js` | **V5.19** | Lead-In/Out, Overcut, Multi-Contour-Collision, Lead-Routing (Corner-Penalty, Flat-Segment-Bonus, Dog-Leg), Slit, Kerf-Flip, Arc-Metadaten, clone(), leadManualOverride, Flat-Preferred autoPlace, Hatch-Entity (cuttingMode='none', isHatchContour), materialGroup, intarsiaRole |
 | **Lead Profiles** | `lead-profiles.js` | **V1.1** | 8 Built-in Profile (inkl. Intarsien), Benutzerdefiniert (localStorage), Batch-Engine (disc/hole/smallHole/slit) |
 | **CeraJet Engine** | `cerajet-engine.js` | — | Technologie-Engine (Piercing, Speed-Ramping) |
@@ -226,7 +226,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Dynamic Input** | `dynamic-input.js` | **V1.1** | Koordinaten/Distanz/Winkel HUD am Cursor |
 | **Snap Manager** | `snap-manager.js` | **V1.4** | 9 Snap-Typen + Ortho (F8), Snap-Indikatoren |
 | **Layer Manager** | `layer-manager.js` | **V1.2** | AutoCAD-Style Layers, ACI-Farben, Sichtbarkeit, Lock, Drag-to-Reorder |
-| **DXF Writer** | `dxf-writer.js` | **V1.10** | DXF R12 (AC1009) Export, ANSI_1252 Encoding, Kreis-Validierung |
+| **DXF Writer** | `dxf-writer.js` | **V1.11** | DXF R12 (AC1009) Export, ANSI_1252 Encoding, Kreis-Validierung |
 | **SVG Parser** | `svg-parser.js` | — | SVG-Import |
 | **CNC Reader** | `cnc-reader.js` | — | CNC-Datei Import |
 | **Properties Panel** | `properties-panel.js` | **V1.5** | Kontur-Eigenschaften im Kontextmenu, Piercing, Lead-In, Area-Class, Batch-Editing, Hatch-Schraffur (Panel-Refresh-Fix), Live Preview, Material-Dropdown |
@@ -248,7 +248,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **User-Store** | `lib/user-store.js` | **V1.0** | Benutzerverwaltung (scrypt-Hashing), Bootstrap erster Admin via Env-Vars |
 | **Session-Store** | `lib/session-store.js` | **V1.0** | In-Memory Session-Map, Sliding Expiry |
 | **Auth-Helper** | `lib/auth.js` | **V1.0** | Cookie-Parsing, Session-Cookie-Helper, JSON-Body-Parsing |
-| **Build-Info** | `build-info.js` | **V6.47** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V6.49** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.10 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -283,10 +283,10 @@ ceraCUT/
 │   └── auth.js                        ← Cookie/Body-Parsing-Helper V1.0
 ├── data/                               ← users.json (gitignored — Passwort-Hashes)
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V6.47
+│   ├── build-info.js                  ← Versions-Banner V6.49
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
-│   ├── app.js                         ← Hauptanwendung V6.47 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
-│   ├── dxf-parser.js                  ← DXF Parser V3.16 (Deque-Chaining, TEXT-Glyphs)
+│   ├── app.js                         ← Hauptanwendung V6.49 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
+│   ├── dxf-parser.js                  ← DXF Parser V3.18 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.13
 │   ├── geometry-ops.js                ← GeometryOps V2.6 (Intersection, Arabeske, splitAndOverlap)
 │   ├── ceracut-pipeline.js            ← Pipeline V3.9
@@ -306,7 +306,7 @@ ceraCUT/
 │   ├── cam-tools.js                   ← CAM-Werkzeuge
 │   ├── tool-manager.js               ← Tool-Routing V2.2
 │   ├── layer-manager.js              ← Layer-System V1.2 (Drag-to-Reorder)
-│   ├── dxf-writer.js                 ← DXF R12 Export V1.10 (UTF-8, Kreis-Validierung)
+│   ├── dxf-writer.js                 ← DXF R12 Export V1.11 (UTF-8, Kreis-Validierung)
 │   ├── svg-parser.js                  ← SVG-Import
 │   ├── cnc-reader.js                  ← CNC-Import
 │   ├── properties-panel.js            ← Eigenschaften-Panel V1.5 (Kontextmenu-Modus)
@@ -520,7 +520,7 @@ CeraCUT V6.13 — Build 20260323-splinetool (2026-03-23) — 31 Module
 
 Module-Details (in collapsed Gruppe, per Klick sichtbar):
 ```
-  dxf-parser: V3.16 (20260625-normalizeoffset)
+  dxf-parser: V3.18 (20260625-chainsplinedataloss)
   geometry: V2.13 (20260624-gapfix)
   pipeline: V3.9 (20260624-referencerefresh)
   cam-contour: V5.19 (20260625-cornerleadslot)
@@ -536,7 +536,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   tool-manager: V2.2 (20260216-0015)
   layer-manager: V1.2 (20260324-undofix)
   text-tool: V1.2 (20260312-textimport)
-  dxf-writer: V1.10 (20260625-stalecacheguard)
+  dxf-writer: V1.11 (20260625-splineclosedguard)
   lead-profiles: V1.4 (20260625-cornerleadslot)
   app: V6.25 (20260625-deletedcontourguard)
   document-manager: V1.2 (20260625-deletedcontourguard)

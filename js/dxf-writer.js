@@ -1,5 +1,10 @@
 /**
- * CeraCUT DXF Writer V1.10
+ * CeraCUT DXF Writer V1.11
+ * V1.11: Defense-in-Depth — Closed-Flag (70/Bit1) bei SPLINE wird vor dem Export gegen die
+ *        tatsaechlichen Roh-Punkte (Fit/Control) validiert, nicht mehr blind aus contour.isClosed
+ *        uebernommen. Verhindert, dass ein inkonsistent geschlossen markierter Spline (Quelle
+ *        siehe dxf-parser V3.17) beim Re-Export erneut als widersprüchliches SPLINE-Entity
+ *        geschrieben wird (Closed-Bit gesetzt, aber Roh-Punkte bilden keine Schleife).
  * V1.10: Cache-Staleness-Check vor SPLINE/CIRCLE-Export (_isCacheStale). _splineData/_fitPoints/
  *        _center stammen vom Import und werden von Move/Rotate/Mirror/Scale (drawing-tools.js)
  *        NIE mitverschoben — diese Tools transformieren ausschliesslich contour.points. Bisher
@@ -39,7 +44,7 @@
  *
  * Created: 2026-02-15 MEZ
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-stalecacheguard
+ * Build: 20260625-splineclosedguard
  */
 
 class DXFWriter {
@@ -485,9 +490,6 @@ class DXFWriter {
         }
 
         const degree = (sd && sd.degree) ? sd.degree : 3;
-        const isClosed = contour.isClosed || contour._splineClosed || false;
-        let flags = 8; // planar
-        if (isClosed) flags |= 1;
 
         const controlPoints = hasCP ? sd.controlPoints : [];
         const knots = (sd && sd.knots && sd.knots.length > 0) ? sd.knots : [];
@@ -495,6 +497,21 @@ class DXFWriter {
         const fitPoints = hasFP
             ? (sd && sd.fitPoints && sd.fitPoints.length >= 2 ? sd.fitPoints : fp)
             : [];
+
+        // V1.11: Closed-Flag nicht blind aus contour.isClosed übernehmen — wenn die
+        // tatsächlichen Roh-Punkte (Fit/Control) keine Schleife bilden, würde ein gesetztes
+        // Closed-Bit einen widersprüchlichen SPLINE-Entity erzeugen (AutoCAD/CeraCUT zeichnen
+        // dann eine falsche Schluss-Sehne quer durchs Bauteil — "verstreute" Geometrie).
+        const rawClosedRequested = contour.isClosed || contour._splineClosed || false;
+        const splinePoints = fitPoints.length >= 2 ? fitPoints : controlPoints;
+        const geometricallyClosed = splinePoints.length > 1 &&
+            this._dist(splinePoints[0], splinePoints[splinePoints.length - 1]) < 1.0;
+        const isClosed = rawClosedRequested && geometricallyClosed;
+        if (rawClosedRequested && !geometricallyClosed) {
+            console.warn('[DXF-Writer V1.11] SPLINE als geschlossen markiert, Rohdaten bilden aber keine Schleife → als offen exportiert');
+        }
+        let flags = 8; // planar
+        if (isClosed) flags |= 1;
 
         this._writeEntityHeader('SPLINE', layer);
         this._write(100, 'AcDbSpline');
@@ -541,6 +558,8 @@ class DXFWriter {
         const tolerance = Math.max(5, diag);
         return Math.hypot(pCenterX - rCenterX, pCenterY - rCenterY) > tolerance;
     }
+
+    _dist(p1, p2) { return Math.hypot(p2.x - p1.x, p2.y - p1.y); }
 
     _bbox(points) {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

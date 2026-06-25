@@ -1,27 +1,27 @@
 /**
- * CeraCUT Build Info V6.47
- * Version: V6.47
+ * CeraCUT Build Info V6.49
+ * Version: V6.49
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-deletedcontourguard
+ * Build: 20260625-chainsplinedataloss
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.47',
-    build: '20260625-deletedcontourguard',
+    version: '6.49',
+    build: '20260625-chainsplinedataloss',
     date: '2026-06-25',
-    time: '16:05 MEZ',
+    time: '17:10 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '8c7e435',
-        date: '2026-06-25 15:02:37 +0200',
-        message: 'fix: Geloeschte Konturen tauchten nach Layer-Sichtbarkeits-Toggle wieder auf'
+        hash: '431e00c',
+        date: '2026-06-25 16:54:52 +0200',
+        message: 'fix: SPLINE-Closed-Flag und Chaining-Datenverlust zerstueckelten Export-Geometrie'
     },
 
     modules: {
-        'dxf-parser':         { version: '3.16', build: '20260625-normalizeoffset' },
+        'dxf-parser':         { version: '3.18', build: '20260625-chainsplinedataloss' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
         'cam-contour':        { version: '5.19', build: '20260625-cornerleadslot' },
@@ -37,7 +37,7 @@ const CERACUT_BUILD = {
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
-        'dxf-writer':         { version: '1.10', build: '20260625-stalecacheguard' },
+        'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
         'app':                { version: '6.25', build: '20260625-deletedcontourguard' },
         'document-manager':   { version: '1.2', build: '20260625-deletedcontourguard' },
@@ -63,6 +63,30 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.49: Fix — chainContours() verkettete mehrere Original-Entities (z.B. SPLINE + ' +
+        'mehrere LINEs) korrekt zu einer durchgehenden Kontur, reichte aber weiterhin nur die ' +
+        'rohen _splineData/_fitPoints DES ERSTEN Segments durch. War das erste Segment eine ' +
+        'SPLINE, schrieb dxf-writer.js beim Export nur dieses winzige erste Fragment — der ' +
+        'Rest der Kontur (alle angeketteten Segmente) wurde komplett verworfen. Das ist die ' +
+        'eigentliche Ursache der "verstreuten Bruchstuecke" (Praxisfall Irlich_Entwurf2/3/4.dxf, ' +
+        'mit Node-Testfall nachgebaut: SPLINE+4×LINE zu einem 100×100mm-Quadrat verkettet ergab ' +
+        '1 Kontur mit 7 Punkten, aber nur 4 Kontrollpunkte vom ersten Mini-Segment wurden ' +
+        'weitergereicht). Cache-Felder werden jetzt nur durchgereicht, wenn beim Verketten ' +
+        'nichts angehaengt wurde — sonst faellt der Export automatisch auf die vollstaendige ' +
+        'Polyline aus der gesamten Punktliste zurueck (dxf-parser V3.18).',
+        'V6.48: Fix — SPLINE-Closed-Flag (DXF Gruppencode 70, Bit 1) wurde beim Import blind ' +
+        'uebernommen. Manche Vektor-Tools (z.B. aus Illustrator/CorelDraw abgeleitete DXF-' +
+        'Exporter) setzen dieses Bit faelschlich auf JEDES einzelne Spline-Segment eines ' +
+        'zusammengesetzten Pfades statt nur aufs Gesamtpolygon — Start/Ende eines einzelnen ' +
+        'Segments lagen dabei mehrere cm auseinander, obwohl isClosed=true gesetzt war. Da ' +
+        'canvas-renderer.js fuer isClosed-Konturen automatisch eine Schluss-Linie vom letzten ' +
+        'zum ersten Punkt zeichnet, entstand eine sichtbare falsche Sehne quer durchs Bauteil ' +
+        '("verstreute"/falsche Geometrie nach Export — Praxisfall Irlich_Entwurf2.dxf: 39 von ' +
+        '39 SPLINE-Entities betroffen, Fehler ueberlebte mehrere Export/Re-Import-Zyklen). ' +
+        '_parseSpline() validiert das Closed-Flag jetzt gegen die tatsaechliche Kurven-' +
+        'Geometrie (dxf-parser V3.17); dxf-writer.js prueft beim Re-Export defensiv dieselbe ' +
+        'Bedingung gegen die Roh-Fit-/Control-Punkte, bevor das Closed-Bit gesetzt wird ' +
+        '(dxf-writer V1.11).',
         'V6.47: Fix — Geloeschte Konturen tauchten nach einem Layer-Sichtbarkeits-Toggle ' +
         'wieder auf: applyLayerSelection() baute die Konturliste bei JEDEM Aufruf (auch bei ' +
         'reinem Visibility-Toggle) komplett neu aus dxfResult.contours auf — dem unveraenderten ' +

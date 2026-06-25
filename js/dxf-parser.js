@@ -1,8 +1,32 @@
 /**
- * CeraCUT DXF Parser V3.16
+ * CeraCUT DXF Parser V3.18
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-normalizeoffset
+ * Build: 20260625-chainsplinedataloss
  *
+ * V3.18: Fix — chainContours() verkettete mehrere Original-Entities (z.B. SPLINE + mehrere
+ *        LINEs) korrekt zu EINER durchgehenden Kontur (chain.points enthielt alle Punkte),
+ *        reichte aber weiterhin NUR die rohen _splineData/_fitPoints/sourceType DES ERSTEN
+ *        Segments durch. War das erste Segment eine SPLINE, markierte dxf-writer.js dadurch
+ *        die GESAMTE gekettete Kontur als sourceType='SPLINE' und schrieb beim Export NUR
+ *        das winzige erste Spline-Fragment — der Rest der Kontur (alle angeketteten Segmente)
+ *        wurde komplett verworfen. Das ist die eigentliche Ursache der "verstreuten
+ *        Bruchstuecke" (Praxisfall Irlich_Entwurf2/3/4.dxf: 35-39 winzige isolierte
+ *        SPLINE-Fragmente statt der echten, gut verketteten Kontur — mit Node nachgebaut:
+ *        SPLINE+4×LINE zu einem 100×100mm-Quadrat verkettet ergab 1 Kontur mit 7 Punkten,
+ *        aber nur 4 rohe Kontrollpunkte vom allerersten Mini-Segment wurden weitergereicht).
+ *        Cache-Felder werden jetzt nur noch durchgereicht, wenn beim Verketten NICHTS
+ *        angehaengt wurde (Segment blieb fuer sich allein) — sonst null, Export faellt
+ *        automatisch auf die vollstaendige Polyline aus chain.points zurueck.
+ * V3.17: Fix — SPLINE-Closed-Flag (Gruppencode 70, Bit 1) wurde blind aus der DXF-Quelle
+ *        uebernommen. Manche Vektor-Tools (z.B. aus Illustrator/CorelDraw abgeleitete DXF-
+ *        Exporter) setzen dieses Bit faelschlich auf JEDES einzelne Spline-Segment eines
+ *        zusammengesetzten Pfades statt nur aufs Gesamtpolygon — Start/Ende des einzelnen
+ *        Segments liegen dann u.U. mehrere cm auseinander, obwohl isClosed=true gesetzt wird.
+ *        canvas-renderer.js zeichnet fuer isClosed-Konturen automatisch eine Schluss-Linie
+ *        vom letzten zum ersten Punkt → sichtbare falsche Sehne quer durchs Bauteil
+ *        ("verstreute" Geometrie, Irlich_Entwurf2.dxf: 39/39 SPLINE-Entities betroffen).
+ *        _parseSpline() validiert das Flag jetzt gegen die tatsaechliche Kurven-Geometrie
+ *        (Start/Ende-Abstand < TOLERANCES.CHAIN) statt es ungeprueft zu uebernehmen.
  * V3.16: Fix — Dateien mit Geometrie weit ausserhalb der Plattengroesse (z.B. Quelle lag
  *        ~30m vom Ursprung entfernt, Plattengroesse 362x342mm) blieben unnormalisiert:
  *        NORMALIZATION_THRESHOLD (1.000.000) griff erst bei absurd grossen Distanzen statt
@@ -1094,11 +1118,23 @@ const DXFParser = {
         if (!tessellatedPoints || tessellatedPoints.length < 2) {
             return null;
         }
-        
+
+        // V3.17: Closed/Periodic-Flag nicht blind übernehmen — manche DXF-Exporter (z.B. aus
+        // Vektor-Tools wie Illustrator/CorelDraw) setzen das Closed-Bit fälschlich auf JEDES
+        // einzelne Spline-Segment eines zusammengesetzten Pfades statt nur aufs Gesamtpolygon.
+        // Nur als geschlossen behandeln, wenn Start/Ende der tessellierten Kurve tatsächlich
+        // zusammenfallen (gleiche Toleranz wie chainContours() für die Closed-Erkennung).
+        const rawIsClosed = isClosed || isPeriodic;
+        const endGap = this._dist(tessellatedPoints[0], tessellatedPoints[tessellatedPoints.length - 1]);
+        const geometricallyClosed = endGap < this.TOLERANCES.CHAIN;
+        if (rawIsClosed && !geometricallyClosed) {
+            console.warn(`[DXF SPLINE] Closed-Flag gesetzt, aber Start/Ende ${endGap.toFixed(2)}mm entfernt — als offen behandelt`);
+        }
+
         const result = {
             type: 'SPLINE',
             points: tessellatedPoints,
-            isClosed: isClosed || isPeriodic,
+            isClosed: rawIsClosed && geometricallyClosed,
             flags,
             degree,
             _splineData: { controlPoints, fitPoints, knots, weights, degree, numKnots, numControlPoints, numFitPoints }
@@ -1270,7 +1306,19 @@ const DXFParser = {
                 }
                 chain[chain.length - 1] = { x: chain[0].x, y: chain[0].y };
             }
-            result.push(this._createContour(chain, segments[i].layer, isClosed, segments[i].type, segments[i]._splineData, null, null, segments[i]._fitPoints, segments[i]._splineClosed, seams));
+
+            // V3.17: Wurden andere Segmente an Segment i angekettet (headParts/zusaetzliche
+            // tailParts), repraesentieren die ROHEN Cache-Felder (_splineData/_fitPoints) von
+            // Segment i nur noch ein winziges Teilstueck der tatsaechlichen, viel laengeren
+            // Gesamtkontur — NICHT mehr die ganze Kontur. dxf-writer.js wuerde sonst beim Export
+            // ausschliesslich dieses erste Teilstueck schreiben und den Rest der Kontur (alle
+            // angeketteten Segmente) komplett verwerfen ("verstreute Bruchstuecke"). Cache-Felder
+            // nur durchreichen, wenn NICHTS angehaengt wurde (Segment blieb fuer sich allein).
+            const wasMerged = headParts.length > 0 || tailParts.length > 1;
+            const chainSplineData = wasMerged ? null : segments[i]._splineData;
+            const chainFitPoints = wasMerged ? null : segments[i]._fitPoints;
+            const chainType = wasMerged ? null : segments[i].type;
+            result.push(this._createContour(chain, segments[i].layer, isClosed, chainType, chainSplineData, null, null, chainFitPoints, segments[i]._splineClosed, seams));
 
             // Fortschritts-Log
             if (logProgress) {
