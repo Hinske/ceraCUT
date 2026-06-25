@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '4ff0266',
-        date: '2026-06-25 19:17:55 +0200',
-        message: 'fix: 4 HatchTool-Bugs behoben (drawing-tools-ext V1.9)'
+        hash: 'd21dd9b',
+        date: '2026-06-25 19:28:26 +0200',
+        message: 'fix: HatchTool isClosed-Empfindlichkeit + JoinTool Schlusspunkt-Snap'
     },
 
     modules: {
@@ -31,7 +31,7 @@ const CERACUT_BUILD = {
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.5', build: '20260625-snapcenterfix' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
-        'drawing-tools':      { version: '2.16', build: '20260625-deletedcontourguard' },
+        'drawing-tools':      { version: '2.17', build: '20260625-jointoolclosefix' },
         'drawing-tools-ext':  { version: '1.9', build: '20260625-hatchtool4fix' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },

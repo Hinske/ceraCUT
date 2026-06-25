@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.16
+ * CeraCUT Drawing & Modification Tools V2.17
  * AutoCAD-style CAD Tools für CeraCUT
  *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
@@ -43,8 +43,8 @@
  * V1.1: handleRawInput für Linie/Rechteck/Polylinie
  * V1.0: Initiale 5 Zeichentools
  * Created: 2026-02-13 MEZ
- * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-cadimprovements7
+ * Last Modified: 2026-06-25 MEZ
+ * Build: 20260625-jointoolclosefix
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -4342,6 +4342,13 @@ class JoinTool extends ModificationTool {
             contour: c,
             index: contours.indexOf(c)
         }));
+
+        // Schlusspunkt exakt auf Startpunkt snappen wenn joinContours() "closed" meldet —
+        // sonst liegt die Lücke (bis 0.5 mm) über CamContour._detectClosed()-Schwelle (0.01 mm)
+        // und isClosed bleibt false, was HatchTool und Pipeline daran hindert die Kontur zu erkennen.
+        if (result.isClosed && result.points.length > 1) {
+            result.points[result.points.length - 1] = { x: result.points[0].x, y: result.points[0].y };
+        }
 
         // Neue verbundene Kontur
         const joinedContour = new CamContour(result.points, {

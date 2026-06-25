@@ -1,6 +1,10 @@
 /**
  * CeraCUT Drawing Tools Extension V1.9
  * Zusätzliche Zeichentools: Ellipse, Spline, Donut, XLine, OverlapBreak, Hatch
+ * V1.9: Fix — (5) Math.abs in _findEnclosingContour reverted (getArea() ist immer positiv).
+ *        (6) isClosed-Filter: near-closed Konturen (< 1mm Lücke) werden ebenfalls akzeptiert —
+ *        JoinTool erzeugt isClosed=false wenn join-Toleranz (0.5mm) > _detectClosed (0.01mm).
+ *        Eigentlicher Root-Cause fix in drawing-tools.js V2.17 (JoinTool snap).
  * V1.9: Fix — 4 HatchTool-Bugs: (1) cancel() löscht jetzt _hatchPreview/hoveredContour —
  *        verhindert eingefrorene Schraffur-Vorschau nach ESC. (2) Undo/Redo rufen
  *        updateContourPanel() auf — verhindert Geister-Konturen in der Seitenleiste.
@@ -1074,9 +1078,16 @@ class HatchTool extends BaseTool {
         const candidates = [];
 
         for (const c of contours) {
-            if (!c.isClosed || c.isReference) continue;
+            if (c.isReference) continue;
             if (c.isHatchContour || c.cuttingMode === 'none') continue;  // V1.5: Hatch-Konturen überspringen
             if (!c.points || c.points.length < 3) continue;
+            // Kontur muss geschlossen oder geometrisch fast geschlossen sein (< 1 mm Lücke).
+            // JoinTool und andere Operationen können isClosed=false erzeugen obwohl die Form
+            // visuell geschlossen ist (join-Toleranz 0.5 mm > _detectClosed-Schwelle 0.01 mm).
+            if (!c.isClosed) {
+                const p0 = c.points[0], pN = c.points[c.points.length - 1];
+                if (Math.hypot(p0.x - pN.x, p0.y - pN.y) >= 1.0) continue;
+            }
             // Unsichtbare Layer überspringen
             if (lm) {
                 const ld = lm.getLayer(c.layer || '0');
@@ -1089,8 +1100,8 @@ class HatchTool extends BaseTool {
 
         if (candidates.length === 0) return null;
 
-        // Kleinste absolute Fläche = innerste Kontur (Math.abs: CW-Konturen liefern negative Werte)
-        candidates.sort((a, b) => Math.abs(a.getArea()) - Math.abs(b.getArea()));
+        // Kleinste Fläche = innerste Kontur (getArea() gibt stets positive Werte)
+        candidates.sort((a, b) => a.getArea() - b.getArea());
         return candidates[0];
     }
 
