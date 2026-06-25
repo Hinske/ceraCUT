@@ -18,19 +18,23 @@
  * V1.5: Slit-Rückzug in Schnittrichtung, expliziter F-Code auf Kontur, _fc() NaN-Warnung
  * V1.7: Fix — _fc() blockiert Export bei NaN/Infinity statt 0.000 zu exportieren; Lead-In-Fallback ohne Kerf;
  *       Multi-Head-Achsgrenzen-Check; Bridges (Haltestege) werden im G-Code berücksichtigt (Abrasiv aus/an)
+ * V1.9: Fix — _processArcLeadExact() hatte keinen Guard für pts.length < 2 — bei einem
+ *       Lead-Pfad mit nur einem Punkt wurde pts[1] als undefined indexiert, was zu
+ *       NaN-I/J-Werten im G-Code führte (arcStart = undefined → center.x - undefined = NaN).
+ *       Neuer Guard: if (!pts || pts.length < 2) → Fallback auf _processContourPoints().
  * V1.8: _processLeadPath() nutzt bei unverändertem Arc-Lead jetzt die exakten arcCenter/
  *       arcRadius/arcSweepCCW-Metadaten direkt für G02/G03 (_processArcLeadExact()) statt
  *       die 12-Punkte-Tessellierung erneut zu fitten — vermeidet Diskrepanz zur Canvas-
  *       Vorschau an der Linie→Bogen-Nahtstelle. Gekürzte/alternative Leads fallen weiter
  *       auf ArcFitting.fitPolyline() zurück.
  *
- * Last Modified: 2026-06-24
- * Build: 20260624-leadoverhaul
+ * Last Modified: 2026-06-25
+ * Build: 20260625-bugfixsweep
  */
 
 class SinumerikPostprocessor {
 
-    static VERSION = '1.8';
+    static VERSION = '1.9';
 
     constructor(options = {}) {
         // ═══ Formatierung ═══
@@ -681,6 +685,7 @@ class SinumerikPostprocessor {
      */
     _processArcLeadExact(leadPath) {
         const pts = leadPath.points;
+        if (!pts || pts.length < 2) return this._processContourPoints(pts);
         const center = leadPath.arcCenter;
         const clockwise = !leadPath.arcSweepCCW;
         const isLeadIn = leadPath.entryPoint !== undefined;

@@ -1,5 +1,9 @@
 /**
- * CeraCUT V6.26 - Main Application
+ * CeraCUT V6.27 - Main Application
+ * V6.27: Fix — getContourPerimeter() zählte das Schließungssegment (letzter→erster Punkt)
+ *        bei geschlossenen Konturen nicht. Folge: Auto-Microjoint-Positionen (Gleichverteilung
+ *        per Perimeteranteil) lagen leicht verschoben, der letzte Microjoint fehlte im
+ *        letzten Segment. Für isClosed-Konturen wird jetzt pts[n-1]→pts[0] addiert.
  * V6.26: Feat — Toolpath-Verifikation zeigte nur die Anzahl der Warnungen/Fehler
  *        ("11 Warnungen") ohne jeden Inhalt. _showSimVerifyModal() listet jetzt die
  *        konkreten Meldungstexte aus ToolpathSimulator.verify() in einem Modal auf
@@ -1606,12 +1610,13 @@ class CeraCutApp {
     
     getContourPerimeter(contour) {
         if (!contour || !contour.points) return 0;
+        const pts = contour.points;
         let len = 0;
-        for (let i = 1; i < contour.points.length; i++) {
-            len += Math.hypot(
-                contour.points[i].x - contour.points[i-1].x,
-                contour.points[i].y - contour.points[i-1].y
-            );
+        for (let i = 1; i < pts.length; i++) {
+            len += Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y);
+        }
+        if (contour.isClosed && pts.length >= 2) {
+            len += Math.hypot(pts[0].x - pts[pts.length-1].x, pts[0].y - pts[pts.length-1].y);
         }
         return len;
     }

@@ -1,33 +1,33 @@
 /**
- * CeraCUT Build Info V6.50
- * Version: V6.50
+ * CeraCUT Build Info V6.51
+ * Version: V6.51
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-simverifydetails
+ * Build: 20260625-bugfixsweep
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.50',
-    build: '20260625-simverifydetails',
+    version: '6.51',
+    build: '20260625-bugfixsweep',
     date: '2026-06-25',
     time: '17:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '0b157b5',
-        date: '2026-06-25 17:03:34 +0200',
-        message: 'feat: Toolpath-Verifikation zeigt jetzt konkrete Warnungs-/Fehlertexte statt nur Anzahl'
+        hash: '5c09d66',
+        date: '2026-06-25 18:30:42 +0200',
+        message: 'fix: Bug-Sweep — 5 Robustheitsfixes aus systematischer Code-Inspektion (V6.51)'
     },
 
     modules: {
         'dxf-parser':         { version: '3.18', build: '20260625-chainsplinedataloss' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
-        'cam-contour':        { version: '5.19', build: '20260625-cornerleadslot' },
-        'canvas-renderer':    { version: '3.40', build: '20260625-arcleadsweepfix' },
+        'cam-contour':        { version: '5.20', build: '20260625-bugfixsweep' },
+        'canvas-renderer':    { version: '3.41', build: '20260625-bugfixsweep' },
         'undo-manager':       { version: '1.3', build: '20260625-deletedcontourguard' },
-        'sinumerik-pp':       { version: '1.8', build: '20260624-leadoverhaul' },
+        'sinumerik-pp':       { version: '1.9', build: '20260625-bugfixsweep' },
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.4', build: '20260623-bugfixaudit' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.26', build: '20260625-simverifydetails' },
+        'app':                { version: '6.27', build: '20260625-bugfixsweep' },
         'document-manager':   { version: '1.2', build: '20260625-deletedcontourguard' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
@@ -63,6 +63,20 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.51: Fix (Bug-Sweep) — 5 Robustheitsfixes aus systematischer Code-Inspektion: ' +
+        '(1) sinumerik-postprocessor.js V1.9: _processArcLeadExact() hatte keinen pts.length-' +
+        'Check — bei 1-Punkt-Lead-Pfad wurde pts[1]=undefined indexiert und NaN-I/J in den ' +
+        'G-Code geschrieben. Guard ergaenzt, Fallback auf _processContourPoints(). ' +
+        '(2) app.js V6.27: getContourPerimeter() zahlte Schliessungssegment (letzter→erster ' +
+        'Punkt) bei isClosed-Konturen nicht — Auto-Microjoint-Positionen lagen leicht ' +
+        'verschoben. Segment wird jetzt addiert. ' +
+        '(3) canvas-renderer.js V3.41: Geometry.interiorPoint() im Disc-Fill-Hole-Cutout ' +
+        'ohne Existenz-Check aufgerufen (Guard + Fallback auf points[0] ergaenzt). ' +
+        '_drawHatchDots() nutzte Float-Loop-Counter mit Drift-Risiko — auf Integer-Counter ' +
+        'umgestellt. ' +
+        '(4) cam-contour.js V5.20: _truncatePathToHalfLength() indexierte points[0] ohne ' +
+        'vorherige Laengenprüfung bei leerem Array — return [undefined] war möglich. ' +
+        'Guard if (!points || points.length === 0) return [] ergaenzt.',
         'V6.50: Feat — Toolpath-Verifikation ("Verifizieren"-Button) zeigte bisher nur die ' +
         'Anzahl der Warnungen/Fehler an (z.B. "11 Warnungen"), ohne deren Inhalt — die Meldung ' +
         'war ohne Konsolen-Zugriff nutzlos. ToolpathSimulator.verify() liefert die konkreten ' +

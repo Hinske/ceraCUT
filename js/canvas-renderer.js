@@ -1,7 +1,11 @@
 /**
- * CeraCUT V3.40 - Canvas Renderer
+ * CeraCUT V3.41 - Canvas Renderer
  * Features: Selection, Lead-In/Out, Overcut, Micro-Joints, Travel Paths, Order Numbers,
  *           Startpunkt-Drag im Anschuss-Modus, SLIT Support
+ * V3.41: Fix — Geometry.interiorPoint() im Disc-Fill-Hole-Cutout ohne Existenz-Check
+ *        aufgerufen (null-safe Guard ergänzt, Fallback auf points[0]). _drawHatchDots()
+ *        nutzte Float-Loop-Counter (x += spacing) mit Drift-Risiko bei großen Bounding-Boxes
+ *        — umgestellt auf Integer-Counter mit x = xMin + i * spacing.
  * V3.40: Fix — _drawArcLead() übergab arcSweepCCW ungeflippt an ctx.arc()'s
  *        anticlockwise-Parameter. ctx.arc() sweept bei anticlockwise=false mit
  *        STEIGENDEM Winkel, unser arcSweepCCW=true meint aber genau das (Welt-CCW =
@@ -961,8 +965,10 @@ class CanvasRenderer {
                     if (other === contour || !other.isClosed || other.isReference) continue;
                     if (other.cuttingMode !== 'hole') continue;
                     if (other.points?.length < 3) continue;
-                    const tp = Geometry.interiorPoint(other.points);
-                    if (typeof GeometryOps !== 'undefined' && GeometryOps.pointInPolygon?.(tp, points)) {
+                    const tp = (typeof Geometry !== 'undefined' && Geometry.interiorPoint)
+                        ? Geometry.interiorPoint(other.points)
+                        : other.points[0];
+                    if (tp && typeof GeometryOps !== 'undefined' && GeometryOps.pointInPolygon?.(tp, points)) {
                         const hp = other.points;
                         ctx.moveTo(hp[hp.length - 1].x, hp[hp.length - 1].y);
                         for (let j = hp.length - 2; j >= 0; j--) {
@@ -1179,8 +1185,12 @@ class CanvasRenderer {
 
         ctx.fillStyle = color;
 
-        for (let x = bb.xMin; x <= bb.xMax; x += spacing) {
-            for (let y = bb.yMin; y <= bb.yMax; y += spacing) {
+        const countX = Math.ceil((bb.xMax - bb.xMin) / spacing);
+        const countY = Math.ceil((bb.yMax - bb.yMin) / spacing);
+        for (let ix = 0; ix <= countX; ix++) {
+            const x = bb.xMin + ix * spacing;
+            for (let iy = 0; iy <= countY; iy++) {
+                const y = bb.yMin + iy * spacing;
                 ctx.beginPath();
                 ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
                 ctx.fill();

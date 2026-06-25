@@ -19,6 +19,24 @@
 
 ## Eintraege
 
+### [2026-06-25] Bug-Sweep: Array-Zugriff ohne Längenprüfung in mehreren Modulen
+- **Fehler:** 5 Stellen in 4 Modulen hatten Zugriffe auf Array-Elemente (pts[1], points[0]) ohne vorherige Längenprüfung. Konkrete Symptome: NaN-I/J im G-Code, falsche Microjoint-Positionen, Crash bei leerem Pfad-Array.
+- **Root Cause:** Defensive Programmierpraktiken wurden bei nachträglichem Refactoring nicht konsequent auf neue Code-Pfade übertragen. Jeder einzelne Fix war "offensichtlich korrekt", aber ohne Guard.
+- **Regel:** Jede Funktion die ein Array indexiert (pts[i], points[0]) muss ZUERST `if (!array || array.length < i+1)` prüfen. Besonders bei Lead-Pfaden, die aus optionalen Metadaten kommen (arcLeadExact, truncatePath).
+- **Betroffene Module:** `sinumerik-postprocessor.js` (V1.9), `app.js` (V6.27), `canvas-renderer.js` (V3.41), `cam-contour.js` (V5.20)
+
+### [2026-06-25] Perimeter-Berechnung für geschlossene Konturen unvollständig
+- **Fehler:** `getContourPerimeter()` zählte nur N-1 Segmente statt N bei geschlossenen Konturen. Das letzte Segment (letzter→erster Punkt) fehlte, was Auto-Microjoint-Positionen leicht verschob.
+- **Root Cause:** Schleife `for (i=1; i<pts.length)` ist korrekt für offene Konturen. Für geschlossene ist zusätzlich `pts[n-1]→pts[0]` nötig — wurde beim initialen Schreiben vergessen.
+- **Regel:** Bei Perimeter/Längen-Berechnungen immer explizit fragen: "Ist diese Kontur geschlossen?" Wenn ja: Schließungssegment addieren. `contour.isClosed` ist das Flag dafür.
+- **Betroffene Module:** `app.js` (V6.27, `getContourPerimeter()`)
+
+### [2026-06-25] Float-Loop-Counter in Rendering-Schleifen vermeiden
+- **Fehler:** `_drawHatchDots()` nutzte `for (x = xMin; x <= xMax; x += spacing)` — Float-Addition akkumuliert Rundungsfehler bei großen Bounding-Boxes, erzeugt Lücken oder überschießende Punkte.
+- **Root Cause:** Klassischer IEEE-754-Drift. Bei kleinem `spacing` und großem Bereich summiert sich der Fehler auf sichtbare Lücken.
+- **Regel:** In Rendering-Schleifen immer Integer-Counter verwenden: `for (let i = 0; i <= count; i++) { const x = base + i * step; }`. Nie mit Float akkumulieren.
+- **Betroffene Module:** `canvas-renderer.js` (V3.41, `_drawHatchDots()`)
+
 ### [2026-03-16] tasks/lessons.md wurde nie angelegt
 - **Fehler:** CLAUDE.md schreibt vor, nach jeder Korrektur `tasks/lessons.md` zu aktualisieren. Die Datei existierte nicht.
 - **Root Cause:** Kein initialer Startpunkt, keine Durchsetzung zwischen Sessions.

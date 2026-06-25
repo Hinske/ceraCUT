@@ -1,5 +1,8 @@
 /**
- * CeraCUT CamContour V5.19 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.20 - IGEMS-konformes Lead-In/Out System
+ * V5.20: Fix — _truncatePathToHalfLength() indexierte points[0] ohne vorherige
+ *        Längenprüfung: bei leerem Array → return [undefined]. Neuer Guard
+ *        if (!points || points.length === 0) return [] vor der _pathLength()-Berechnung.
  * V5.19: Refactor — Eigene Corner-Lead-Kategorie (analog IGEMS External/Internal/
  *        Corner/Alternative, Kap. 10.13.2) statt verstreuter Magic-Number-Overrides:
  *        neue Properties cornerLeadType/cornerLeadAngle/cornerDegradeThreshold
@@ -1471,6 +1474,7 @@ class CamContour {
      * exakt in der Mitte zwischen beiden, nicht an der Kante selbst.
      */
     _truncatePathToHalfLength(points) {
+        if (!points || points.length === 0) return [];
         const total = this._pathLength(points);
         const target = total / 2;
         if (!(target > 0)) return [points[0]];
