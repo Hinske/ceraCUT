@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-06-25
-> **Version:** V6.56
-> **Build:** 20260625-analyzefix
+> **Version:** V6.57
+> **Build:** 20260625-thickerpreview
 
 ---
 
@@ -217,7 +217,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **UndoManager** | `undo-manager.js` | **V1.3** | Command Pattern, Undo/Redo, Clipboard, WizardStepUndo |
 | **Arc-Fitting** | `arc-fitting.js` | **V3.1** | Polylinie → G02/G03 Bogen (fur PP-Ausgabe) |
 | **Pipeline** | `ceracut-pipeline.js` | **V3.9** | Topologie (disc/hole/reference/slit/none), Kerf-Offset, interiorPoint-basierte Nesting-Erkennung, Validation Engine (Pre-Export), Hatch-Konturen ausgeschlossen |
-| **Drawing Tools** | `drawing-tools.js` | **V2.17** | Tier 1+2 CAD-Tools, AutoCAD-Aliases, Continuous Mode, BreakTool, Enter/Rechtsklick=Beenden (AutoCAD), Layerfarbe, Auto-Apply pending Entities, Locked-Layer-Guard Window-Selection, ArcTool 8 Konstruktionsarten, PolylineTool Bogen-Modus, RectangleTool Fillet/Chamfer/Rotation, LineTool Fortsetzung, ALL/L-Selektion |
+| **Drawing Tools** | `drawing-tools.js` | **V2.18** | Tier 1+2 CAD-Tools, AutoCAD-Aliases, Continuous Mode, BreakTool, Enter/Rechtsklick=Beenden (AutoCAD), Layerfarbe, Auto-Apply pending Entities, Locked-Layer-Guard Window-Selection, ArcTool 8 Konstruktionsarten, PolylineTool Bogen-Modus, RectangleTool Fillet/Chamfer/Rotation, LineTool Fortsetzung, ALL/L-Selektion |
 | **Drawing Tools Ext** | `drawing-tools-ext.js` | **V1.10** | Ellipse, Spline, Donut, XLine, Overlap Break (OB), Hatch (H, eigenständige CamContour, Live-Preview, Farbpalette) |
 | **Advanced Tools** | `advanced-tools.js` | **V1.7** | Fillet, Trim, Extend, Offset (Ghost-Preview), Chamfer, Arabeske, Aufteilen, Overkill, Boundary (DCEL) |
 | **CAM Tools** | `cam-tools.js` | **V1.1** | CAM-spezifische Werkzeuge, Hit-Test Zoom-Scaling |
@@ -248,7 +248,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **User-Store** | `lib/user-store.js` | **V1.0** | Benutzerverwaltung (scrypt-Hashing), Bootstrap erster Admin via Env-Vars |
 | **Session-Store** | `lib/session-store.js` | **V1.0** | In-Memory Session-Map, Sliding Expiry |
 | **Auth-Helper** | `lib/auth.js` | **V1.0** | Cookie-Parsing, Session-Cookie-Helper, JSON-Body-Parsing |
-| **Build-Info** | `build-info.js` | **V6.56** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V6.57** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.10 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -283,9 +283,9 @@ ceraCUT/
 │   └── auth.js                        ← Cookie/Body-Parsing-Helper V1.0
 ├── data/                               ← users.json (gitignored — Passwort-Hashes)
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V6.56
+│   ├── build-info.js                  ← Versions-Banner V6.57
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
-│   ├── app.js                         ← Hauptanwendung V6.56 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
+│   ├── app.js                         ← Hauptanwendung V6.57 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.18 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.13
 │   ├── geometry-ops.js                ← GeometryOps V2.6 (Intersection, Arabeske, splitAndOverlap)
@@ -300,7 +300,7 @@ ceraCUT/
 │   ├── command-line.js                ← Command-Line UI V1.5 (History, Validation-Feedback)
 │   ├── dynamic-input.js              ← Dynamic Input HUD V1.1
 │   ├── snap-manager.js               ← Snap-System V1.5
-│   ├── drawing-tools.js              ← CAD-Tools V2.17 (Auto-Apply, Locked-Layer-Guard)
+│   ├── drawing-tools.js              ← CAD-Tools V2.18 (Auto-Apply, Locked-Layer-Guard)
 │   ├── drawing-tools-ext.js           ← Ellipse, Spline, Donut, XLine, OB, Hatch V1.10
 │   ├── advanced-tools.js              ← Tier 5 Tools V1.7 (Fillet/Trim/Extend/Offset/Chamfer/Overkill)
 │   ├── cam-tools.js                   ← CAM-Werkzeuge
@@ -530,7 +530,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   command-line: V1.5 (20260624-polarinput)
   snap-manager: V1.5 (20260625-snapcenterfix)
   geometry-ops: V2.6 (20260624-cadimprovements7)
-  drawing-tools: V2.17 (20260625-jointoolclosefix)
+  drawing-tools: V2.18 (20260625-thickerpreview)
   drawing-tools-ext: V1.10 (20260625-splineclosedring)
   dynamic-input: V1.1 (20260623-autocadfeel)
   tool-manager: V2.2 (20260216-0015)

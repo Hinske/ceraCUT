@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.17
+ * CeraCUT Drawing & Modification Tools V2.18
  * AutoCAD-style CAD Tools für CeraCUT
  *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
@@ -44,7 +44,7 @@
  * V1.0: Initiale 5 Zeichentools
  * Created: 2026-02-13 MEZ
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-jointoolclosefix
+ * Build: 20260625-thickerpreview
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -652,15 +652,17 @@ class DrawingToolManager {
 
     _drawRubberBand(ctx, scale) {
         const rb = this.rubberBand;
-        const lineWidth = 1.0 / scale;
+        // V2.18: Dichere Preview-Linie (war 1.0) für bessere Sichtbarkeit
+        const lineWidth = 2.0 / scale;
 
         // V2.6: Rubber-Band in Layerfarbe (halbtransparent)
         const layerHex = this.app?.layerManager?.getActiveLayer()?.color || '#FFFFFF';
         const r = parseInt(layerHex.slice(1, 3), 16), g = parseInt(layerHex.slice(3, 5), 16), b = parseInt(layerHex.slice(5, 7), 16);
         ctx.save();
-        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.6)`;
+        // V2.18: Opazität erhöht (war 0.6) + längere Striche, kürzere Lücken
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.85)`;
         ctx.lineWidth = lineWidth;
-        ctx.setLineDash([4 / scale, 4 / scale]);
+        ctx.setLineDash([6 / scale, 3 / scale]);
 
         switch (rb.type) {
             case 'line':
@@ -724,18 +726,18 @@ class DrawingToolManager {
                 if (spFp && spFp.length >= 2) {
                     ctx.setLineDash([6 / scale, 3 / scale]);
                     ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.3)`;
-                    ctx.lineWidth = lineWidth;
+                    ctx.lineWidth = 1.0 / scale; // Kontrollpolygon bleibt dünn
                     ctx.beginPath();
                     ctx.moveTo(spFp[0].x, spFp[0].y);
                     for (let i = 1; i < spFp.length; i++) ctx.lineTo(spFp[i].x, spFp[i].y);
                     ctx.stroke();
                 }
 
-                // 2. Glatte Kurve: solid
+                // 2. Glatte Kurve: solid, dicker (V2.18)
                 if (spCurve && spCurve.length >= 2) {
                     ctx.setLineDash([]);
-                    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.8)`;
-                    ctx.lineWidth = lineWidth;
+                    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
+                    ctx.lineWidth = lineWidth; // 2.0 / scale
                     ctx.beginPath();
                     ctx.moveTo(spCurve[0].x, spCurve[0].y);
                     for (let i = 1; i < spCurve.length; i++) ctx.lineTo(spCurve[i].x, spCurve[i].y);

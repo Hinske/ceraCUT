@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.56
- * Version: V6.56
+ * CeraCUT Build Info V6.57
+ * Version: V6.57
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-analyzefix
+ * Build: 20260625-thickerpreview
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.56',
-    build: '20260625-analyzefix',
+    version: '6.57',
+    build: '20260625-thickerpreview',
     date: '2026-06-25',
-    time: '21:00 MEZ',
+    time: '22:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'c222594',
-        date: '2026-06-25 20:52:40 +0200',
-        message: 'fix: AnalyzeTool — 3 Bugs behoben (cam-tools V1.4, build V6.56)'
+        hash: 'f135435',
+        date: '2026-06-25 20:54:03 +0200',
+        message: 'ux: Preview-Linie beim Zeichnen dicker (drawing-tools V2.18, build V6.57)'
     },
 
     modules: {
@@ -31,7 +31,7 @@ const CERACUT_BUILD = {
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.5', build: '20260625-snapcenterfix' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
-        'drawing-tools':      { version: '2.17', build: '20260625-jointoolclosefix' },
+        'drawing-tools':      { version: '2.18', build: '20260625-thickerpreview' },
         'drawing-tools-ext':  { version: '1.10', build: '20260625-splineclosedring' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
@@ -63,6 +63,10 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.57: UX — Preview-Linie beim Zeichnen dicker (drawing-tools.js V2.18): ' +
+        'Rubber-Band lineWidth 1.0→2.0/scale, Opazität 0.6→0.85, Strichlänge [4,4]→[6,3] ' +
+        'für bessere Erkennbarkeit von Kreis/Rechteck/Linie/Bogen vor der Bestätigung. ' +
+        'Spline-Kurve lineWidth erhöht, Kontrollpolygon bleibt dünn (1.0/scale).',
         'V6.56: Fix — AnalyzeTool 3 Bugs behoben (cam-tools.js V1.4): ' +
         '(1) finish()-Blockade: ModificationTool.finish() brach bei leerer Selektion hart ab — ' +
         'der Fallback "alle Konturen analysieren" war toter Code. Fix: finish() in AnalyzeTool ' +
