@@ -1,5 +1,9 @@
 /**
- * CeraCUT Document Manager V1.3
+ * CeraCUT Document Manager V1.4
+ * V1.4: Fix — switchTo() bricht jetzt laufende Tools/Modi ab bevor der State gesichert wird:
+ *       cancelTool(), toggleMeasureMode(), toggleStartpointMode() — verhindert Cross-Tab-
+ *       Korruption wenn ein aktives Zeichenwerkzeug nach dem Tab-Wechsel weiter Klicks
+ *       verarbeitet und auf Referenzen des alten Dokuments zugreift.
  * V1.3: Fix — visibilitychange-Event ersetzt beforeunload für zuverlässige Persistenz beim
  *       Tab-/Browser-Schließen (async IndexedDB-Transaktionen werden in beforeunload abgebrochen).
  * V1.2: Fix — deletedContourNames-Set (geloeschte Konturen pro Tab) wird jetzt mit
@@ -242,6 +246,13 @@ class DocumentManager {
 
         const current = this.activeDocument;
         if (current && current !== target) {
+            // Flüchtige UI-Zustände abbrechen bevor der State gesichert wird —
+            // sonst übernimmt das aktive Tool Klicks im Ziel-Tab und kann beide
+            // Dokumente korrumpieren.
+            if (this.app.toolManager?.isToolActive()) this.app.toolManager.cancelTool();
+            if (this.app.measureMode) this.app.toggleMeasureMode();
+            if (this.app.startpointMode) this.app.toggleStartpointMode();
+
             this._captureFromApp(current);
             this._persist(current.id);
         }

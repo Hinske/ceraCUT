@@ -1,5 +1,12 @@
 /**
- * CeraCUT V6.28 - Main Application
+ * CeraCUT V6.29 - Main Application
+ * V6.29: Fix — 3 Robustheitsfixes: (1) autoSortContours() speicherte Array-Indizes in
+ *        Undo-Commands — nach Delete/Insert verschoben diese auf falsche Konturen und
+ *        korrumpierten die Geometrie beim Redo. Jetzt Objekt-Referenzen (_lastReversedContours).
+ *        (2) saveDXF()/saveDXFAs(): _isSaving-Mutex verhindert überlappende FSAPI-
+ *        createWritable()-Aufrufe auf demselben FileHandle (Doppelklick/STRG+S-Spam → 0-Byte-
+ *        File-Korruption möglich). (3) _downloadIntarsiaFile(): per-Dateiname-Set (_savingFiles)
+ *        verhindert gleichzeitige Schreibzugriffe auf dieselbe CNC-Ausgabedatei.
  * V6.28: Fix — Zombie-Event-Listener in _showShortcutDialog() und _showPreviewModal():
  *        escHandler wurde nur bei ESC-Schließung entfernt; Schließen per Button/Hintergrund
  *        ließ ihn als toten Listener am document hängen. Akkumulierte bei jedem Öffnen.
@@ -193,6 +200,7 @@ class CeraCutApp {
         this.isDirty = false;      // Ungespeicherte Änderungen
         this._lastDirHandle = null; // Letzter Ordner (für "Speichern unter")
         this._dxfFileHandle = null; // FileHandle für "Speichern" direkt (FSAPI)
+        this._isSaving = false;     // Mutex gegen gleichzeitige FSAPI-Schreibvorgänge
 
         // V5.6: ProjectManager (Workspace-Verwaltung)
         if (typeof ProjectManager !== 'undefined') {
@@ -1719,22 +1727,22 @@ class CeraCutApp {
         const newOrder = cuttable.map(item => item.index);
         this.cutOrder = newOrder;
         
-        // Reversed-Indizes für Undo (Serpentinen-Umkehr rückgängig machen)
-        const reversedIndices = [...(this._lastReversedContourIndices || [])];
-        
+        // Objekt-Referenzen (nicht Indizes) — überleben Array-Verschiebungen durch Delete/Insert
+        const reversedContours = [...(this._lastReversedContours || [])];
+
         // Undo-Command für Sortierung + Richtungsumkehr
         const app = this;
         const cmd = new FunctionCommand(
             `Sortierung: ${method}`,
             () => {
                 // Redo: Konturen erneut umkehren + neue Reihenfolge
-                reversedIndices.forEach(idx => { if (app.contours[idx]?.points) app.contours[idx].points.reverse(); });
+                reversedContours.forEach(c => { if (c?.points) c.points.reverse(); });
                 app.cutOrder = [...newOrder];
                 app.updateCutOrderList(); app.updateOrderStats(); app.renderer?.render();
             },
             () => {
                 // Undo: Konturen zurück-umkehren + alte Reihenfolge
-                reversedIndices.forEach(idx => { if (app.contours[idx]?.points) app.contours[idx].points.reverse(); });
+                reversedContours.forEach(c => { if (c?.points) c.points.reverse(); });
                 app.cutOrder = [...oldOrder];
                 app.updateCutOrderList(); app.updateOrderStats(); app.renderer?.render();
             }
@@ -1794,7 +1802,7 @@ class CeraCutApp {
         // Wähle nächste Kontur + optimale Richtung
         // → Erzeugt automatisch Serpentinen/Boustrophedon bei Slits
         let reversals = 0;
-        const reversedContourIndices = []; // Kontour-Indizes die umgekehrt wurden
+        const reversedContourRefs = []; // Kontur-Objekte die umgekehrt wurden (nicht Indizes — Shift-sicher)
         
         while (remaining.length > 0) {
             let bestIdx = 0;
@@ -1843,7 +1851,7 @@ class CeraCutApp {
                 ep.first = ep.last;
                 ep.last = tmp;
                 reversals++;
-                reversedContourIndices.push(best.index);
+                reversedContourRefs.push(best.contour);
             }
             
             sorted.push(best);
@@ -1855,8 +1863,8 @@ class CeraCutApp {
         cuttable.length = 0;
         cuttable.push(...sorted);
         
-        // Reversed-Indizes für Undo verfügbar machen
-        this._lastReversedContourIndices = reversedContourIndices;
+        // Objekt-Referenzen für Undo verfügbar machen
+        this._lastReversedContours = reversedContourRefs;
         
         console.timeEnd('[SORT] sortByShortestPath');
         console.log(`[SORT] ${sorted.length} Konturen, ${reversals} Richtungsumkehrungen (Serpentine)`);
@@ -4774,9 +4782,12 @@ class CeraCutApp {
      */
     async _downloadIntarsiaFile(code, filename) {
         if (!code) return;
+        if (!this._savingFiles) this._savingFiles = new Set();
+        if (this._savingFiles.has(filename)) return;
 
         // FSAPI-Ordner-Export (wie normaler CNC-Export)
         if (window._cncDirHandle) {
+            this._savingFiles.add(filename);
             try {
                 const fh = await window._cncDirHandle.getFileHandle(filename, { create: true });
                 const w = await fh.createWritable();
@@ -4786,20 +4797,27 @@ class CeraCutApp {
                 return;
             } catch (err) {
                 console.warn(`[Intarsia V5.2] FSAPI fehlgeschlagen, Fallback auf Download:`, err);
+            } finally {
+                this._savingFiles.delete(filename);
             }
         }
 
         // Fallback: normaler Browser-Download
-        const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        console.log(`[Intarsia V5.2] Download: ${filename} (${code.length} bytes)`);
+        this._savingFiles?.add(filename);
+        try {
+            const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            console.log(`[Intarsia V5.2] Download: ${filename} (${code.length} bytes)`);
+        } finally {
+            this._savingFiles?.delete(filename);
+        }
     }
 
     _showPreviewModal(code, warnings, stats) {
@@ -5376,11 +5394,14 @@ class CeraCutApp {
             return this.saveDXFAs();
         }
 
+        if (this._isSaving) return;
+
         if (!this.contours || this.contours.length === 0) {
             this.showToast('Keine Konturen zum Speichern', 'warning');
             return;
         }
 
+        this._isSaving = true;
         try {
             const filename = this._dxfFileHandle.name;
             const result = this.dxfWriter.generate(this.contours, this.layerManager, {
@@ -5403,11 +5424,15 @@ class CeraCutApp {
         } catch (err) {
             console.warn('[DXF-Writer] Direktes Speichern fehlgeschlagen, Fallback auf Speichern-unter:', err);
             return this.saveDXFAs();
+        } finally {
+            this._isSaving = false;
         }
     }
 
     /** Speichern unter... (neuer Dateiname) — öffnet immer Ordnerauswahl */
     async saveDXFAs() {
+        if (this._isSaving) return;
+
         const defaultName = this.currentProjectName || this.loadedFileName || 'zeichnung.dxf';
 
         // File System Access API (Chrome, Edge, Opera)
@@ -5439,9 +5464,14 @@ class CeraCutApp {
                     filename,
                     imageUnderlayManager: this.imageUnderlayManager
                 });
-                const writable = await fileHandle.createWritable();
-                await writable.write(this.dxfWriter._encodeAnsi1252(result.content));
-                await writable.close();
+                this._isSaving = true;
+                try {
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(this.dxfWriter._encodeAnsi1252(result.content));
+                    await writable.close();
+                } finally {
+                    this._isSaving = false;
+                }
 
                 this.isDirty = false;
                 this.currentProjectName = filename;
@@ -5456,6 +5486,7 @@ class CeraCutApp {
                 document.getElementById('current-filename').textContent = `📄 ${filename}`;
                 return;
             } catch (err) {
+                this._isSaving = false;
                 if (err.name === 'AbortError') return; // Benutzer hat abgebrochen
                 console.warn('[DXF-Writer] File System API fehlgeschlagen, Fallback:', err);
             }

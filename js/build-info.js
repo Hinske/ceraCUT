@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'f142932',
-        date: '2026-06-25 18:37:29 +0200',
-        message: 'fix: visibilitychange ersetzt beforeunload für zuverlässige IndexedDB-Persistenz (document-manager V1.3)'
+        hash: '93a8af3',
+        date: '2026-06-25 18:49:43 +0200',
+        message: 'fix: 4 Sicherheits- und Robustheitsfixes (Tab-Korruption, Slowloris, Undo-Index, FSAPI-Race)'
     },
 
     modules: {
@@ -39,8 +39,8 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.28', build: '20260625-zombielistener' },
-        'document-manager':   { version: '1.3', build: '20260625-visibilitychangepersist' },
+        'app':                { version: '6.29', build: '20260625-undoidxfix' },
+        'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
         'debug-monitor':      { version: '1.1', build: '20260324-gitcommit' },
@@ -56,7 +56,7 @@ const CERACUT_BUILD = {
         'measure-tool':       { version: '1.2', build: '20260325-curvcheck' },
         'dimension-tool':     { version: '2.4', build: '20260326-dimedit' },
         'dxf-browser':        { version: '1.1', build: '20260624-userlogin' },
-        'server':             { version: '1.5', build: '20260625-xssfix' },
+        'server':             { version: '1.6', build: '20260625-slowlorisfix' },
         'user-store':         { version: '1.0', build: '20260624-userlogin' },
         'session-store':      { version: '1.0', build: '20260624-userlogin' },
         'auth-helper':        { version: '1.0', build: '20260624-userlogin' }

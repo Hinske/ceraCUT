@@ -205,7 +205,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 
 | Modul | Datei | Version | Verantwortung |
 |-------|-------|---------|---------------|
-| **App** | `app.js` | **V6.28** | Wizard, Kontextmenu, Export-Modal, Undo (Granular per Kontur), ToolManager, Click-Routing, Window-Selection, DynamicInput, Print, FSAPI-Save, ProjectManager, CAM-Kontextmenu, Lead-Profiles, Intarsien V2.0, Layer-Visibility→Pipeline, Validation Engine, Multi-Material Export, Hatch-Entity, Undo/Redo-Button-Click, Snap-Modi-Statusbar, Cycle-Selection |
+| **App** | `app.js` | **V6.29** | Wizard, Kontextmenu, Export-Modal, Undo (Granular per Kontur), ToolManager, Click-Routing, Window-Selection, DynamicInput, Print, FSAPI-Save, ProjectManager, CAM-Kontextmenu, Lead-Profiles, Intarsien V2.0, Layer-Visibility→Pipeline, Validation Engine, Multi-Material Export, Hatch-Entity, Undo/Redo-Button-Click, Snap-Modi-Statusbar, Cycle-Selection |
 | **Geometry** | `geometry.js` | **V2.13** | Vektoren, SplineUtils (De Boor), MicroHealing (5-Stage), Shoelace, interiorPoint |
 | **GeometryOps** | `geometry-ops.js` | **V2.6** | Intersection, Segment-Modell, Arabeske, circumscribedCircle, splitAndOverlap, Boundary (DCEL Planar Graph), filletPolyline/chamferPolyline |
 | **DXF-Parser** | `dxf-parser.js` | **V3.18** | DXF → Entities, SPLINE-Tessellation, Deque-Chaining, Layer-aware, TEXT/MTEXT, TEXT-Glyphs, Center/Radius-Passthrough, R12-Layer-Table, HATCH-Skip |
@@ -538,8 +538,8 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   text-tool: V1.2 (20260312-textimport)
   dxf-writer: V1.11 (20260625-splineclosedguard)
   lead-profiles: V1.4 (20260625-cornerleadslot)
-  app: V6.28 (20260625-zombielistener)
-  document-manager: V1.3 (20260625-visibilitychangepersist)
+  app: V6.29 (20260625-undoidxfix)
+  document-manager: V1.4 (20260625-tabswitch-cancel)
   project-manager: V1.0 (20260313-workspace)
   properties-panel: V1.5 (20260316-hatchentity)
   debug-monitor: V1.1 (20260324-gitcommit)
@@ -553,7 +553,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   advanced-tools: V1.7 (20260625-deletedcontourguard)
   arc-fitting: V3.1 (20260315-bugfix35)
   dxf-browser: V1.1 (20260624-userlogin)
-  server: V1.5 (20260625-xssfix)
+  server: V1.6 (20260625-slowlorisfix)
   user-store: V1.0 (20260624-userlogin)
   session-store: V1.0 (20260624-userlogin)
   auth-helper: V1.0 (20260624-userlogin)

@@ -1,5 +1,9 @@
 /**
- * CeraCUT Server V1.5
+ * CeraCUT Server V1.6
+ * V1.6: Fix — Slowloris-DoS im Dual-Protocol Gateway: socket.setTimeout(3000) +
+ *       socket.on('timeout', destroy) schützt vor Angreifern die TCP-Verbindungen öffnen
+ *       aber kein erstes Byte senden. Ohne Guard blieben Sockets unbegrenzt offen und
+ *       erschöpften den File-Deskriptor-Pool des Node.js-Prozesses.
  * V1.5: Fix — XSS in _injectCurrentUser(): JSON.stringify-Output wird nun mit
  *       .replace(/</g, '\\u003c') bereinigt — verhindert vorzeitigen Script-Tag-
  *       Abbruch durch Benutzernamen mit </script> (CVE-Klasse: Stored XSS).
@@ -551,8 +555,12 @@ function startServer() {
         httpRedirect.listen(0, '127.0.0.1');
 
         const gateway = net.createServer({ pauseOnConnect: true }, socket => {
+            // Slowloris-Guard: Socket der kein erstes Byte sendet wird nach 3 s getrennt.
+            socket.setTimeout(3000);
+            socket.on('timeout', () => socket.destroy());
             // Erstes Byte lesen um Protokoll zu erkennen
             socket.once('readable', () => {
+                socket.setTimeout(0); // Sniffing erfolgreich — Timeout deaktivieren
                 const chunk = socket.read(1);
                 if (!chunk || chunk.length === 0) { socket.destroy(); return; }
                 // Byte zurückschieben
