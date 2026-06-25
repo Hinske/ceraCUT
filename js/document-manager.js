@@ -1,5 +1,7 @@
 /**
- * CeraCUT Document Manager V1.2
+ * CeraCUT Document Manager V1.3
+ * V1.3: Fix — visibilitychange-Event ersetzt beforeunload für zuverlässige Persistenz beim
+ *       Tab-/Browser-Schließen (async IndexedDB-Transaktionen werden in beforeunload abgebrochen).
  * V1.2: Fix — deletedContourNames-Set (geloeschte Konturen pro Tab) wird jetzt mit
  *       erfasst/angewendet (_captureFromApp/_applyToApp), analog zu dxfResult.
  * V1.1: Fix — settings.originSet-Default ergänzt (Gate für CAM-Freischaltung erst nach Setup)
@@ -165,9 +167,16 @@ class DocumentManager {
         this._dbStore = 'documents';
         this._persistTimers = new Map();
 
+        // visibilitychange ist zuverlässiger als beforeunload für async IndexedDB-Writes:
+        // Browser dispatchen 'hidden' vor dem Entladen und geben laufenden Hintergrund-Tasks
+        // mehr Zeit zum Abschluss. Feuert auch bei Tab-Wechsel (harmlos — extra Save).
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden' && this.activeId) {
+                this._persist(this.activeId);
+            }
+        });
+        // beforeunload als letzter Fallback behalten (best-effort, kein Garant)
         window.addEventListener('beforeunload', () => {
-            // Best-effort — IndexedDB-Writes sind async und können beim Unload
-            // abgebrochen werden. Kein Garant für vollständige Persistenz.
             if (this.activeId) this._persist(this.activeId);
         });
 

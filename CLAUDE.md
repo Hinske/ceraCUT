@@ -539,7 +539,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   dxf-writer: V1.11 (20260625-splineclosedguard)
   lead-profiles: V1.4 (20260625-cornerleadslot)
   app: V6.28 (20260625-zombielistener)
-  document-manager: V1.2 (20260625-deletedcontourguard)
+  document-manager: V1.3 (20260625-visibilitychangepersist)
   project-manager: V1.0 (20260313-workspace)
   properties-panel: V1.5 (20260316-hatchentity)
   debug-monitor: V1.1 (20260324-gitcommit)

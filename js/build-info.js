@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'b244e4b',
-        date: '2026-06-25 18:34:21 +0200',
-        message: 'fix: Zombie-Event-Listener in Modal-ESC-Handlern beseitigt (V6.28)'
+        hash: 'f142932',
+        date: '2026-06-25 18:37:29 +0200',
+        message: 'fix: visibilitychange ersetzt beforeunload für zuverlässige IndexedDB-Persistenz (document-manager V1.3)'
     },
 
     modules: {
