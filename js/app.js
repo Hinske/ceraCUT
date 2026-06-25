@@ -1,5 +1,9 @@
 /**
- * CeraCUT V6.25 - Main Application
+ * CeraCUT V6.26 - Main Application
+ * V6.26: Feat — Toolpath-Verifikation zeigte nur die Anzahl der Warnungen/Fehler
+ *        ("11 Warnungen") ohne jeden Inhalt. _showSimVerifyModal() listet jetzt die
+ *        konkreten Meldungstexte aus ToolpathSimulator.verify() in einem Modal auf
+ *        (Klick auf die Ergebnis-Zeile im Simulation-Ribbon).
  * V6.25: Fix — deletedContourNames-Set verhindert, dass geloeschte Konturen bei einem
  *        Layer-Sichtbarkeits-Toggle aus dxfResult.contours wieder auftauchen
  *        (applyLayerSelection() baute die Liste sonst immer komplett neu auf).
@@ -4379,6 +4383,43 @@ class CeraCutApp {
             if (proceedBtn) proceedBtn.addEventListener('click', () => cleanup(true));
             overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); });
         });
+    }
+
+    /**
+     * V6.26: Zeigt die konkreten Fehler/Warnungen aus ToolpathSimulator.verify() an
+     * (Klick auf "Verifizieren"-Ergebnis-Zeile) — vorher war nur die Anzahl sichtbar.
+     */
+    _showSimVerifyModal(result) {
+        const existing = document.getElementById('sim-verify-modal');
+        if (existing) existing.remove();
+
+        const items = [
+            ...result.errors.map(msg => ({ msg, icon: '⛔', color: '#ef4444' })),
+            ...result.warnings.map(msg => ({ msg, icon: '⚠️', color: '#f59e0b' }))
+        ];
+        const listHTML = items.length
+            ? items.map(item => `<div style="padding:6px 8px;margin:4px 0;background:${item.color}22;border-left:3px solid ${item.color};border-radius:3px;font-size:12px;color:#ddd;">
+                <span>${item.icon}</span> ${sanitizeHTML(item.msg)}
+            </div>`).join('')
+            : '<div style="color:#888;font-size:12px;">Keine Fehler oder Warnungen.</div>';
+
+        const overlay = document.createElement('div');
+        overlay.id = 'sim-verify-modal';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;';
+        overlay.innerHTML = `
+            <div style="background:#1e1e1e;border:1px solid #555;border-radius:8px;max-width:560px;width:90%;max-height:70vh;overflow-y:auto;padding:20px;color:#ddd;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+                <h3 style="margin:0 0 12px;font-size:16px;color:${result.errors.length ? '#ef4444' : '#f59e0b'}">
+                    ${result.valid ? '⚠️ Verifikation: Warnungen' : '⛔ Verifikation: Fehler'}
+                </h3>
+                <div>${listHTML}</div>
+                <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+                    <button id="sim-verify-close" style="padding:6px 16px;background:#555;border:none;border-radius:4px;color:#ddd;cursor:pointer;">Schliessen</button>
+                </div>
+            </div>`;
+
+        document.body.appendChild(overlay);
+        overlay.querySelector('#sim-verify-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
     }
 
     previewGCode() {

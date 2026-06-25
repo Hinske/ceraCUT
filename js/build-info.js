@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.49
- * Version: V6.49
+ * CeraCUT Build Info V6.50
+ * Version: V6.50
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-chainsplinedataloss
+ * Build: 20260625-simverifydetails
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.49',
-    build: '20260625-chainsplinedataloss',
+    version: '6.50',
+    build: '20260625-simverifydetails',
     date: '2026-06-25',
-    time: '17:10 MEZ',
+    time: '17:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '431e00c',
-        date: '2026-06-25 16:54:52 +0200',
-        message: 'fix: SPLINE-Closed-Flag und Chaining-Datenverlust zerstueckelten Export-Geometrie'
+        hash: '0b157b5',
+        date: '2026-06-25 17:03:34 +0200',
+        message: 'feat: Toolpath-Verifikation zeigt jetzt konkrete Warnungs-/Fehlertexte statt nur Anzahl'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.25', build: '20260625-deletedcontourguard' },
+        'app':                { version: '6.26', build: '20260625-simverifydetails' },
         'document-manager':   { version: '1.2', build: '20260625-deletedcontourguard' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
@@ -63,6 +63,13 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.50: Feat — Toolpath-Verifikation ("Verifizieren"-Button) zeigte bisher nur die ' +
+        'Anzahl der Warnungen/Fehler an (z.B. "11 Warnungen"), ohne deren Inhalt — die Meldung ' +
+        'war ohne Konsolen-Zugriff nutzlos. ToolpathSimulator.verify() liefert die konkreten ' +
+        'Texte (result.errors/result.warnings) bereits, sie wurden nur nie angezeigt. Klick auf ' +
+        'die Ergebnis-Zeile oeffnet jetzt ein Modal mit der vollstaendigen Liste ' +
+        '(_showSimVerifyModal() in app.js V6.26); zusaetzlich werden die Listen immer in die ' +
+        'Konsole geloggt.',
         'V6.49: Fix — chainContours() verkettete mehrere Original-Entities (z.B. SPLINE + ' +
         'mehrere LINEs) korrekt zu einer durchgehenden Kontur, reichte aber weiterhin nur die ' +
         'rohen _splineData/_fitPoints DES ERSTEN Segments durch. War das erste Segment eine ' +
