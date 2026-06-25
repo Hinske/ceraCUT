@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.54
- * Version: V6.54
+ * CeraCUT Build Info V6.55
+ * Version: V6.55
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-snapcenterfix
+ * Build: 20260625-splineclosedring
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.54',
-    build: '20260625-snapcenterfix',
+    version: '6.55',
+    build: '20260625-splineclosedring',
     date: '2026-06-25',
-    time: '20:00 MEZ',
+    time: '21:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'd21dd9b',
-        date: '2026-06-25 19:28:26 +0200',
-        message: 'fix: HatchTool isClosed-Empfindlichkeit + JoinTool Schlusspunkt-Snap'
+        hash: '0e06bf1',
+        date: '2026-06-25 19:32:35 +0200',
+        message: 'fix: SplineTool geschlossener Ringschluss (drawing-tools-ext V1.10)'
     },
 
     modules: {
@@ -32,7 +32,7 @@ const CERACUT_BUILD = {
         'snap-manager':       { version: '1.5', build: '20260625-snapcenterfix' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
         'drawing-tools':      { version: '2.17', build: '20260625-jointoolclosefix' },
-        'drawing-tools-ext':  { version: '1.9', build: '20260625-hatchtool4fix' },
+        'drawing-tools-ext':  { version: '1.10', build: '20260625-splineclosedring' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
@@ -63,6 +63,11 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.55: Fix — SplineTool geschlossener Ringschluss (drawing-tools-ext.js V1.10): ' +
+        'handleClick() und handleOption(S) pushten den Startpunkt nicht in fitPoints — ' +
+        'die Kurve sah geschlossen aus, points[0] !== points[last] führte aber in der ' +
+        'Pipeline zum Slit-Fallback statt Disc/Hole. Fix: Startpunkt exakt als letzten ' +
+        'fitPoints-Eintrag anfügen + _tessellate() erzwingt exakten Ringschluss.',
         'V6.54: Fix — Snap-Punkte falsch positioniert (snap-manager.js V1.5, canvas-renderer.js V3.42, app.js V6.31): ' +
         '(1) contour._center/_radius (DXF-Parser-Eigenschaften mit Unterstrich) wurden im Snap-Manager ' +
         'nicht erkannt — contour.center war immer undefined. Center-Snap und Quadrant-Snap für importierte ' +
