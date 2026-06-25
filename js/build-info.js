@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.53
- * Version: V6.53
+ * CeraCUT Build Info V6.54
+ * Version: V6.54
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-simcrashfix
+ * Build: 20260625-snapcenterfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.53',
-    build: '20260625-simcrashfix',
+    version: '6.54',
+    build: '20260625-snapcenterfix',
     date: '2026-06-25',
-    time: '18:00 MEZ',
+    time: '20:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'aa4cf3a',
-        date: '2026-06-25 19:03:06 +0200',
-        message: 'fix: Simulation-Absturz — O(n²) Trail-Rendering, Canvas-Hijack, falscher API-Aufruf (toolpath-simulator V1.1, build-info V6.53)'
+        hash: 'e543e3d',
+        date: '2026-06-25 19:15:11 +0200',
+        message: 'fix: Snap — Center/Endpoint-Punkte falsch positioniert (snap-manager V1.5, canvas-renderer V3.42, app V6.31)'
     },
 
     modules: {
@@ -25,11 +25,11 @@ const CERACUT_BUILD = {
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
         'cam-contour':        { version: '5.20', build: '20260625-bugfixsweep' },
-        'canvas-renderer':    { version: '3.41', build: '20260625-bugfixsweep' },
+        'canvas-renderer':    { version: '3.42', build: '20260625-snapcenterfix' },
         'undo-manager':       { version: '1.3', build: '20260625-deletedcontourguard' },
         'sinumerik-pp':       { version: '1.9', build: '20260625-bugfixsweep' },
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
-        'snap-manager':       { version: '1.4', build: '20260623-bugfixaudit' },
+        'snap-manager':       { version: '1.5', build: '20260625-snapcenterfix' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
         'drawing-tools':      { version: '2.16', build: '20260625-deletedcontourguard' },
         'drawing-tools-ext':  { version: '1.8', build: '20260623-bugfixaudit' },
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.30', build: '20260625-gripselectfix' },
+        'app':                { version: '6.31', build: '20260625-snapcenterfix' },
         'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
@@ -63,6 +63,18 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.54: Fix — Snap-Punkte falsch positioniert (snap-manager.js V1.5, canvas-renderer.js V3.42, app.js V6.31): ' +
+        '(1) contour._center/_radius (DXF-Parser-Eigenschaften mit Unterstrich) wurden im Snap-Manager ' +
+        'nicht erkannt — contour.center war immer undefined. Center-Snap und Quadrant-Snap für importierte ' +
+        'Kreise/Bögen fehlten vollständig. Fix: (contour.center || contour._center). ' +
+        '(2) Endpoint-Spam für Kreiskonturen: Alle 32 Tessellations-Punkte wurden als Endpoints ' +
+        'registriert statt nur Quadrant- und Center-Snaps (AutoCAD-konform). ' +
+        'Fix: Bei Kreiskonturen (isClosed + center + radius) werden Endpoints/Midpoints unterdrückt. ' +
+        '(3) _pointsCache nicht invalidiert nach Grip-Editing und nach addDrawnEntities() — ' +
+        'Snap-Punkte zeigten alte Positionen. Fix: invalidatePointsCache() nach Grip-Ende ' +
+        'und in onChanged() aufgerufen. ' +
+        '(4) MouseMove-Guard prüft jetzt auch Array-Länge (nicht nur Referenz-Identität), ' +
+        'damit neu gezeichnete Konturen sofort im Snap erscheinen.',
         'V6.53: Fix — Simulation Crash (toolpath-simulator.js V1.1): ' +
         '(1) Trail-Rendering von O(n²) auf O(1) umgestellt: Trail-Array durch Off-Screen-' +
         'History-Canvas ersetzt — jeder Frame zeichnet nur den neuen Abschnitt auf den ' +

@@ -93,8 +93,8 @@
  * V3.1: Undo/Redo (Command Pattern), Clipboard (Copy/Cut/Paste)
  * V3.14: CAM-Tab Redesign — Außen/Innen-Lead, Material-Gruppe, Piercing-Typen, Speed-Info
  * V4.5: IGEMS 4-Slot Lead-System — Alternativ-Lead Fallback bei Kollision
- * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-cadimprovements7
+ * Last Modified: 2026-06-25 MEZ
+ * Build: 20260625-snapcenterfix
  */
 
 // XSS Protection
@@ -368,7 +368,10 @@ class CeraCutApp {
             let activeSnap = snapPoint;
             if (this.snapManager) {
                 // Konturen immer synchron halten (nach Import, Zeichnen, Undo etc.)
-                if (this.snapManager._contours !== this.contours && this.contours?.length) {
+                // V6.31: auch Längenänderung prüfen (gleiche Referenz, neues Element)
+                if ((this.snapManager._contours !== this.contours ||
+                     this.snapManager._contours?.length !== this.contours?.length) &&
+                    this.contours?.length) {
                     this.snapManager.setContours(this.contours);
                 }
                 const snap = this.snapManager.findSnap(worldX, worldY, this.renderer.scale);
@@ -822,6 +825,7 @@ class CeraCutApp {
         const onChanged = () => {
             this.rebuildCutOrder();
             this.renderer?.setContours(this.contours);
+            this.snapManager?.invalidatePointsCache?.(); // V6.31: Snap-Cache nach neuen Konturen
             this.updateContourPanel();
             this.updateStats({ totalEntities: this.contours.length });
         };

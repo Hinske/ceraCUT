@@ -1,5 +1,5 @@
 /**
- * CeraCUT V3.41 - Canvas Renderer
+ * CeraCUT V3.42 - Canvas Renderer
  * Features: Selection, Lead-In/Out, Overcut, Micro-Joints, Travel Paths, Order Numbers,
  *           Startpunkt-Drag im Anschuss-Modus, SLIT Support
  * V3.41: Fix — Geometry.interiorPoint() im Disc-Fill-Hole-Cutout ohne Existenz-Check
@@ -42,8 +42,8 @@
  * V3.11: Image Underlay Rendering
  * V3.5: Ghost-Preview + Window-Selection Rendering
  * V3.4: Drawing-Overlay + SnapManager-Rendering
- * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-userlogin
+ * Last Modified: 2026-06-25 MEZ
+ * Build: 20260625-snapcenterfix
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -525,12 +525,15 @@ class CanvasRenderer {
                 if (typeof ModificationTool !== 'undefined') ModificationTool.invalidateCache(contour);
                 contour._cachedKerfPolyline = null;
                 contour._cacheKey = null;
+                // V3.42: Snap-Point-Cache invalidieren (nach Grip-Editing veraltet)
+                this.app?.snapManager?.invalidatePointsCache?.();
                 // Undo-Command (bereits ausgeführt → push, nicht execute)
                 const app = this.app;
                 const rerender = () => {
                     if (typeof ModificationTool !== 'undefined') ModificationTool.invalidateCache(contour);
                     contour._cachedKerfPolyline = null;
                     contour._cacheKey = null;
+                    app?.snapManager?.invalidatePointsCache?.();
                     app?.renderer?.setContours(app.contours);
                     app?.rebuildCutOrder?.();
                     app?.updateContourPanel?.();

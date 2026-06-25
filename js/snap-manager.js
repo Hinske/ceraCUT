@@ -1,5 +1,8 @@
 /**
- * CeraCUT Snap Manager V1.4
+ * CeraCUT Snap Manager V1.5
+ * V1.5: Fix — contour._center/_radius (DXF-Parser Unterstrich-Properties) unterstützt;
+ *        Endpoint-Spam für Kreiskonturen unterdrückt (AutoCAD-konform: nur Center+Quadrant);
+ *        invalidatePointsCache() Methode für externe Cache-Invalidierung (nach Grip-Editing etc.)
  * V1.4: Fix — _collectAllPoints() gecacht (_pointsCache), lief zuvor bei jedem Mousemove neu
  * Erweitetes Object-Snap System (AutoCAD-Stil)
  * - Endpoint, Midpoint, Center, GeoCenter, Quadrant, Intersection, Perpendicular, Tangent, Nearest
@@ -9,8 +12,8 @@
  * - Grid-Snap
  * - Visuelle Snap-Marker (verschiedene Symbole pro Typ)
  * Created: 2026-02-13 MEZ
- * Last Modified: 2026-02-16 MEZ
- * Build: 20260216-snap12 MEZ
+ * Last Modified: 2026-06-25 MEZ
+ * Build: 20260625-snapcenterfix
  */
 
 class SnapManager {
@@ -64,7 +67,7 @@ class SnapManager {
         try {
             this._computeCentroid([{x:0,y:0},{x:10,y:0},{x:10,y:10},{x:0,y:10},{x:0,y:0}]);
             this._bulgeToArcInfo({x:0,y:0,bulge:1},{x:10,y:0}, 1);
-            console.debug('[SnapManager V1.2] ✅ Initialisiert (9 Snap-Typen: Endpoint, Midpoint, Center, GeoCenter, Quadrant, Intersection, Perpendicular, Tangent, Nearest)');
+            console.debug('[SnapManager V1.5] ✅ Initialisiert (9 Snap-Typen: Endpoint, Midpoint, Center, GeoCenter, Quadrant, Intersection, Perpendicular, Tangent, Nearest)');
         } catch(e) {
             console.error('[SnapManager V1.2] ❌ Smoke-Test FEHLER:', e);
         }
@@ -86,6 +89,12 @@ class SnapManager {
         this._drawingEntities = entities || [];
         this._segmentCache = null; // V5.0: Cache invalidieren
         this._pointsCache = null;  // V1.4: Cache invalidieren
+    }
+
+    /** V1.5: Punkt-Cache invalidieren (nach Grip-Editing, Kontur-Mutation etc.) */
+    invalidatePointsCache() {
+        this._pointsCache = null;
+        this._segmentCache = null;
     }
 
     /** Ortho-Modus umschalten (F8) */
@@ -492,24 +501,38 @@ class SnapManager {
             const quadrants = [];  // V1.2: Quadrant-Punkte
             let geoCenter = null;  // V1.2: Geometrisches Zentrum
 
-            for (let i = 0; i < pts.length; i++) {
-                endpoints.push({ x: pts[i].x, y: pts[i].y });
+            // V1.5: DXF-Parser speichert Center/Radius als _center/_radius (Unterstrich)
+            const _ctr = contour.center || contour._center;
+            const _rad = contour.radius || contour._radius;
+            // Kreis-Kontur: isClosed + center + radius → kein Endpoint-Spam (AutoCAD-konform)
+            const isCircleContour = !!_ctr && !!_rad && contour.isClosed;
 
-                if (i < pts.length - 1) {
-                    midpoints.push({
-                        x: (pts[i].x + pts[i + 1].x) / 2,
-                        y: (pts[i].y + pts[i + 1].y) / 2
-                    });
+            if (!isCircleContour) {
+                // Normale Polylinie/Bogen: Endpoints, Midpoints, Segments
+                for (let i = 0; i < pts.length; i++) {
+                    endpoints.push({ x: pts[i].x, y: pts[i].y });
+
+                    if (i < pts.length - 1) {
+                        midpoints.push({
+                            x: (pts[i].x + pts[i + 1].x) / 2,
+                            y: (pts[i].y + pts[i + 1].y) / 2
+                        });
+                        segments.push({ p1: pts[i], p2: pts[i + 1] });
+                    }
+                }
+            } else {
+                // Kreis: nur Segments für Nearest-Snap (kein Endpoint-Spam)
+                for (let i = 0; i < pts.length - 1; i++) {
                     segments.push({ p1: pts[i], p2: pts[i + 1] });
                 }
             }
 
-            if (contour.center) {
-                centers.push({ x: contour.center.x, y: contour.center.y });
+            if (_ctr) {
+                centers.push({ x: _ctr.x, y: _ctr.y });
 
                 // V1.1: Wenn Kontur ein Kreis ist (center + radius vorhanden)
-                if (contour.radius) {
-                    const cx = contour.center.x, cy = contour.center.y, r = contour.radius;
+                if (_rad) {
+                    const cx = _ctr.x, cy = _ctr.y, r = _rad;
                     arcs.push({ center: { x: cx, y: cy }, radius: r });
 
                     // V1.2: Quadrant-Punkte (0°, 90°, 180°, 270°)
@@ -529,7 +552,7 @@ class SnapManager {
                     const arcInfo = this._bulgeToArcInfo(p1, p2, p1.bulge);
                     if (arcInfo) {
                         // Center auch als Snap registrieren falls noch nicht vorhanden
-                        if (!contour.center) {
+                        if (!_ctr) {
                             centers.push({ x: arcInfo.cx, y: arcInfo.cy });
                         }
                         arcs.push({ center: { x: arcInfo.cx, y: arcInfo.cy }, radius: arcInfo.r, startAngle: arcInfo.startAngle, endAngle: arcInfo.endAngle });
@@ -545,7 +568,7 @@ class SnapManager {
             }
 
             // V1.2: Geometrisches Zentrum (Schwerpunkt) für geschlossene Konturen
-            if (contour.isClosed && pts.length >= 4 && !contour.center) {
+            if (contour.isClosed && pts.length >= 4 && !_ctr) {
                 geoCenter = this._computeCentroid(pts);
             }
 
