@@ -1,5 +1,8 @@
 /**
- * CeraCUT Server V1.4
+ * CeraCUT Server V1.5
+ * V1.5: Fix — XSS in _injectCurrentUser(): JSON.stringify-Output wird nun mit
+ *       .replace(/</g, '\\u003c') bereinigt — verhindert vorzeitigen Script-Tag-
+ *       Abbruch durch Benutzernamen mit </script> (CVE-Klasse: Stored XSS).
  * V1.4: Feat — Login + User-Management: /, /index.html und /api/dxf/* sind jetzt
  *       hinter einer Session (Cookie ceracut_session) gegated, neue Routen
  *       /api/auth/{login,logout,me} + /api/admin/users* (Rolle admin). Beim
@@ -9,8 +12,8 @@
  *       Siehe lib/user-store.js, lib/session-store.js, lib/auth.js.
  * V1.3: Fix — safePath() prüft Symlink-Ziel via fs.realpathSync gegen DXF_ROOT,
  *       Content-Disposition-Header filtert CR/LF (Header-Injection)
- * Last Modified: 2026-06-24
- * Build: 20260624-userlogin
+ * Last Modified: 2026-06-25
+ * Build: 20260625-xssfix
  *
  * Statischer Dateiserver + DXF-Browse-API für Netzlaufwerk-Zugriff.
  * Ersetzt `npx serve .` und stellt zusätzlich /api/dxf/* Endpunkte bereit.
@@ -330,7 +333,8 @@ const INDEX_HTML_PATH = path.join(STATIC_ROOT, 'index.html');
 function _injectCurrentUser(resolvedPath, data, currentUser) {
     if (resolvedPath !== INDEX_HTML_PATH) return data;
     const html = data.toString('utf8');
-    const script = `<script>window.CeraCutCurrentUser = ${JSON.stringify(currentUser ? currentUser.username : null)};window.CeraCutCurrentRole = ${JSON.stringify(currentUser ? currentUser.role : null)};</script>`;
+    const safeJSON = (val) => JSON.stringify(val).replace(/</g, '\\u003c');
+    const script = `<script>window.CeraCutCurrentUser = ${safeJSON(currentUser ? currentUser.username : null)};window.CeraCutCurrentRole = ${safeJSON(currentUser ? currentUser.role : null)};</script>`;
     const injected = html.replace('<head>', '<head>\n' + script);
     return Buffer.from(injected, 'utf8');
 }
