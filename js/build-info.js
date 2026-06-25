@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'bd6743b',
-        date: '2026-06-25 18:53:37 +0200',
-        message: 'fix: 3 Robustheitsfixes — Grip-Anzeige, Undo-Buttons, Einzelteil-Workflow (app.js V6.30, build-info V6.52)'
+        hash: 'aa4cf3a',
+        date: '2026-06-25 19:03:06 +0200',
+        message: 'fix: Simulation-Absturz — O(n²) Trail-Rendering, Canvas-Hijack, falscher API-Aufruf (toolpath-simulator V1.1, build-info V6.53)'
     },
 
     modules: {
