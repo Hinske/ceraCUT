@@ -1,5 +1,5 @@
 /**
- * CeraCUT CAM-Tools V1.3 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
+ * CeraCUT CAM-Tools V1.4 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
  * 7 Tools für Analyse, Optimierung und Vorbereitung der Schnittgeometrie
  *
  * Tools:
@@ -13,13 +13,15 @@
  *
  * Benötigt: geometry-ops.js V2.1, drawing-tools.js V2.2, ceracut-pipeline.js V3.1
  *
+ * V1.4: AnalyzeTool — 3 Bugs behoben: finish()-Blockade (leere Selektion), same-contour
+ *       Lücken-Blindheit, Marker-State-Leak beim Neustart + Undo-Stack-Müll
  * V1.3: _notifyStateChange() nach jedem undoStack.push() — UI-Buttons aktualisieren sich korrekt
  * V1.2: Renderer-Patch fix (scale/offsetX/offsetY), Edgefix nutzt zentrale Hit-Test-Methode,
  *       Shift-Tracking für BoundaryTrim, Redo-Stack-Clearing nach Undo-Push, alle TOOL_TOOLTIPS
  * V1.1: Hit-Test Scaling — Klick-Threshold skaliert mit Zoom-Level
  * Created: 2026-02-17 MEZ
- * Last Modified: 2026-03-24 MEZ
- * Build: 20260324-undofix
+ * Last Modified: 2026-06-25 MEZ
+ * Build: 20260625-analyzefix
  */
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -350,7 +352,13 @@ class AnalyzeTool extends ModificationTool {
     getToolName() { return 'ANALYZE'; }
 
     start() {
-        console.log('[CAM-Tools V1.2] Analyze gestartet');
+        console.log('[CAM-Tools V1.4] Analyze gestartet');
+        // Alte Marker sofort löschen, damit kein State-Leak beim Neustart bleibt
+        const renderer = this.manager.renderer;
+        if (renderer && renderer._analyzeMarkers) {
+            renderer._analyzeMarkers = null;
+            renderer.render();
+        }
         // Prüfe ob Konturen selektiert sind (Noun-Verb)
         const preSelected = this.manager.getSelectedContours();
         if (preSelected.length > 0) {
@@ -358,8 +366,17 @@ class AnalyzeTool extends ModificationTool {
             this._executeAnalyze();
         } else {
             this.state = 'select';
-            this.cmd?.setPrompt('ANALYZE — Objekte wählen, Enter = analysieren:');
+            this.cmd?.setPrompt('ANALYZE — Objekte wählen, Enter = alle analysieren:');
             this.cmd?.log('🔍 Analyze: Lücken und Überlappungen anzeigen', 'info');
+        }
+    }
+
+    // Bug #1: finish() überschreiben — leere Selektion → alle Konturen analysieren
+    finish() {
+        if (this.state === 'select') {
+            const selected = this.manager.getSelectedContours();
+            this.selectedContours = [...selected]; // ggf. leer → _executeAnalyze nimmt alle
+            this._executeAnalyze();
         }
     }
 
@@ -406,7 +423,11 @@ class AnalyzeTool extends ModificationTool {
         // Paarweise Endpunkt-Vergleich
         for (let i = 0; i < endpoints.length; i++) {
             for (let j = i + 1; j < endpoints.length; j++) {
-                if (endpoints[i].contour === endpoints[j].contour) continue;
+                const sameContour = endpoints[i].contour === endpoints[j].contour;
+                // Bug #2 fix: Bei gleicher Kontur nur Start↔End prüfen (Lücke an eigener Öffnung).
+                // Gleichartige Punkte (start↔start, end↔end) können nicht vorkommen (je 1 pro Kontur).
+                // Überlappung (d ≤ overlapTolerance) an eigenen Endpunkten ignorieren.
+                if (sameContour && endpoints[i].type === endpoints[j].type) continue;
                 const d = Math.hypot(
                     endpoints[i].point.x - endpoints[j].point.x,
                     endpoints[i].point.y - endpoints[j].point.y
@@ -419,8 +440,8 @@ class AnalyzeTool extends ModificationTool {
                         distance: d,
                         type: 'gap'
                     });
-                } else if (d <= overlapTolerance) {
-                    // Nahezu identische Endpunkte — Überlappung prüfen
+                } else if (d <= overlapTolerance && !sameContour) {
+                    // Nahezu identische Endpunkte verschiedener Konturen — Überlappung
                     overlaps.push({
                         x: endpoints[i].point.x,
                         y: endpoints[i].point.y,
@@ -475,13 +496,20 @@ class AnalyzeTool extends ModificationTool {
             renderer.render();
         }
 
-        // Undo: Markierungen hinzufügen/entfernen
+        // Undo: Markierungen hinzufügen/entfernen.
+        // Bug #3 fix: Vorherigen Analyze-Eintrag ersetzen statt aufstapeln.
         const undoMgr = this.manager.app?.undoManager;
         if (undoMgr) {
             const cmd = {
+                _isAnalyzeCmd: true,
                 execute() { if (renderer) { renderer._analyzeMarkers = unique; renderer.render(); } },
                 undo() { if (renderer) { renderer._analyzeMarkers = null; renderer.render(); } }
             };
+            // Vorherigen Analyze-Cmd vom Stack-Top entfernen (kein doppelter Eintrag)
+            if (undoMgr.undoStack.length > 0 &&
+                undoMgr.undoStack[undoMgr.undoStack.length - 1]._isAnalyzeCmd) {
+                undoMgr.undoStack.pop();
+            }
             undoMgr.undoStack.push(cmd);
             undoMgr.redoStack.length = 0;
             undoMgr._notifyStateChange();

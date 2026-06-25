@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.55
- * Version: V6.55
+ * CeraCUT Build Info V6.56
+ * Version: V6.56
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-splineclosedring
+ * Build: 20260625-analyzefix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.55',
-    build: '20260625-splineclosedring',
+    version: '6.56',
+    build: '20260625-analyzefix',
     date: '2026-06-25',
     time: '21:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'aad4bfb',
-        date: '2026-06-25 19:36:19 +0200',
-        message: 'fix: SplineTool — fitPoints.push(p0) revertiert (drawing-tools-ext V1.10)'
+        hash: 'c222594',
+        date: '2026-06-25 20:52:40 +0200',
+        message: 'fix: AnalyzeTool — 3 Bugs behoben (cam-tools V1.4, build V6.56)'
     },
 
     modules: {
@@ -50,7 +50,7 @@ const CERACUT_BUILD = {
         'machine-profiles':   { version: '1.1', build: '20260624-userlogin' },
         'bridge-cutting':     { version: '1.0', build: '20260309' },
         'quality-zones':      { version: '1.1', build: '20260315-bugfix35' },
-        'cam-tools':          { version: '1.3', build: '20260324-undofix' },
+        'cam-tools':          { version: '1.4', build: '20260625-analyzefix' },
         'advanced-tools':     { version: '1.7', build: '20260625-deletedcontourguard' },
         'arc-fitting':        { version: '3.1', build: '20260315-bugfix35' },
         'measure-tool':       { version: '1.2', build: '20260325-curvcheck' },
@@ -63,6 +63,18 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.56: Fix — AnalyzeTool 3 Bugs behoben (cam-tools.js V1.4): ' +
+        '(1) finish()-Blockade: ModificationTool.finish() brach bei leerer Selektion hart ab — ' +
+        'der Fallback "alle Konturen analysieren" war toter Code. Fix: finish() in AnalyzeTool ' +
+        'überschreiben, leere Selektion → _executeAnalyze() direkt aufrufen. ' +
+        '(2) Same-Contour-Blindheit: Lücke zwischen Start/End einer offenen Polylinie wurde ' +
+        'nicht erkannt weil der paarweise Vergleich bei gleicher Kontur komplett übersprang. ' +
+        'Fix: Skip nur bei gleichartigem Typ (start↔start, end↔end); start↔end derselben ' +
+        'Kontur wird jetzt als Lücke erkannt. Überlappungs-Marker auf gleiche Kontur ausgeschlossen. ' +
+        '(3) State-Leak + Undo-Stack-Müll: Alte Marker blieben beim Tool-Neustart sichtbar; ' +
+        'jede Analyse schrieb einen neuen Undo-Eintrag ohne den vorherigen zu ersetzen. ' +
+        'Fix: start() löscht _analyzeMarkers; _executeAnalyze() prüft ob top-of-stack _isAnalyzeCmd ' +
+        'und ersetzt ihn statt aufzustapeln.',
         'V6.55: Fix — SplineTool geschlossener Ringschluss (drawing-tools-ext.js V1.10): ' +
         'handleClick() und handleOption(S) pushten den Startpunkt nicht in fitPoints — ' +
         'die Kurve sah geschlossen aus, points[0] !== points[last] führte aber in der ' +
