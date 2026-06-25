@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.45
- * Version: V6.45
+ * CeraCUT Build Info V6.46
+ * Version: V6.46
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-normalizeoffset
+ * Build: 20260625-stalecacheguard
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.45',
-    build: '20260625-normalizeoffset',
+    version: '6.46',
+    build: '20260625-stalecacheguard',
     date: '2026-06-25',
-    time: '14:30 MEZ',
+    time: '15:10 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'efed975',
-        date: '2026-06-25 13:53:00 +0200',
-        message: 'fix: DXF-Import normalisiert jetzt auch Geometrie wenige Meter vom Ursprung — Export crashte AutoCAD'
+        hash: 'b52ce6c',
+        date: '2026-06-25 14:37:07 +0200',
+        message: 'fix: DXF-Export verwirft veralteten Spline/Circle-Cache statt falsche Position zu schreiben'
     },
 
     modules: {
@@ -37,7 +37,7 @@ const CERACUT_BUILD = {
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
-        'dxf-writer':         { version: '1.9', build: '20260624-orphanlayer' },
+        'dxf-writer':         { version: '1.10', build: '20260625-stalecacheguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
         'app':                { version: '6.24', build: '20260625-cornerleadslot' },
         'document-manager':   { version: '1.1', build: '20260623-camsetupgate' },
@@ -63,6 +63,18 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.46: Fix — _writeSpline()/_writeCircle() bevorzugten beim DXF-Export immer die ' +
+        'rohen Import-Cache-Felder (_splineData.controlPoints/fitPoints, _fitPoints, _center) ' +
+        'vor den aktuellen contour.points. Move/Rotate/Mirror/Scale (drawing-tools.js) ' +
+        'transformieren aber AUSSCHLIESSLICH contour.points — der Cache wird dabei nie ' +
+        'mitverschoben. Ein verschobenes importiertes Spline/Circle-Objekt wurde beim ' +
+        'naechsten DXF-Export also wieder an seiner URSPRUENGLICHEN Position geschrieben ' +
+        '(derselbe Bug-Typ wie V6.45, hier durch Tool-Transformationen statt fehlende Import-' +
+        'Normalisierung ausgeloest). Neue _isCacheStale()-Pruefung vergleicht die Bounding-' +
+        'Box-Zentren von .points und Cache-Rohdaten (Toleranz = eigene Kontur-Diagonale, ' +
+        'tolerant genug fuer normale Kontrollpolygon-Abweichung bei gekruemmten Splines) — ' +
+        'bei Drift faellt der Export auf eine Polyline aus den aktuellen .points zurueck ' +
+        '(dxf-writer V1.10).',
         'V6.45: Fix — Dateien mit Geometrie weit ausserhalb der Plattengroesse (Praxisfall: ' +
         'Quelle lag ~30m vom DXF-Ursprung entfernt, Plattengroesse nur 362x342mm) wurden nicht ' +
         'auto-normalisiert: NORMALIZATION_THRESHOLD griff erst bei absurd grossen Distanzen ' +

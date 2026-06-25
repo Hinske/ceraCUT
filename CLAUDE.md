@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-06-25
-> **Version:** V6.45
-> **Build:** 20260625-normalizeoffset
+> **Version:** V6.46
+> **Build:** 20260625-stalecacheguard
 
 ---
 
@@ -194,7 +194,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | Feld | Wert |
 |------|------|
 | Name | CeraCUT / CeraCUT |
-| Version | **V6.45** — Build 20260625-normalizeoffset (2026-06-25, 14:30 MEZ) |
+| Version | **V6.46** — Build 20260625-stalecacheguard (2026-06-25, 15:10 MEZ) |
 | Typ | Wasserstrahl-CAM Software |
 | Zweck | DXF → Sinumerik 840D CNC-Code für Wasserstrahlschneiden |
 | Firma | Cerasell GmbH |
@@ -226,7 +226,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Dynamic Input** | `dynamic-input.js` | **V1.1** | Koordinaten/Distanz/Winkel HUD am Cursor |
 | **Snap Manager** | `snap-manager.js` | **V1.4** | 9 Snap-Typen + Ortho (F8), Snap-Indikatoren |
 | **Layer Manager** | `layer-manager.js` | **V1.2** | AutoCAD-Style Layers, ACI-Farben, Sichtbarkeit, Lock, Drag-to-Reorder |
-| **DXF Writer** | `dxf-writer.js` | **V1.9** | DXF R12 (AC1009) Export, ANSI_1252 Encoding, Kreis-Validierung |
+| **DXF Writer** | `dxf-writer.js` | **V1.10** | DXF R12 (AC1009) Export, ANSI_1252 Encoding, Kreis-Validierung |
 | **SVG Parser** | `svg-parser.js` | — | SVG-Import |
 | **CNC Reader** | `cnc-reader.js` | — | CNC-Datei Import |
 | **Properties Panel** | `properties-panel.js` | **V1.5** | Kontur-Eigenschaften im Kontextmenu, Piercing, Lead-In, Area-Class, Batch-Editing, Hatch-Schraffur (Panel-Refresh-Fix), Live Preview, Material-Dropdown |
@@ -248,7 +248,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **User-Store** | `lib/user-store.js` | **V1.0** | Benutzerverwaltung (scrypt-Hashing), Bootstrap erster Admin via Env-Vars |
 | **Session-Store** | `lib/session-store.js` | **V1.0** | In-Memory Session-Map, Sliding Expiry |
 | **Auth-Helper** | `lib/auth.js` | **V1.0** | Cookie-Parsing, Session-Cookie-Helper, JSON-Body-Parsing |
-| **Build-Info** | `build-info.js` | **V6.45** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V6.46** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.10 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -283,7 +283,7 @@ ceraCUT/
 │   └── auth.js                        ← Cookie/Body-Parsing-Helper V1.0
 ├── data/                               ← users.json (gitignored — Passwort-Hashes)
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V6.45
+│   ├── build-info.js                  ← Versions-Banner V6.46
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
 │   ├── app.js                         ← Hauptanwendung V6.24 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.16 (Deque-Chaining, TEXT-Glyphs)
@@ -306,7 +306,7 @@ ceraCUT/
 │   ├── cam-tools.js                   ← CAM-Werkzeuge
 │   ├── tool-manager.js               ← Tool-Routing V2.2
 │   ├── layer-manager.js              ← Layer-System V1.2 (Drag-to-Reorder)
-│   ├── dxf-writer.js                 ← DXF R12 Export V1.9 (UTF-8, Kreis-Validierung)
+│   ├── dxf-writer.js                 ← DXF R12 Export V1.10 (UTF-8, Kreis-Validierung)
 │   ├── svg-parser.js                  ← SVG-Import
 │   ├── cnc-reader.js                  ← CNC-Import
 │   ├── properties-panel.js            ← Eigenschaften-Panel V1.5 (Kontextmenu-Modus)
@@ -536,7 +536,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   tool-manager: V2.2 (20260216-0015)
   layer-manager: V1.2 (20260324-undofix)
   text-tool: V1.2 (20260312-textimport)
-  dxf-writer: V1.9 (20260624-orphanlayer)
+  dxf-writer: V1.10 (20260625-stalecacheguard)
   lead-profiles: V1.4 (20260625-cornerleadslot)
   app: V6.24 (20260625-cornerleadslot)
   document-manager: V1.1 (20260623-camsetupgate)

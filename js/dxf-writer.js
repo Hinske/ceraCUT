@@ -1,5 +1,14 @@
 /**
- * CeraCUT DXF Writer V1.9
+ * CeraCUT DXF Writer V1.10
+ * V1.10: Cache-Staleness-Check vor SPLINE/CIRCLE-Export (_isCacheStale). _splineData/_fitPoints/
+ *        _center stammen vom Import und werden von Move/Rotate/Mirror/Scale (drawing-tools.js)
+ *        NIE mitverschoben — diese Tools transformieren ausschliesslich contour.points. Bisher
+ *        bevorzugte _writeSpline/_writeCircle diese Rohdaten IMMER vor .points, ein nachtraeglich
+ *        verschobenes Objekt (oder ein Import, dessen Normalisierung nur .points traf) wurde
+ *        also wieder an der ALTEN Position re-exportiert. Neue Pruefung vergleicht die
+ *        Bounding-Box-Zentren von .points und Rohdaten (Toleranz = eigene Diagonale der Kontur);
+ *        bei Drift faellt der Export auf Polyline aus den aktuellen .points zurueck statt eine
+ *        falsche Position zu schreiben (verlustbehaftet bei Spline-Form, aber korrekt positioniert).
  * V1.9: _writeLayerTable trägt jetzt jeden von einer Kontur referenzierten Layer-Namen
  *       (Code 8) automatisch nach, falls er nicht im LayerManager registriert ist.
  *       Ursache: Fallback-Layer 'DRAW' (drawing-tools.js/advanced-tools.js, z.B.
@@ -29,8 +38,8 @@
  * V1.4: AC1015 ohne Handles (crashte AutoCAD)
  *
  * Created: 2026-02-15 MEZ
- * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-orphanlayer
+ * Last Modified: 2026-06-25 MEZ
+ * Build: 20260625-stalecacheguard
  */
 
 class DXFWriter {
@@ -420,7 +429,7 @@ class DXFWriter {
         const layer = contour.layer || '0';
         let cx, cy, radius;
 
-        if (contour._center && contour._radius) {
+        if (contour._center && contour._radius && !this._isCacheStale(contour.points, [contour._center])) {
             cx = contour._center.x;
             cy = contour._center.y;
             radius = contour._radius;
@@ -454,6 +463,23 @@ class DXFWriter {
         const hasFP = (sd && sd.fitPoints && sd.fitPoints.length >= 2) || (fp && fp.length >= 2);
 
         if (!hasCP && !hasFP) {
+            this._writePolyline(contour, stats);
+            return;
+        }
+
+        // V1.10: Cache-Validierung — _splineData/_fitPoints stammen vom Import und werden von
+        // Move/Rotate/Mirror/Scale NIE mitverschoben (diese Tools transformieren nur contour.points).
+        // Driftet der Cache weit von der aktuellen Kontur weg (z.B. nach Verschieben, oder weil die
+        // Import-Normalisierung nur .points traf), wuerde der Re-Export die ALTE, falsche Position
+        // schreiben. Lieber verlustbehaftet aber korrekt: Fallback auf Polyline aus contour.points.
+        const cacheRawPoints = [
+            ...(hasCP ? sd.controlPoints : []),
+            ...(sd && sd.fitPoints ? sd.fitPoints : []),
+            ...(fp || [])
+        ];
+        if (this._isCacheStale(contour.points, cacheRawPoints)) {
+            console.warn('[DXF-Writer V1.10] SPLINE-Rohdaten stimmen nicht mit aktueller Kontur-Position ueberein (Cache veraltet) → Polyline-Fallback');
+            stats.splineStaleCacheFallbacks = (stats.splineStaleCacheFallbacks || 0) + 1;
             this._writePolyline(contour, stats);
             return;
         }
@@ -498,6 +524,32 @@ class DXFWriter {
     }
 
     // ═══ HELFER ═══
+
+    /**
+     * Prüft ob importierte Roh-Geometrie (Spline-Control-/Fit-Points, Kreis-Center) noch zur
+     * aktuellen contour.points-Position passt. Vergleicht die Zentren der jeweiligen Bounding-
+     * Boxen; Toleranz = eigene Diagonale der aktuellen Kontur (grosszuegig genug fuer normale
+     * Kontrollpolygon-Abweichung bei gekruemmten Splines, aber zu klein fuer einen Meter-Versatz).
+     */
+    _isCacheStale(points, rawPoints) {
+        if (!points || points.length === 0 || !rawPoints || rawPoints.length === 0) return true;
+        const pb = this._bbox(points);
+        const rb = this._bbox(rawPoints);
+        const pCenterX = (pb.minX + pb.maxX) / 2, pCenterY = (pb.minY + pb.maxY) / 2;
+        const rCenterX = (rb.minX + rb.maxX) / 2, rCenterY = (rb.minY + rb.maxY) / 2;
+        const diag = Math.hypot(pb.maxX - pb.minX, pb.maxY - pb.minY);
+        const tolerance = Math.max(5, diag);
+        return Math.hypot(pCenterX - rCenterX, pCenterY - rCenterY) > tolerance;
+    }
+
+    _bbox(points) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of points) {
+            if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
+            if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
+        }
+        return { minX, minY, maxX, maxY };
+    }
 
     _fitCircle(points) {
         if (!points || points.length < 3) return null;
