@@ -1,5 +1,11 @@
 /**
- * CeraCUT CamContour V5.14 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.15 - IGEMS-konformes Lead-In/Out System
+ * V5.15: Fix — Arc-Lead an echten Ecken (z.B. 90°-Aussenecken) erzeugte eine unnoetige
+ *        S-Schleife (Gerade+Bogen tangential nur zum Bisektor, nicht zur tatsaechlichen
+ *        Kante — der Tangentialitaets-Vorteil eines Arcs ist an einer Ecke ohnehin
+ *        hinfaellig). Degradier-Schwelle in getLeadInPath()/getLeadOutPath() von >120°
+ *        auf >60° gesenkt — normale Rechteckecken (90°) bekommen jetzt automatisch
+ *        Linear-Lead, sanfte Knicke (<60°, z.B. grob tessellierte Kurven) behalten Arc.
  * V5.14: Fix — Lead an Konturecken (v.a. konkave "Innenecken") konnte ins Werkstück
  *        schneiden: getLeadInPath()/getLeadOutPath() berechneten Tangente/Normale bisher
  *        NUR aus der auslaufenden Kante — an einer Ecke zeigt das teils auf die falsche
@@ -521,11 +527,17 @@ class CamContour {
             this.leadInLength = this._calcDynamicLeadLength(entry, tangent, normal, pts);
         }
 
-        // CORNER DETECTION: Nur an sehr scharfen Ecken (>120°) Arc zu Linear degradieren
-        // V5.3: Threshold von 90° auf 120° erhöht — Arc-Leads werden seltener degradiert
+        // CORNER DETECTION: Arc zu Linear degradieren ab echten Ecken (>60°, z.B. 90°-
+        // Rechteckecken). V6.39: Schwelle von 120° auf 60° gesenkt — ein Arc-Lead ist
+        // tangential zu einer Schnittrichtung konstruiert, an einer Ecke gibt es aber ZWEI
+        // Kantenrichtungen statt einer; der Bogen kann nur zum Bisektor tangential sein,
+        // nicht zur tatsaechlichen Kante. Der Tangentialitaets-Vorteil eines Arcs geht an
+        // der Ecke verloren (sichtbar als unnoetige S-Schleife), waehrend auf flachen/
+        // sanften Segmenten (<60° Knick, z.B. grob tessellierte Kurven) Arc weiterhin
+        // sinnvoll bleibt (V5.3-Verhalten dort unveraendert).
         const cornerAngle = this._isAtCorner(pts);
         let effectiveType = this.leadInType;
-        if (cornerAngle > 120 && effectiveType === 'arc') {
+        if (cornerAngle > 60 && effectiveType === 'arc') {
             effectiveType = 'linear';
         }
         // V5.14: An scharfen Ecken ist ein flacher/tangentialer Lead-Winkel unsicher (die
@@ -1031,10 +1043,11 @@ class CamContour {
             exitTangent = basis.tangent;
         }
 
-        // 3. CORNER DETECTION: Nur an sehr scharfen Ecken (>120°) Linear erzwingen
+        // 3. CORNER DETECTION: Arc zu Linear degradieren ab echten Ecken (>60°) — siehe
+        // getLeadInPath V6.39 fuer die Begruendung (Bisektor-Tangente statt Kantentangente).
         const cornerAngle = this._isAtCorner(pts);
         let effectiveType = this.leadOutType;
-        if (cornerAngle > 120 && effectiveType === 'arc') {
+        if (cornerAngle > 60 && effectiveType === 'arc') {
             effectiveType = 'linear';
         }
         // V5.14: siehe getLeadInPath — flacher Winkel an scharfen Ecken unsicher

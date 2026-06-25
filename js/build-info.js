@@ -1,30 +1,30 @@
 /**
- * CeraCUT Build Info V6.38
- * Version: V6.38
+ * CeraCUT Build Info V6.39
+ * Version: V6.39
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-arcleadsweepfix
+ * Build: 20260625-arcdegradethreshold
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.38',
-    build: '20260625-arcleadsweepfix',
+    version: '6.39',
+    build: '20260625-arcdegradethreshold',
     date: '2026-06-25',
-    time: '10:00 MEZ',
+    time: '10:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '6c63fa1',
-        date: '2026-06-25 07:19:28 +0200',
-        message: 'fix: Arc-Lead-Sweep in Vorschau invertiert (Vollkreis-Schleife an 90°-Ecken); Referenz-Topologie nach manuellem Wechsel neu berechnet'
+        hash: '70d6fe0',
+        date: '2026-06-25 07:35:26 +0200',
+        message: 'fix: Arc-Lead an echten Ecken (z.B. 90°-Aussenecken) auf Linear degradiert'
     },
 
     modules: {
         'dxf-parser':         { version: '3.15', build: '20260624-gapfix' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
-        'cam-contour':        { version: '5.14', build: '20260624-cornerleadfix' },
+        'cam-contour':        { version: '5.15', build: '20260625-arcdegradethreshold' },
         'canvas-renderer':    { version: '3.40', build: '20260625-arcleadsweepfix' },
         'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
         'sinumerik-pp':       { version: '1.8', build: '20260624-leadoverhaul' },
@@ -63,6 +63,14 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.39: Fix — Arc-Lead an echten Ecken (z.B. 90°-Aussenecken) erzeugte eine ' +
+        'unnoetige S-Schleife (Gerade+Bogen tangential nur zum Eck-Bisektor statt zur ' +
+        'tatsaechlichen Kante — der Tangentialitaets-Vorteil eines Arc-Leads ist an einer ' +
+        'Ecke ohnehin hinfaellig, da es dort zwei Kantenrichtungen statt einer gibt). Die ' +
+        'Arc→Linear-Degradierschwelle in getLeadInPath()/getLeadOutPath() wurde von >120° ' +
+        'auf >60° gesenkt — normale Rechteckecken (90°) bekommen jetzt automatisch ' +
+        'Linear-Lead, sanfte Knicke (<60°, z.B. grob tessellierte Kurven) behalten Arc ' +
+        '(cam-contour V5.15).',
         'V6.38: Fix — Arc-Leads an Konturecken (insb. 90°-Aussenecken) wurden in der Vorschau ' +
         'als fast vollstaendige Kreisschleife statt als kleiner 90°-Bogen gezeichnet. Ursache: ' +
         '_drawArcLead() (canvas-renderer.js) uebergab arcSweepCCW direkt als ctx.arc()s ' +
