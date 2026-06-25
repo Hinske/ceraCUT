@@ -19,6 +19,12 @@
 
 ## Eintraege
 
+### [2026-06-25] Animation-Loop auf Haupt-Canvas: O(n²) Trail-Rendering → UI-Freeze + Canvas-Abstürz
+- **Fehler:** `ToolpathSimulator.startAnimation()` zeichnete direkt auf den Haupt-Canvas (`#canvas`) und akkumulierte alle Trail-Punkte in einem Array. Jeder Frame zeichnete ALLE bisherigen Punkte neu → O(n²) Canvas-Operationen → Browser-Freeze nach wenigen Sekunden. Nach Ende: Canvas blank, kein Re-render, UI tot.
+- **Root Cause:** Drei Design-Fehler gleichzeitig: (1) Trail-Array unbegrenzt wachsend + O(n) Draw-Loop. (2) Kein Overlay — Haupt-Canvas übernommen. (3) Kein Restore-Callback.
+- **Regel:** Animations-Loop auf Canvas → IMMER Off-Screen-History-Canvas verwenden (inkrementelles Rendering). Jeder Frame: nur neuen Abschnitt auf History-Canvas malen, dann `ctx.drawImage(history, 0, 0)` → O(1) statt O(n). Animation immer auf Overlay-Canvas (position:absolute), nie auf Haupt-Canvas. onComplete muss Overlay entfernen und `renderer.render()` aufrufen.
+- **Betroffene Module:** `toolpath-simulator.js` (V1.1), `index.html` (Simulation-Button-Handler)
+
 ### [2026-06-25] Agent-Code-Inspektion: viele False Positives, 3 echte Bugs gefunden
 - **Fehler:** 3 Explore-Agenten meldeten 20+ Bugs, davon waren ~50% False Positives (Agent hat Code falsch gelesen, z.B. existierendes `return` übersehen, referenz-basiertes `indexOf` als Index-Shift-Bug eingestuft).
 - **Root Cause:** Agenten lesen Code-Fragmente ohne vollständigen Kontext; sie können benachbarte Zeilen übersehen und ziehen falsche Schlüsse. Jeder Befund muss direkt im Code verifiziert werden.

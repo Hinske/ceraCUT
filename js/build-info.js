@@ -1,17 +1,17 @@
 /**
- * CeraCUT Build Info V6.52
- * Version: V6.52
+ * CeraCUT Build Info V6.53
+ * Version: V6.53
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-gripselectfix
+ * Build: 20260625-simcrashfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.52',
-    build: '20260625-gripselectfix',
+    version: '6.53',
+    build: '20260625-simcrashfix',
     date: '2026-06-25',
-    time: '17:30 MEZ',
+    time: '18:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
@@ -45,7 +45,7 @@ const CERACUT_BUILD = {
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
         'debug-monitor':      { version: '1.1', build: '20260324-gitcommit' },
         'nesting':            { version: '1.1', build: '20260315-bugfix35' },
-        'toolpath-simulator': { version: '1.0', build: '20260309' },
+        'toolpath-simulator': { version: '1.1', build: '20260625-simcrashfix' },
         'cost-calculator':    { version: '1.2', build: '20260623-bugfixaudit' },
         'machine-profiles':   { version: '1.1', build: '20260624-userlogin' },
         'bridge-cutting':     { version: '1.0', build: '20260309' },
@@ -63,6 +63,18 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.53: Fix — Simulation Crash (toolpath-simulator.js V1.1): ' +
+        '(1) Trail-Rendering von O(n²) auf O(1) umgestellt: Trail-Array durch Off-Screen-' +
+        'History-Canvas ersetzt — jeder Frame zeichnet nur den neuen Abschnitt auf den ' +
+        'History-Canvas und compositet ihn per drawImage(). Verhindert UI-Freeze bei langen ' +
+        'Schneidpfaden. ' +
+        '(2) worldToCanvas-Formel korrigiert: stimmte nicht mit renderer.worldToScreen ueberein, ' +
+        'Pfad wurde falsch positioniert. Neue Formel: x=(wx*scale+offsetX)*dpr, y=(-wy*scale+offsetY)*dpr. ' +
+        '(3) Simulation benutzt jetzt Overlay-Canvas (Position:absolute ueber canvas-area) ' +
+        'statt des Haupt-Canvas — Haupt-UI bleibt erhalten, Stop-Button schließt Overlay. ' +
+        '(4) API-Aufruf gefixt: startAnimation(..., 5) uebergab Number statt Object als options, ' +
+        'speed-Parameter wurde ignoriert. ' +
+        '(5) onComplete-Callback stellt Haupt-Canvas wieder her (renderer.render()).',
         'V6.52: Fix — 3 Robustheitsfixes (agent-gestuetzte Code-Inspektion): ' +
         '(1) app.js V6.30: Startpunkt-Grip-Edit rief undoStack.push()+redoStack=[] ohne ' +
         '_notifyStateChange() — Undo/Redo-Buttons blieben nach Startpunkt-Verschiebung im ' +

@@ -1,5 +1,5 @@
 /**
- * CeraCUT Toolpath Simulator V1.0
+ * CeraCUT Toolpath Simulator V1.1
  * Simulation und Verifikation des Schneidpfads vor dem Export.
  *
  * Erkennt: Rapid-Moves durch Material, Lead-In/Out-Kollisionen,
@@ -8,16 +8,21 @@
  *
  * Animation-API: Schritt-für-Schritt-Visualisierung mit virtuellem Schneidkopf.
  *
- * Last Modified: 2026-03-09
- * Build: 20260309
- * Version: V1.0
+ * V1.1 (2026-06-25): Crash-Fix —
+ *   (1) Trail-Rendering von O(n²) auf O(1) umgestellt (Off-Screen-History-Canvas).
+ *   (2) worldToCanvas-Formel korrigiert (entspricht jetzt renderer.worldToScreen).
+ *   (3) options-Parameter war Number statt Object — wird jetzt defensiv gehandhabt.
+ *
+ * Last Modified: 2026-06-25
+ * Build: 20260625-simcrashfix
+ * Version: V1.1
  */
 
 const ToolpathSimulator = {
 
-    VERSION: '1.0',
-    BUILD: '20260309',
-    PREFIX: '[ToolpathSim V1.0]',
+    VERSION: '1.1',
+    BUILD: '20260625-simcrashfix',
+    PREFIX: '[ToolpathSim V1.1]',
 
     // ════════════════════════════════════════════════════════════════
     // KONFIGURATION
@@ -714,20 +719,22 @@ const ToolpathSimulator = {
     /**
      * Startet die Toolpath-Animation auf einem Canvas.
      *
-     * @param {HTMLCanvasElement} canvas - Ziel-Canvas
+     * @param {HTMLCanvasElement} canvas - Ziel-Canvas (Overlay, NICHT Haupt-Canvas)
      * @param {CamContour[]} contours - Konturen
      * @param {number[]} cutOrder - Schnittfolge
-     * @param {Object} options
-     * @param {number} [options.speed=1] - Geschwindigkeitsfaktor (1=Echtzeit, 10=10x)
-     * @param {Function} [options.onStep] - Callback pro Frame: ({ phase, contourIndex, progress, headPos, contourName })
+     * @param {Object} [options]
+     * @param {number} [options.speed=1] - Geschwindigkeitsfaktor
+     * @param {Function} [options.onStep] - Callback pro Frame
      * @param {Function} [options.onComplete] - Callback bei Fertigstellung: ({ totalTime })
-     * @param {Function} [options.renderBase] - Funktion zum Zeichnen des Hintergrunds (canvas, ctx)
-     * @param {Object} [options.transform] - { offsetX, offsetY, scale } für Welt→Canvas Mapping
-     * @param {Object} [options.colors] - { rapid, cutting, leadIn, leadOut, head, trail }
-     * @returns {{ stop: Function, pause: Function, resume: Function, setSpeed: Function }}
+     * @param {Object} [options.transform] - { offsetX, offsetY, scale, dpr } Welt→Canvas
+     * @param {Object} [options.colors] - { rapid, cutting, leadIn, leadOut, head }
+     * @param {Object} [options.nullPoint] - { x, y } Startposition des Schneidkopfs
+     * @returns {{ stop, pause, resume, setSpeed }}
      */
     startAnimation(canvas, contours, cutOrder, options = {}) {
-        // Vorherige Animation stoppen
+        // Defensiv: falls options versehentlich eine Number ist (alter Bug: startAnimation(..., 5))
+        if (typeof options !== 'object' || options === null) options = {};
+
         this.stopAnimation();
 
         const ctx = canvas.getContext('2d');
@@ -736,22 +743,27 @@ const ToolpathSimulator = {
         const onComplete = options.onComplete || null;
 
         const colors = Object.assign({
-            rapid:    '#888888',
-            cutting:  '#00aaff',
-            leadIn:   '#00ff00',
-            leadOut:  '#ff00ff',
-            overcut:  '#00ffff',
-            head:     '#ff0000',
-            trail:    'rgba(255, 255, 255, 0.6)'
+            rapid:   '#888888',
+            cutting: '#00aaff',
+            leadIn:  '#00ff00',
+            leadOut: '#ff00ff',
+            overcut: '#00ffff',
+            head:    '#ff0000'
         }, options.colors || {});
 
         const transform = Object.assign({
             offsetX: 0,
             offsetY: 0,
-            scale: 1
+            scale: 1,
+            dpr: 1
         }, options.transform || {});
 
-        // Toolpath als sequentielle Segmentliste aufbauen
+        // Off-Screen-History-Canvas: Trail wird inkrementell akkumuliert (O(1) pro Frame)
+        const histCanvas = document.createElement('canvas');
+        histCanvas.width = canvas.width;
+        histCanvas.height = canvas.height;
+        const histCtx = histCanvas.getContext('2d');
+
         const segments = this._buildAnimationSegments(contours, cutOrder, options.nullPoint);
 
         if (segments.length === 0) {
@@ -769,25 +781,37 @@ const ToolpathSimulator = {
             segmentIndex: 0,
             segmentProgress: 0,
             startTime: performance.now(),
-            trail: [], // Gezeichnete Punkte + Farben
+            lastPt: null,
             rafId: null
         };
 
         this._animation = anim;
 
-        const worldToCanvas = (p) => ({
-            x: (p.x + transform.offsetX) * transform.scale,
-            y: canvas.height - (p.y + transform.offsetY) * transform.scale
+        // Welt → physische Canvas-Pixel (entspricht renderer.worldToScreen * dpr)
+        const w2c = (p) => ({
+            x: (p.x * transform.scale + transform.offsetX) * transform.dpr,
+            y: (-p.y * transform.scale + transform.offsetY) * transform.dpr
         });
 
-        const drawFrame = (timestamp) => {
+        // Segment inkrementell auf History-Canvas malen
+        const paintLine = (from, to, phase) => {
+            const f = w2c(from);
+            const t = w2c(to);
+            histCtx.beginPath();
+            histCtx.strokeStyle = colors[phase] || colors.cutting;
+            histCtx.lineWidth = (phase === 'rapid' ? 0.5 : 1.5) * transform.dpr;
+            histCtx.moveTo(f.x, f.y);
+            histCtx.lineTo(t.x, t.y);
+            histCtx.stroke();
+        };
+
+        const drawFrame = () => {
             if (!anim.running) return;
             if (anim.paused) {
                 anim.rafId = requestAnimationFrame(drawFrame);
                 return;
             }
 
-            const dt = (1000 / 60) * anim.speed; // ms pro Frame bei 60fps * speed
             const seg = segments[anim.segmentIndex];
             if (!seg) {
                 anim.running = false;
@@ -795,77 +819,58 @@ const ToolpathSimulator = {
                 return;
             }
 
-            // Fortschritt innerhalb des Segments
+            const dt = (1000 / 60) * anim.speed;
             const segLength = seg.length || 1;
-            const stepMM = (dt / 1000) * (seg.speed / 60); // mm pro Frame
+            const stepMM = (dt / 1000) * (seg.speed / 60);
             anim.segmentProgress += stepMM / segLength;
 
+            let currentPt;
             if (anim.segmentProgress >= 1) {
-                // Segment abgeschlossen — Trail vervollständigen
-                for (let t = 0; t <= 1; t += 0.02) {
-                    const p = this._interpolateSegment(seg, t);
-                    anim.trail.push({ p, color: colors[seg.phase] || colors.cutting });
-                }
+                currentPt = seg.points[seg.points.length - 1];
+                if (anim.lastPt) paintLine(anim.lastPt, currentPt, seg.phase);
                 anim.segmentIndex++;
                 anim.segmentProgress = 0;
             } else {
-                // Aktuellen Punkt zum Trail hinzufügen
-                const p = this._interpolateSegment(seg, anim.segmentProgress);
-                anim.trail.push({ p, color: colors[seg.phase] || colors.cutting });
+                currentPt = this._interpolateSegment(seg, anim.segmentProgress);
+                if (anim.lastPt) paintLine(anim.lastPt, currentPt, seg.phase);
             }
+            anim.lastPt = { x: currentPt.x, y: currentPt.y };
 
-            // Zeichnen
-            if (options.renderBase) {
-                options.renderBase(canvas, ctx);
-            } else {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
+            // Frame: History (O(1)) + Schneidkopf
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(histCanvas, 0, 0);
 
-            // Trail zeichnen
-            for (let i = 1; i < anim.trail.length; i++) {
-                const prev = worldToCanvas(anim.trail[i - 1].p);
-                const curr = worldToCanvas(anim.trail[i].p);
-                ctx.beginPath();
-                ctx.strokeStyle = anim.trail[i].color;
-                ctx.lineWidth = seg.phase === 'rapid' ? 0.5 : 1.5;
-                ctx.moveTo(prev.x, prev.y);
-                ctx.lineTo(curr.x, curr.y);
-                ctx.stroke();
-            }
-
-            // Schneidkopf zeichnen
-            const headPt = anim.trail.length > 0
-                ? anim.trail[anim.trail.length - 1].p
-                : (segments[0]?.points?.[0] || { x: 0, y: 0 });
-            const headCanvas = worldToCanvas(headPt);
-
+            const head = w2c(currentPt);
+            const r = 5 * transform.dpr;
             ctx.beginPath();
-            ctx.arc(headCanvas.x, headCanvas.y, 5, 0, Math.PI * 2);
+            ctx.arc(head.x, head.y, r, 0, Math.PI * 2);
             ctx.fillStyle = colors.head;
             ctx.fill();
 
-            // Crosshair
             ctx.beginPath();
             ctx.strokeStyle = colors.head;
-            ctx.lineWidth = 1;
-            ctx.moveTo(headCanvas.x - 10, headCanvas.y);
-            ctx.lineTo(headCanvas.x + 10, headCanvas.y);
-            ctx.moveTo(headCanvas.x, headCanvas.y - 10);
-            ctx.lineTo(headCanvas.x, headCanvas.y + 10);
+            ctx.lineWidth = transform.dpr;
+            ctx.moveTo(head.x - r * 2, head.y);
+            ctx.lineTo(head.x + r * 2, head.y);
+            ctx.moveTo(head.x, head.y - r * 2);
+            ctx.lineTo(head.x, head.y + r * 2);
             ctx.stroke();
 
-            // Callback
-            const currentSeg = segments[anim.segmentIndex];
+            const nextSeg = segments[anim.segmentIndex];
             onStep?.({
-                phase: currentSeg?.phase || 'complete',
-                contourIndex: currentSeg?.contourIndex ?? -1,
-                contourName: currentSeg?.contourName || '',
+                phase: nextSeg?.phase || 'complete',
+                contourIndex: nextSeg?.contourIndex ?? -1,
+                contourName: nextSeg?.contourName || '',
                 progress: anim.segmentIndex / segments.length,
-                headPos: headPt
+                headPos: currentPt
             });
 
             anim.rafId = requestAnimationFrame(drawFrame);
         };
+
+        // Startpunkt merken
+        const firstPt = segments[0]?.points?.[0] || { x: 0, y: 0 };
+        anim.lastPt = { x: firstPt.x, y: firstPt.y };
 
         anim.rafId = requestAnimationFrame(drawFrame);
 
@@ -1310,4 +1315,4 @@ const ToolpathSimulator = {
 };
 
 // Modul-Registrierung
-console.debug('[ToolpathSim V1.0] Loaded — Build 20260309');
+console.debug('[ToolpathSim V1.1] Loaded — Build 20260625-simcrashfix');
