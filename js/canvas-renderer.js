@@ -1,7 +1,14 @@
 /**
- * CeraCUT V3.39 - Canvas Renderer
+ * CeraCUT V3.40 - Canvas Renderer
  * Features: Selection, Lead-In/Out, Overcut, Micro-Joints, Travel Paths, Order Numbers,
  *           Startpunkt-Drag im Anschuss-Modus, SLIT Support
+ * V3.40: Fix — _drawArcLead() übergab arcSweepCCW ungeflippt an ctx.arc()'s
+ *        anticlockwise-Parameter. ctx.arc() sweept bei anticlockwise=false mit
+ *        STEIGENDEM Winkel, unser arcSweepCCW=true meint aber genau das (Welt-CCW =
+ *        steigender Winkel) — die beiden Konventionen sind invertiert zueinander
+ *        (sinumerik-postprocessor.js wusste das bereits: "clockwise = !arcSweepCCW").
+ *        Sichtbarer Effekt: Arc-Leads an 90°-Aussenecken wurden als 270°-Major-Arc
+ *        (fast Vollkreis-Schleife) statt als 90°-Minor-Arc gezeichnet. Fix: !arcSweepCCW.
  * V3.39: _getLeadColor() kennt jetzt isFallbackCenterExit (neues Lead-Out-Fallback-Flag
  *        aus cam-contour.js V5.12) — sonst falsche Farbe statt Fallback-Kennzeichnung
  * V3.38: Theme-Key pro User (_userKey(), Login/User-Management V6.32)
@@ -1467,8 +1474,11 @@ class CanvasRenderer {
         const eAngle = (arcEndAngle !== undefined) ? arcEndAngle
             : Math.atan2(points[points.length - 1].y - arcCenter.y, points[points.length - 1].x - arcCenter.x);
 
+        // V3.40 Fix: canvas arc() "anticlockwise" sweept bei steigendem Winkel auf FALSE,
+        // unser arcSweepCCW meint aber "Welt-CCW = steigender Winkel" — ungeflippt wurde
+        // der 270°-Major-Arc statt des 90°-Minor-Arc gezeichnet (Vollkreis-Schleife am Eck).
         ctx.beginPath();
-        ctx.arc(arcCenter.x, arcCenter.y, arcRadius, sAngle, eAngle, arcSweepCCW);
+        ctx.arc(arcCenter.x, arcCenter.y, arcRadius, sAngle, eAngle, !arcSweepCCW);
         ctx.stroke();
     }
 

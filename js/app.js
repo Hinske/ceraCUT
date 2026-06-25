@@ -1,5 +1,9 @@
 /**
- * CeraCUT V6.21 - Main Application
+ * CeraCUT V6.22 - Main Application
+ * V6.22: Fix — toggleReference()/autoDetectReference() triggern jetzt
+ *        _recalcTopologyAfterReferenceChange() (ruft CeraCutPipeline._analyzeTopology()
+ *        erneut auf), statt nur isReference zu setzen. Vorher blieb die Inselerkennung
+ *        (disc/hole) nach manuellem Referenz-Wechsel auf dem alten Stand.
  * V6.21: Feat — lastCreatedContour-Tracking in addDrawnEntities() für ModificationTool
  *        "L" (Last) Selektionsoption (CAD-Improvements Abschnitt 7).
  * V6.20: Feat — Login/User-Management: currentUser-Feld (aus window.CeraCutCurrentUser,
@@ -1310,12 +1314,26 @@ class CeraCutApp {
         const newVal = !contour.isReference;
         const cmd = new PropertyChangeCommand(contour, 'isReference', newVal, () => {
             if (contour.isReference) this.setOriginToReferenceUL();
-            this.renderer?.render();
-            this.updateContourPanel();
-            this.updateStepUI();
+            this._recalcTopologyAfterReferenceChange();
         });
         this.undoManager.execute(cmd);
         this.showToast(newVal ? '🟨 Referenz gesetzt (STRG+Z = Rückgängig)' : 'Referenz aufgehoben', 'success');
+    }
+
+    /**
+     * V6.22: Nesting-Level (disc/hole) neu berechnen, nachdem die Referenz manuell
+     * gesetzt/gewechselt wurde. Die Referenz ist "transparent" fuer die Topologie —
+     * Konturen darin/dahinter muessen neu als disc/hole klassifiziert werden,
+     * sonst bleiben Kerf-Offset-Richtung und Lead-Routing inkonsistent.
+     */
+    _recalcTopologyAfterReferenceChange() {
+        if (typeof CeraCutPipeline !== 'undefined') {
+            CeraCutPipeline._analyzeTopology(this.contours, { skipReference: true });
+        }
+        this.renderer?.render();
+        this.updateContourPanel();
+        this.rebuildCutOrder?.();
+        this.updateStepUI();
     }
     
     // ════════════════════════════════════════════════════════════════
@@ -3354,8 +3372,8 @@ class CeraCutApp {
                 const app = this;
                 const cmd = new FunctionCommand(
                     'Referenz zurückgesetzt (keine geschlossenen Konturen)',
-                    () => { app.contours.forEach(c => { c.isReference = false; }); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); },
-                    () => { oldRefs.forEach(c => { c.isReference = true; }); app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); }
+                    () => { app.contours.forEach(c => { c.isReference = false; }); app._recalcTopologyAfterReferenceChange(); },
+                    () => { oldRefs.forEach(c => { c.isReference = true; }); app.setOriginToReferenceUL(); app._recalcTopologyAfterReferenceChange(); }
                 );
                 this.undoManager.undoStack.push(cmd);
                 this.undoManager.redoStack.length = 0;
@@ -3393,17 +3411,16 @@ class CeraCutApp {
             const app = this;
             const cmd = new FunctionCommand(
                 `Auto-Referenz: ${referenceContour.layer || 'größte Fläche'}`,
-                () => { app.contours.forEach(c => { c.isReference = false; }); newRef.isReference = true; app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); },
-                () => { app.contours.forEach(c => { c.isReference = false; }); oldRefs.forEach(c => { c.isReference = true; }); if (oldRefs.length > 0) app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); }
+                () => { app.contours.forEach(c => { c.isReference = false; }); newRef.isReference = true; app.setOriginToReferenceUL(); app._recalcTopologyAfterReferenceChange(); },
+                () => { app.contours.forEach(c => { c.isReference = false; }); oldRefs.forEach(c => { c.isReference = true; }); if (oldRefs.length > 0) app.setOriginToReferenceUL(); app._recalcTopologyAfterReferenceChange(); }
             );
             this.undoManager.undoStack.push(cmd);
             this.undoManager.redoStack.length = 0;
             this.undoManager._notifyStateChange();
-            
+
             const info = referenceContour.layer || 'größte geschlossene Fläche';
             this.showToast(`Referenz: ${info} (STRG+Z = Rückgängig)`, 'success');
-            this.renderer?.render();
-            this.updateContourPanel();
+            this._recalcTopologyAfterReferenceChange();
         } else {
             this.showToast('Keine passende Referenz gefunden', 'warning');
         }

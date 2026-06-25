@@ -1,31 +1,31 @@
 /**
- * CeraCUT Build Info V6.36
- * Version: V6.36
- * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-cornerleadfix
+ * CeraCUT Build Info V6.38
+ * Version: V6.38
+ * Last Modified: 2026-06-25 MEZ
+ * Build: 20260625-arcleadsweepfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.36',
-    build: '20260624-cornerleadfix',
-    date: '2026-06-24',
-    time: '21:50 MEZ',
+    version: '6.38',
+    build: '20260625-arcleadsweepfix',
+    date: '2026-06-25',
+    time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'eee1f95',
-        date: '2026-06-24 19:21:17 +0200',
-        message: 'fix: Lead an Konturecken konnte ins Werkstück schneiden; Startpunkt nur auf Ecken verschiebbar'
+        hash: '6c63fa1',
+        date: '2026-06-25 07:19:28 +0200',
+        message: 'fix: Arc-Lead-Sweep in Vorschau invertiert (Vollkreis-Schleife an 90°-Ecken); Referenz-Topologie nach manuellem Wechsel neu berechnet'
     },
 
     modules: {
         'dxf-parser':         { version: '3.15', build: '20260624-gapfix' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
-        'pipeline':           { version: '3.8', build: '20260624-gapfix' },
+        'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
         'cam-contour':        { version: '5.14', build: '20260624-cornerleadfix' },
-        'canvas-renderer':    { version: '3.39', build: '20260624-leadoverhaul' },
+        'canvas-renderer':    { version: '3.40', build: '20260625-arcleadsweepfix' },
         'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
         'sinumerik-pp':       { version: '1.8', build: '20260624-leadoverhaul' },
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.9', build: '20260624-orphanlayer' },
         'lead-profiles':      { version: '1.3', build: '20260624-leadoverhaul' },
-        'app':                { version: '6.21', build: '20260624-cadimprovements7' },
+        'app':                { version: '6.22', build: '20260624-referencerefresh' },
         'document-manager':   { version: '1.1', build: '20260623-camsetupgate' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
@@ -63,6 +63,23 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.38: Fix — Arc-Leads an Konturecken (insb. 90°-Aussenecken) wurden in der Vorschau ' +
+        'als fast vollstaendige Kreisschleife statt als kleiner 90°-Bogen gezeichnet. Ursache: ' +
+        '_drawArcLead() (canvas-renderer.js) uebergab arcSweepCCW direkt als ctx.arc()s ' +
+        'anticlockwise-Parameter — die beiden Konventionen sind aber invertiert zueinander ' +
+        '(anticlockwise=false sweept bei steigendem Winkel, was unser arcSweepCCW=true meint). ' +
+        'sinumerik-postprocessor.js hatte das bereits korrekt beruecksichtigt ("clockwise = ' +
+        '!arcSweepCCW"), der Renderer nicht. Reine Darstellungs-Korrektur — Lead-Geometrie ' +
+        '(Punkte, G-Code) war bereits korrekt, nur die Canvas-Vorschau zeigte den falschen ' +
+        'Bogen-Sweep (canvas-renderer V3.40).',
+        'V6.37: Fix — Inselerkennung (disc/hole) wurde nach manuellem Referenz-Setzen/-Wechseln ' +
+        '(toggleReference, autoDetectReference in app.js) nicht neu berechnet. Konturen behielten ' +
+        'die Nesting-Klassifikation von vor dem Referenz-Wechsel, was zu falscher Kerf-Offset-' +
+        'Richtung fuehren konnte. _analyzeTopology() (ceracut-pipeline.js) behandelt die Referenz ' +
+        'jetzt immer als "transparent" beim Nesting-Level-Zaehlen (statt nur ueber die inzwischen ' +
+        'inaktive _detectReference()-Korrektur), und neue _recalcTopologyAfterReferenceChange() ' +
+        '(app.js) triggert die Neuberechnung automatisch nach jedem Referenz-Wechsel inkl. ' +
+        'Lead-Cache-Invalidierung bei cuttingMode-Aenderung.',
         'V6.36: Fix — Lead an Konturecken (insb. konkave "Innenecken") schnitt teils ins ' +
         'Werkstück: getLeadInPath()/getLeadOutPath() leiteten Tangente/Normale bisher nur aus ' +
         'der auslaufenden Kante ab. Neue _getCornerSafeLeadBasis() (cam-contour.js) bildet den ' +

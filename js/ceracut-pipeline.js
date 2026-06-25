@@ -1,8 +1,14 @@
 /**
- * CeraCUT V3.8 - Processing Pipeline
+ * CeraCUT V3.9 - Processing Pipeline
  * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-gapfix
+ * Build: 20260624-referencerefresh
  *
+ * V3.9: Fix — _analyzeTopology() behandelt die Referenz jetzt IMMER als "transparent"
+ *       (egal ob skipReference gesetzt ist), und Lead-Caches werden bei cuttingMode-
+ *       Wechsel invalidiert. Manuelles Referenz-Setzen/-Wechseln (toggleReference,
+ *       autoDetectReference in app.js) triggert jetzt automatisch eine Neuberechnung
+ *       der Inselerkennung (disc/hole) — vorher blieben Konturen nach Referenz-Wechsel
+ *       mit veralteter Nesting-Klassifikation zurueck.
  * V3.8: Fix — _classifyGaps() nutzt jetzt c.entitySeams (echte Naht-Distanzen aus
  *       DXFParser.chainContours()) statt MicroHealing.findInternalGaps(c.points). Der alte
  *       blinde Punktlisten-Scan markierte faelschlich grobe Arc-Tessellierung und kurze
@@ -252,20 +258,33 @@ const CeraCutPipeline = {
 
         for (let i = 0; i < sorted.length; i++) {
             const contour = sorted[i];
+            const prevCuttingMode = contour.cuttingMode;
             let nestingLevel = 0;
             const testPoint = Geometry.interiorPoint(contour.points);
 
+            // V3.9: Referenz ist "transparent" — zaehlt nicht zum Nesting-Level
+            // anderer Konturen, egal ob auto- oder manuell gesetzt (skipReference).
             for (let j = 0; j < i; j++) {
+                if (sorted[j].isReference) continue;
                 if (this._pointInPolygon(testPoint, sorted[j].points)) {
                     nestingLevel++;
                 }
             }
 
             contour.nestingLevel = nestingLevel;
-            contour.type = nestingLevel % 2 === 0 ? 'OUTER' : 'INNER';
-            contour.cuttingMode = nestingLevel % 2 === 0 ? 'disc' : 'hole';
+            if (contour.isReference) {
+                contour.type = 'OUTER';
+                contour.cuttingMode = 'reference';
+            } else {
+                contour.type = nestingLevel % 2 === 0 ? 'OUTER' : 'INNER';
+                contour.cuttingMode = nestingLevel % 2 === 0 ? 'disc' : 'hole';
+            }
 
-            if (contour.cuttingMode === 'disc') discCount++; else holeCount++;
+            if (contour.cuttingMode !== prevCuttingMode && typeof ModificationTool !== 'undefined') {
+                ModificationTool.invalidateCache(contour);
+            }
+
+            if (contour.cuttingMode === 'disc') discCount++; else if (contour.cuttingMode === 'hole') holeCount++;
         }
 
         // V2.9: Referenz-Erkennung - NUR bei Rechteck!
