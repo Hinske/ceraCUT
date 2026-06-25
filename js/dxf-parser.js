@@ -1,8 +1,18 @@
 /**
- * CeraCUT DXF Parser V3.15
- * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-gapfix
+ * CeraCUT DXF Parser V3.16
+ * Last Modified: 2026-06-25 MEZ
+ * Build: 20260625-normalizeoffset
  *
+ * V3.16: Fix — Dateien mit Geometrie weit ausserhalb der Plattengroesse (z.B. Quelle lag
+ *        ~30m vom Ursprung entfernt, Plattengroesse 362x342mm) blieben unnormalisiert:
+ *        NORMALIZATION_THRESHOLD (1.000.000) griff erst bei absurd grossen Distanzen statt
+ *        bei jeder fuer ein Werkstueck unplausiblen Verschiebung. Auf 10.000 gesenkt.
+ *        Zusaetzlich verschob _autoNormalizeEntities() bislang nur entity.points — die
+ *        Rohdaten fuer Re-Export (_splineData.controlPoints/fitPoints, _fitPoints, _center)
+ *        blieben am alten Offset, wodurch dxf-writer.js beim Re-Export (SPLINE/CIRCLE
+ *        bevorzugen Rohdaten vor .points) die urspruengliche, falsche Position zurueckschrieb.
+ *        Symptom: Export crashte AutoCAD, WariCAM zeigte nur verstreute Bruchstuecke,
+ *        CNC-Code enthielt Verfahrwege ueber 29 Meter (Irlich_Test.dxf).
  * V3.15: Fix — Falsch-positive Gap-Marker (orange) bei grob tessellierten Bögen/kurzen Linien.
  *        chainContours() zeichnet jetzt beim Verketten die tatsaechlichen Naht-Distanzen
  *        zwischen verschiedenen Source-Entities auf (entitySeams[]), statt dass die Gap-
@@ -110,7 +120,7 @@ const DXFParser = {
         LEAD_TAB_MAX_LENGTH: 5.0  // V3.13: max. Laenge einer freihaengenden Anschussfahnen-Stub (mm)
     },
 
-    NORMALIZATION_THRESHOLD: 1000000,
+    NORMALIZATION_THRESHOLD: 10000,
     CIRCLE_SEGMENTS: 32,
     ARC_SEGMENTS: 16,
     
@@ -1539,9 +1549,30 @@ const DXFParser = {
             return { entities, normalized: false, offsetX: 0, offsetY: 0 };
         }
         const offsetX = minX, offsetY = minY;
-        const normalizedEntities = entities.map(entity => ({
-            ...entity, points: entity.points ? entity.points.map(p => ({ x: this._snap(p.x - offsetX), y: this._snap(p.y - offsetY) })) : entity.points
-        }));
+        const shiftPt = p => ({ ...p, x: this._snap(p.x - offsetX), y: this._snap(p.y - offsetY) });
+        const normalizedEntities = entities.map(entity => {
+            const normalized = {
+                ...entity,
+                points: entity.points ? entity.points.map(shiftPt) : entity.points
+            };
+            // V3.16: Rohdaten fuer Re-Export (SPLINE/CIRCLE) muessen denselben Offset
+            // erhalten wie .points — sonst schreibt dxf-writer.js die Originalposition
+            // zurueck (bevorzugt _splineData/_center vor .points beim Export).
+            if (entity._splineData) {
+                normalized._splineData = {
+                    ...entity._splineData,
+                    controlPoints: entity._splineData.controlPoints ? entity._splineData.controlPoints.map(shiftPt) : entity._splineData.controlPoints,
+                    fitPoints: entity._splineData.fitPoints ? entity._splineData.fitPoints.map(shiftPt) : entity._splineData.fitPoints
+                };
+            }
+            if (entity._fitPoints) {
+                normalized._fitPoints = entity._fitPoints.map(shiftPt);
+            }
+            if (entity._center) {
+                normalized._center = shiftPt(entity._center);
+            }
+            return normalized;
+        });
         return { entities: normalizedEntities, normalized: true, offsetX, offsetY };
     },
 

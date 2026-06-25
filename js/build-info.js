@@ -1,27 +1,27 @@
 /**
- * CeraCUT Build Info V6.44
- * Version: V6.44
+ * CeraCUT Build Info V6.45
+ * Version: V6.45
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-cornerleadslot
+ * Build: 20260625-normalizeoffset
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.44',
-    build: '20260625-cornerleadslot',
+    version: '6.45',
+    build: '20260625-normalizeoffset',
     date: '2026-06-25',
-    time: '13:00 MEZ',
+    time: '14:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'cdc3e67',
-        date: '2026-06-25 09:55:50 +0200',
-        message: 'refactor: Eigene Corner-Lead-Kategorie statt verstreuter Magic-Number-Overrides'
+        hash: 'efed975',
+        date: '2026-06-25 13:53:00 +0200',
+        message: 'fix: DXF-Import normalisiert jetzt auch Geometrie wenige Meter vom Ursprung — Export crashte AutoCAD'
     },
 
     modules: {
-        'dxf-parser':         { version: '3.15', build: '20260624-gapfix' },
+        'dxf-parser':         { version: '3.16', build: '20260625-normalizeoffset' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
         'cam-contour':        { version: '5.19', build: '20260625-cornerleadslot' },
@@ -63,6 +63,16 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.45: Fix — Dateien mit Geometrie weit ausserhalb der Plattengroesse (Praxisfall: ' +
+        'Quelle lag ~30m vom DXF-Ursprung entfernt, Plattengroesse nur 362x342mm) wurden nicht ' +
+        'auto-normalisiert: NORMALIZATION_THRESHOLD griff erst bei absurd grossen Distanzen ' +
+        '(1.000.000) statt bei jeder fuer ein Werkstueck unplausiblen Verschiebung — auf 10.000 ' +
+        'gesenkt. Zusaetzlich verschob _autoNormalizeEntities() bislang nur entity.points, nicht ' +
+        'aber die Rohdaten fuer Re-Export (_splineData.controlPoints/fitPoints, _fitPoints, ' +
+        '_center) — dxf-writer.js bevorzugt bei SPLINE/CIRCLE diese Rohdaten vor .points und ' +
+        'schrieb dadurch beim Re-Export die urspruengliche, falsche Position zurueck. Symptom: ' +
+        'DXF-Export crashte AutoCAD, WariCAM zeigte nur verstreute Bruchstuecke, generierter ' +
+        'CNC-Code enthielt Verfahrwege von ueber 29 Metern (dxf-parser V3.16).',
         'V6.44: Refactor — Eigene Corner-Lead-Kategorie statt verstreuter Magic-Number-' +
         'Overrides: Vergleich mit dem IGEMS-Industriestandard (Kap. 10.13.2) zeigte, dass ' +
         'dort External/Internal/Corner/Alternative vier unabhängige Lead-Slots sind — bei ' +
