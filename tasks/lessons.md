@@ -19,6 +19,25 @@
 
 ## Eintraege
 
+### [2026-06-25] Agent-Code-Inspektion: viele False Positives, 3 echte Bugs gefunden
+- **Fehler:** 3 Explore-Agenten meldeten 20+ Bugs, davon waren ~50% False Positives (Agent hat Code falsch gelesen, z.B. existierendes `return` übersehen, referenz-basiertes `indexOf` als Index-Shift-Bug eingestuft).
+- **Root Cause:** Agenten lesen Code-Fragmente ohne vollständigen Kontext; sie können benachbarte Zeilen übersehen und ziehen falsche Schlüsse. Jeder Befund muss direkt im Code verifiziert werden.
+- **Regel:** Nach jeder Agent-Code-Inspektion: ALLE gemeldeten Bugs mit Read-Tool im Original-Code verifizieren, bevor irgendetwas gefixt wird. "Agent sagt Bug" ≠ Bug. False-Positive-Rate war hier ~50%.
+- **Echte Bugs die gefunden wurden:** (1) `_notifyStateChange()` fehlte nach Startpunkt-undoStack.push(). (2) `invalidateGrips()` in 5 Selektionspfaden fehlend. (3) `isSetupComplete()` blockierte Einzelteil-Workflow durch Referenz-Pflicht.
+- **Betroffene Module:** `app.js` (V6.30)
+
+### [2026-06-25] invalidateGrips() muss bei JEDER isSelected-Änderung aufgerufen werden
+- **Fehler:** `_drawGrips()` prüft `_hasSelection` (gesetzt von `invalidateGrips()`). Wenn `isSelected` geändert wird ohne `invalidateGrips()`, bleibt `_hasSelection=false` → keine Grips sichtbar trotz Selektion.
+- **Root Cause:** `invalidateGrips()` war nur in 4 von 9+ Selektionspfaden vorhanden. Neue Pfade (Cut-Order-Panel, Konturen-Panel, ESC, STRG+A) wurden beim Schreiben nicht an `invalidateGrips()` gekoppelt.
+- **Regel:** Überall wo `c.isSelected = ...` gesetzt wird, MUSS danach `this.renderer?.invalidateGrips?.()` folgen — vor `render()`. Vor jedem neuen Selektionspfad checken: "Rufe ich invalidateGrips() auf?"
+- **Betroffene Module:** `app.js` (V6.30, 5 Stellen), `canvas-renderer.js` (`_drawGrips()`)
+
+### [2026-06-25] undoStack.push() direkt: immer mit _notifyStateChange() abschließen
+- **Fehler:** Nach Startpunkt-Grip-Edit: `undoStack.push(cmd)` + `redoStack = []` ohne `_notifyStateChange()` → Undo/Redo-Buttons zeigten falschen State.
+- **Root Cause:** Alle anderen direkten push-Stellen hatten `_notifyStateChange()`, diese eine Stelle wurde beim Refactoring nicht angepasst.
+- **Regel:** Jedes `undoManager.undoStack.push(cmd)` braucht genau diese 3-Zeilen-Sequenz: `push(cmd)` → `redoStack.length=0` (oder `=[]`) → `_notifyStateChange()`. Nie nur 2 von 3.
+- **Betroffene Module:** `app.js` (V6.30, Zeile ~955)
+
 ### [2026-06-25] Bug-Sweep: Array-Zugriff ohne Längenprüfung in mehreren Modulen
 - **Fehler:** 5 Stellen in 4 Modulen hatten Zugriffe auf Array-Elemente (pts[1], points[0]) ohne vorherige Längenprüfung. Konkrete Symptome: NaN-I/J im G-Code, falsche Microjoint-Positionen, Crash bei leerem Pfad-Array.
 - **Root Cause:** Defensive Programmierpraktiken wurden bei nachträglichem Refactoring nicht konsequent auf neue Code-Pfade übertragen. Jeder einzelne Fix war "offensichtlich korrekt", aber ohne Guard.
