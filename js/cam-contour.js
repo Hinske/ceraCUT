@@ -1,5 +1,14 @@
 /**
- * CeraCUT CamContour V5.18 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.19 - IGEMS-konformes Lead-In/Out System
+ * V5.19: Refactor — Eigene Corner-Lead-Kategorie (analog IGEMS External/Internal/
+ *        Corner/Alternative, Kap. 10.13.2) statt verstreuter Magic-Number-Overrides:
+ *        neue Properties cornerLeadType/cornerLeadAngle/cornerDegradeThreshold
+ *        (Default 'linear'/0°/60° = 1:1 altes Verhalten), in getLeadInPath()/
+ *        getLeadOutPath() referenziert statt hart codierter Werte. Zusaetzlich:
+ *        konsolidierter _minSelfClearance()-Helper (Engstellen-Abstandsmessung) —
+ *        ersetzt die bisher separate, laengen-proportionale (Bug-anfaellige)
+ *        Skip-Radius-Logik in _calcClearanceScore() durch dieselbe fixe Schwelle wie
+ *        _capLengthForNarrowChannel() (jetzt duenner Wrapper um den Helper).
  * V5.18: Fix — V5.17 (Halbierung bei Selbst-Kollision) griff nur, wenn der Lead die
  *        gegenueberliegende Kante tatsaechlich KREUZT (Segment-Schnitt-Test). Ein an
  *        Ecken auf 0° (tangential) erzwungener Lead (V5.16) laeuft in einem engen,
@@ -105,6 +114,13 @@ class CamContour {
         this.leadOutLength = options.leadOutLength ?? 4.0;
         this.leadOutRadius = options.leadOutRadius ?? 2.0;
         this.leadOutAngle = options.leadOutAngle ?? 90;
+
+        // ═══ CORNER-LEAD (eigener Slot analog IGEMS External/Internal/Corner/Alternative,
+        // Kap. 10.13.2) — vorher als Magic Numbers (60°, 0°) mitten in getLeadInPath()/
+        // getLeadOutPath() verstreut, jetzt benannte, konfigurierbare Eck-Kategorie. ═══
+        this.cornerLeadType = options.cornerLeadType || 'linear';            // 'linear' | 'arc' | 'tangent'
+        this.cornerLeadAngle = options.cornerLeadAngle ?? 0;                 // war hart 0 (V6.40)
+        this.cornerDegradeThreshold = options.cornerDegradeThreshold ?? 60;  // war hart 60 (V6.39)
 
         // ═══ OVERCUT (kann auch negativ sein) ═══
         this.overcutLength = options.overcutLength ?? 1.0;
@@ -556,23 +572,23 @@ class CamContour {
         // jetzt direkt auf die Haelfte des kuerzesten Eigenabstands (= halbe Kanalbreite).
         this.leadInLength = this._capLengthForNarrowChannel(entry, pts, this.leadInLength);
 
-        // CORNER DETECTION: Arc zu Linear degradieren ab echten Ecken (>60°, z.B. 90°-
-        // Rechteckecken). V6.39: Schwelle von 120° auf 60° gesenkt — ein Arc-Lead ist
-        // tangential zu einer Schnittrichtung konstruiert, an einer Ecke gibt es aber ZWEI
-        // Kantenrichtungen statt einer; der Bogen kann nur zum Bisektor tangential sein,
-        // nicht zur tatsaechlichen Kante. Der Tangentialitaets-Vorteil eines Arcs geht an
-        // der Ecke verloren (sichtbar als unnoetige S-Schleife), waehrend auf flachen/
-        // sanften Segmenten (<60° Knick, z.B. grob tessellierte Kurven) Arc weiterhin
-        // sinnvoll bleibt (V5.3-Verhalten dort unveraendert).
+        // CORNER-LEAD (eigener Slot, siehe Konstruktor): Arc zu cornerLeadType
+        // degradieren ab echten Ecken (cornerDegradeThreshold, Default 60°, z.B. 90°-
+        // Rechteckecken). Ein Arc-Lead ist tangential zu einer Schnittrichtung
+        // konstruiert, an einer Ecke gibt es aber ZWEI Kantenrichtungen statt einer; der
+        // Bogen kann nur zum Bisektor tangential sein, nicht zur tatsaechlichen Kante.
+        // Der Tangentialitaets-Vorteil eines Arcs geht an der Ecke verloren (sichtbar als
+        // unnoetige S-Schleife), waehrend auf flachen/sanften Segmenten (< Threshold,
+        // z.B. grob tessellierte Kurven) Arc weiterhin sinnvoll bleibt (unveraendert).
         const cornerAngle = this._isAtCorner(pts);
         let effectiveType = this.leadInType;
-        if (cornerAngle > 60 && effectiveType === 'arc') {
-            effectiveType = 'linear';
+        if (cornerAngle > this.cornerDegradeThreshold && effectiveType === 'arc') {
+            effectiveType = this.cornerLeadType;
         }
-        // V6.40: An Ecken (z.B. 90°) wird der Lead-Winkel auf 0° (rein tangential zum
-        // Eck-Bisektor) erzwungen statt der bisherigen 90°-Normalen — unabhaengig vom
-        // konfigurierten leadInAngle.
-        const safeLinearAngle = isSharpVertexCorner ? 0 : this.leadInAngle;
+        // An Ecken wird der Lead-Winkel auf cornerLeadAngle (Default 0° = rein tangential
+        // zum Eck-Bisektor) erzwungen statt der Normalen — unabhaengig vom konfigurierten
+        // leadInAngle.
+        const safeLinearAngle = isSharpVertexCorner ? this.cornerLeadAngle : this.leadInAngle;
 
         let leadPath;
         switch (effectiveType) {
@@ -1079,15 +1095,15 @@ class CamContour {
         const _origLeadOutLength = this.leadOutLength;
         this.leadOutLength = this._capLengthForNarrowChannel(exitPoint, pts, this.leadOutLength);
 
-        // 3. CORNER DETECTION: Arc zu Linear degradieren ab echten Ecken (>60°) — siehe
-        // getLeadInPath V6.39 fuer die Begruendung (Bisektor-Tangente statt Kantentangente).
+        // 3. CORNER-LEAD: Arc zu cornerLeadType degradieren ab echten Ecken — siehe
+        // getLeadInPath fuer die Begruendung (Bisektor-Tangente statt Kantentangente).
         const cornerAngle = this._isAtCorner(pts);
         let effectiveType = this.leadOutType;
-        if (cornerAngle > 60 && effectiveType === 'arc') {
-            effectiveType = 'linear';
+        if (cornerAngle > this.cornerDegradeThreshold && effectiveType === 'arc') {
+            effectiveType = this.cornerLeadType;
         }
-        // V6.40: siehe getLeadInPath — Winkel an Ecken auf 0° (tangential) statt 90° erzwungen
-        const safeLinearAngle = isSharpVertexCorner ? 0 : this.leadOutAngle;
+        // siehe getLeadInPath — Winkel an Ecken auf cornerLeadAngle (Default 0°/tangential) erzwungen
+        const safeLinearAngle = isSharpVertexCorner ? this.cornerLeadAngle : this.leadOutAngle;
 
         // 4. Lead-Out berechnen
         let leadPath;
@@ -1475,6 +1491,44 @@ class CamContour {
     }
 
     /**
+     * V6.44: Minimaler Abstand von `point` zu den NICHT unmittelbar angrenzenden
+     * Segmenten von `contourPts` — zentrale Engstellen-/Eigenkollisions-Messung.
+     * Ersetzt drei zuvor eigenstaendige Skip-Radius-Implementierungen
+     * (_capLengthForNarrowChannel, _calcClearanceScore) mit unterschiedlicher (und im
+     * Fall des laengenproportionalen Skip-Radius fehleranfaelliger) Robustheit.
+     *
+     * Ausschluss der eigenen, unmittelbar angrenzenden Kante(n) per FIXEM Radius (nicht
+     * von einer angeforderten Laenge abhaengig — sonst wuerde bei einer grossen Laenge
+     * die nahe gegenueberliegende Wand selbst ausgeschlossen und die Engstelle bliebe
+     * unerkannt, siehe Lessons 2026-06-25). Zwei Faelle: (a) Segment, auf dem `point`
+     * selbst liegt (Distanz ≈ 0, das andere Segment-Ende kann beliebig weit weg sein —
+     * z.B. eine lange Kanalwand) UND (b) kurze, eng tessellierte Nachbarsegmente (beide
+     * Endpunkte nah an point).
+     * @param {{x,y}} point
+     * @param {Array} contourPts - eigene (Kerf-Offset-)Punktliste, geschlossen
+     * @returns {number} kuerzester Abstand, oder Infinity wenn keine Engstelle gefunden
+     */
+    _minSelfClearance(point, contourPts) {
+        const n = contourPts ? contourPts.length - 1 : 0; // closed: letzter=erster
+        if (n < 3) return Infinity;
+
+        const skipRadius = Math.max(this.kerfWidth * 2, 1.0);
+        const onSegEps = 1e-6;
+
+        let minDist = Infinity;
+        for (let i = 0; i < n; i++) {
+            const a = contourPts[i], b = contourPts[i + 1];
+            const distA = Math.hypot(a.x - point.x, a.y - point.y);
+            const distB = Math.hypot(b.x - point.x, b.y - point.y);
+            if (distA < skipRadius && distB < skipRadius) continue;          // (b)
+            const d = this._pointToSegDist(point, a, b);
+            if (d < onSegEps) continue;                                     // (a)
+            if (d < minDist) minDist = d;
+        }
+        return minDist;
+    }
+
+    /**
      * V6.43: Kappt eine angeforderte Lead-Laenge auf maximal die HAELFTE des kuerzesten
      * Eigenabstands zur gegenueberliegenden Kontur-Kante (= halbe Kanalbreite an einer
      * engen Stelle). Laeuft VOR der eigentlichen Pfad-Berechnung, deckt damit auch
@@ -1486,30 +1540,8 @@ class CamContour {
      * @param {number} requestedLength - aktuell konfigurierte Lead-Laenge
      */
     _capLengthForNarrowChannel(point, contourPts, requestedLength) {
-        const n = contourPts ? contourPts.length - 1 : 0; // closed: letzter=erster
-        if (n < 3 || !(requestedLength > 0)) return requestedLength;
-
-        // V6.43: Ausschluss der eigenen, unmittelbar angrenzenden Kante(n) — FIX, nicht von
-        // requestedLength abhaengig (sonst wuerde bei grosser angeforderter Laenge die nahe
-        // gegenueberliegende Wand selbst ausgeschlossen und die Engstelle bliebe unerkannt).
-        // Zwei Faelle: (a) Segment, auf dem "point" selbst liegt (Distanz ≈ 0, aber das andere
-        // Segment-Ende kann beliebig weit weg sein — z.B. eine lange Kanalwand) UND
-        // (b) kurze, eng tessellierte Nachbarsegmente (beide Endpunkte nah an point).
-        const skipRadius = Math.max(this.kerfWidth * 2, 1.0);
-        const onSegEps = 1e-6;
-
-        let minDist = Infinity;
-        for (let i = 0; i < n; i++) {
-            const a = contourPts[i], b = contourPts[i + 1];
-            const distA = Math.hypot(a.x - point.x, a.y - point.y);
-            const distB = Math.hypot(b.x - point.x, b.y - point.y);
-            if (distA < skipRadius && distB < skipRadius) continue;          // (b)
-            if (this._pointToSegDist(point, a, b) < onSegEps) continue;      // (a)
-
-            const d = this._pointToSegDist(point, a, b);
-            if (d < minDist) minDist = d;
-        }
-
+        if (!(requestedLength > 0)) return requestedLength;
+        const minDist = this._minSelfClearance(point, contourPts);
         if (!(minDist < Infinity)) return requestedLength;
         return Math.min(requestedLength, minDist / 2);
     }
@@ -1716,8 +1748,13 @@ class CamContour {
         }
 
         // Selbst-Kollision: Lead vs. eigene Kontur (Skip nahe Startpunkt)
+        // V6.44: Skip-Radius FIX statt laengen-proportional (Math.max(leadInLength,
+        // leadInRadius)*0.15) — bei grosser angeforderter Lead-Laenge wuerde sonst die
+        // gegenueberliegende, eng benachbarte Kante selbst ausgeschlossen werden (siehe
+        // _minSelfClearance / Lessons 2026-06-25, derselbe Bug-Typ). Gleicher Radius wie
+        // _minSelfClearance, fuer konsistentes Verhalten beider Engstellen-Pruefungen.
         const selfPts = this.getKerfOffsetPolyline()?.points || this.points;
-        const skipRadius = Math.max(this.leadInLength, this.leadInRadius) * 0.15;
+        const skipRadius = Math.max(this.kerfWidth * 2, 1.0);
         const entry = leadPts[leadPts.length - 1]; // Letzter Punkt = Entry
         for (let i = 0; i < selfPts.length - 1; i++) {
             if (this._pointToSegDist(entry, selfPts[i], selfPts[i + 1]) < skipRadius) continue;
@@ -2417,6 +2454,9 @@ class CamContour {
             leadOutLength: this.leadOutLength,
             leadOutRadius: this.leadOutRadius,
             leadOutAngle: this.leadOutAngle,
+            cornerLeadType: this.cornerLeadType,
+            cornerLeadAngle: this.cornerLeadAngle,
+            cornerDegradeThreshold: this.cornerDegradeThreshold,
             overcutLength: this.overcutLength,
             piercingType: this.piercingType,
             preferCorners: this.preferCorners,

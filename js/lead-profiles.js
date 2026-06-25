@@ -1,11 +1,17 @@
 /**
- * CeraCUT Lead Profiles V1.3
+ * CeraCUT Lead Profiles V1.4
  *
  * Profil-basierte Lead-Verwaltung für Wasserstrahl-CAM.
  * Built-in Profile für typische Material/Dicke-Kombinationen.
  * Batch-Engine wendet Profile regelbasiert auf Konturen an.
  *
  * Persistenz via localStorage.
+ * V1.4: Feat — Eigene "corner"-Sektion (analog IGEMS External/Internal/Corner/
+ *       Alternative, Kap. 10.13.2) je Profil: { leadType, leadAngle, degradeThreshold }.
+ *       Ersetzt die bisher in cam-contour.js hart codierten Magic Numbers (60°/0°/
+ *       linear) für das Ecken-Verhalten. Alle 8 Built-ins identisch befüllt (= 1:1
+ *       altes Verhalten), _migrateProfile/_applyProfileSection/saveCustom ergänzt.
+ *       Noch ohne UI (Backend-Refactor, Properties-Panel/Profil-Editor folgt separat).
  * V1.2: Aktive Profil-Auswahl (ACTIVE_KEY) pro User (_userKey()) — die Profil-
  *       Liste selbst (STORAGE_KEY) bleibt firmenweit geteilt (Login/User-Management V6.32)
  * V1.3: Lead-Überarbeitung — Custom-Profil-Migration/-Validierung beim Laden
@@ -15,14 +21,14 @@
  *       Grenzen, Lead-Out wird in Small-Hole/Slit-Zweigen mitgesetzt (war zuvor nur
  *       im Normalzweig), smallHole.strategy ausgewertet, DEFAULT_PROFILE_ID-Konstante
  *
- * Last Modified: 2026-06-24
- * Build: 20260624-leadoverhaul
+ * Last Modified: 2026-06-25
+ * Build: 20260625-cornerleadslot
  */
 
 const LeadProfiles = (() => {
     'use strict';
 
-    const VERSION = '1.3';
+    const VERSION = '1.4';
     const STORAGE_KEY = 'ceracut_lead_profiles';
     const ACTIVE_KEY = 'ceracut_active_lead_profile';
     const PREFIX = `[LeadProfiles V${VERSION}]`;
@@ -72,7 +78,8 @@ const LeadProfiles = (() => {
                     altLeadOutLength: 1.5, altOvercutLength: 0.5
                 },
                 smallHole: { thresholdDiameter: 8.0, strategy: 'center_pierce' },
-                slit: { leadInType: 'on_geometry', overcutLength: 0 }
+                slit: { leadInType: 'on_geometry', overcutLength: 0 },
+                corner: { leadType: 'linear', leadAngle: 0, degradeThreshold: 60 }
             },
             {
                 id: 'builtin-stahl-mittel',
@@ -100,7 +107,8 @@ const LeadProfiles = (() => {
                     altLeadOutLength: 2.0, altOvercutLength: 1.0
                 },
                 smallHole: { thresholdDiameter: 8.0, strategy: 'center_pierce' },
-                slit: { leadInType: 'on_geometry', overcutLength: 0 }
+                slit: { leadInType: 'on_geometry', overcutLength: 0 },
+                corner: { leadType: 'linear', leadAngle: 0, degradeThreshold: 60 }
             },
             {
                 id: 'builtin-stahl-dick',
@@ -128,7 +136,8 @@ const LeadProfiles = (() => {
                     altLeadOutLength: 3.0, altOvercutLength: 1.5
                 },
                 smallHole: { thresholdDiameter: 10.0, strategy: 'center_pierce' },
-                slit: { leadInType: 'on_geometry', overcutLength: 0 }
+                slit: { leadInType: 'on_geometry', overcutLength: 0 },
+                corner: { leadType: 'linear', leadAngle: 0, degradeThreshold: 60 }
             },
             {
                 id: 'builtin-aluminium',
@@ -156,7 +165,8 @@ const LeadProfiles = (() => {
                     altLeadOutLength: 2.0, altOvercutLength: 0.5
                 },
                 smallHole: { thresholdDiameter: 8.0, strategy: 'center_pierce' },
-                slit: { leadInType: 'on_geometry', overcutLength: 0 }
+                slit: { leadInType: 'on_geometry', overcutLength: 0 },
+                corner: { leadType: 'linear', leadAngle: 0, degradeThreshold: 60 }
             },
             {
                 id: 'builtin-glas-keramik',
@@ -184,7 +194,8 @@ const LeadProfiles = (() => {
                     altLeadOutLength: 1.0, altOvercutLength: 0.3
                 },
                 smallHole: { thresholdDiameter: 6.0, strategy: 'center_pierce' },
-                slit: { leadInType: 'on_geometry', overcutLength: 0 }
+                slit: { leadInType: 'on_geometry', overcutLength: 0 },
+                corner: { leadType: 'linear', leadAngle: 0, degradeThreshold: 60 }
             },
             {
                 id: 'builtin-schnell',
@@ -212,7 +223,8 @@ const LeadProfiles = (() => {
                     altLeadOutLength: 0.5, altOvercutLength: 0
                 },
                 smallHole: { thresholdDiameter: 6.0, strategy: 'center_pierce' },
-                slit: { leadInType: 'on_geometry', overcutLength: 0 }
+                slit: { leadInType: 'on_geometry', overcutLength: 0 },
+                corner: { leadType: 'linear', leadAngle: 0, degradeThreshold: 60 }
             },
             {
                 id: 'builtin-qualitaet',
@@ -240,7 +252,8 @@ const LeadProfiles = (() => {
                     altLeadOutLength: 3.0, altOvercutLength: 2.0
                 },
                 smallHole: { thresholdDiameter: 10.0, strategy: 'center_pierce' },
-                slit: { leadInType: 'on_geometry', overcutLength: 0 }
+                slit: { leadInType: 'on_geometry', overcutLength: 0 },
+                corner: { leadType: 'linear', leadAngle: 0, degradeThreshold: 60 }
             },
             {
                 id: 'builtin-intarsia',
@@ -268,7 +281,8 @@ const LeadProfiles = (() => {
                     altLeadOutLength: 1.0, altOvercutLength: 0.3
                 },
                 smallHole: { thresholdDiameter: 6.0, strategy: 'center_pierce' },
-                slit: { leadInType: 'on_geometry', overcutLength: 0 }
+                slit: { leadInType: 'on_geometry', overcutLength: 0 },
+                corner: { leadType: 'linear', leadAngle: 0, degradeThreshold: 60 }
             }
         ];
     }
@@ -289,6 +303,7 @@ const LeadProfiles = (() => {
         p.alt = p.alt || { ...defaults.alt };
         p.smallHole = p.smallHole || { ...defaults.smallHole };
         p.slit = p.slit || { ...defaults.slit };
+        p.corner = p.corner || { ...defaults.corner };
         return p;
     }
 
@@ -366,7 +381,10 @@ const LeadProfiles = (() => {
             int: { ...data.int },
             alt: { ...data.alt },
             smallHole: { ...data.smallHole },
-            slit: { ...data.slit }
+            slit: { ...data.slit },
+            // V6.44: corner-Sektion noch ohne UI (Backend-Refactor) — data.corner ist
+            // bisher immer undefined, Default haelt das aktuelle Verhalten (60°/0°/linear)
+            corner: data.corner ? { ...data.corner } : { leadType: 'linear', leadAngle: 0, degradeThreshold: 60 }
         };
         _profiles.push(profile);
         _saveCustomToStorage();
@@ -527,14 +545,14 @@ const LeadProfiles = (() => {
 
             // Hole → int-Profil
             if (c.cuttingMode === 'hole') {
-                _applyProfileSection(c, profile.int, profile.alt, contours);
+                _applyProfileSection(c, profile.int, profile.alt, profile.corner, contours);
                 details.push(`${c.name}: Innen-Profil`);
                 applied++;
                 return;
             }
 
             // Disc → ext-Profil
-            _applyProfileSection(c, profile.ext, profile.alt, contours);
+            _applyProfileSection(c, profile.ext, profile.alt, profile.corner, contours);
             details.push(`${c.name}: Außen-Profil`);
             applied++;
         });
@@ -546,7 +564,7 @@ const LeadProfiles = (() => {
     /**
      * Profil-Sektion auf eine Kontur anwenden
      */
-    function _applyProfileSection(c, section, alt, allContours) {
+    function _applyProfileSection(c, section, alt, corner, allContours) {
         if (!section) return;
         c.leadInType = section.leadInType;
         c.leadInLength = section.leadInLength;
@@ -565,6 +583,13 @@ const LeadProfiles = (() => {
         if (section.piercingStationaryTime !== undefined) c.piercingStationaryTime = section.piercingStationaryTime;
         if (section.piercingCircularRadius !== undefined) c.piercingCircularRadius = section.piercingCircularRadius;
         if (section.piercingCircularTime !== undefined)   c.piercingCircularTime   = section.piercingCircularTime;
+
+        // Corner-Lead (eigener Slot, siehe cam-contour.js Konstruktor)
+        if (corner) {
+            c.cornerLeadType = corner.leadType;
+            c.cornerLeadAngle = corner.leadAngle;
+            c.cornerDegradeThreshold = corner.degradeThreshold;
+        }
 
         // Alt-Lead
         if (alt) {

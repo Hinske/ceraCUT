@@ -1,30 +1,30 @@
 /**
- * CeraCUT Build Info V6.43
- * Version: V6.43
+ * CeraCUT Build Info V6.44
+ * Version: V6.44
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-narrowchannelcap
+ * Build: 20260625-cornerleadslot
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.43',
-    build: '20260625-narrowchannelcap',
+    version: '6.44',
+    build: '20260625-cornerleadslot',
     date: '2026-06-25',
-    time: '12:10 MEZ',
+    time: '13:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '9e8a5c7',
-        date: '2026-06-25 09:12:31 +0200',
-        message: 'fix: Lead-Längen-Kappung bei engen Konturen griff nicht bei tangentialen Leads (Regression)'
+        hash: 'cdc3e67',
+        date: '2026-06-25 09:55:50 +0200',
+        message: 'refactor: Eigene Corner-Lead-Kategorie statt verstreuter Magic-Number-Overrides'
     },
 
     modules: {
         'dxf-parser':         { version: '3.15', build: '20260624-gapfix' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
-        'cam-contour':        { version: '5.18', build: '20260625-narrowchannelcap' },
+        'cam-contour':        { version: '5.19', build: '20260625-cornerleadslot' },
         'canvas-renderer':    { version: '3.40', build: '20260625-arcleadsweepfix' },
         'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
         'sinumerik-pp':       { version: '1.8', build: '20260624-leadoverhaul' },
@@ -38,8 +38,8 @@ const CERACUT_BUILD = {
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.9', build: '20260624-orphanlayer' },
-        'lead-profiles':      { version: '1.3', build: '20260624-leadoverhaul' },
-        'app':                { version: '6.23', build: '20260625-automulticollision' },
+        'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
+        'app':                { version: '6.24', build: '20260625-cornerleadslot' },
         'document-manager':   { version: '1.1', build: '20260623-camsetupgate' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
@@ -63,6 +63,19 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.44: Refactor — Eigene Corner-Lead-Kategorie statt verstreuter Magic-Number-' +
+        'Overrides: Vergleich mit dem IGEMS-Industriestandard (Kap. 10.13.2) zeigte, dass ' +
+        'dort External/Internal/Corner/Alternative vier unabhängige Lead-Slots sind — bei ' +
+        'uns war die Ecke bisher kein eigener Slot, sondern Laufzeit-Overrides mitten in ' +
+        'getLeadInPath()/getLeadOutPath() (Arc→Linear-Degradierung, 0°-Winkel, 60°-' +
+        'Schwelle), die in dieser Session viermal nachgebessert werden mussten. Neue ' +
+        'Properties cornerLeadType/cornerLeadAngle/cornerDegradeThreshold (Default ' +
+        '"linear"/0°/60° = 1:1 altes Verhalten) sowie eigene "corner"-Sektion in allen 8 ' +
+        'Lead-Profilen. Zusätzlich: konsolidierter _minSelfClearance()-Helper ersetzt die ' +
+        'bisher separate, längen-proportionale Skip-Radius-Logik in _calcClearanceScore() ' +
+        '(derselbe Bug-Typ wie V6.43) durch dieselbe feste Schwelle wie ' +
+        '_capLengthForNarrowChannel(). Noch ohne UI (Backend-Refactor, Properties-Panel/' +
+        'Profil-Editor als Fast-Follow) (cam-contour V5.19, lead-profiles V1.4, app V6.24).',
         'V6.43: Fix — V6.42 (Halbierung bei Selbst-Kollision) griff nur, wenn der Lead die ' +
         'gegenüberliegende Kante tatsächlich KREUZT. Ein an Ecken auf 0° (tangential, V6.40) ' +
         'erzwungener Lead läuft in einem engen, gekrümmten Kanal aber LÄNGS ohne je zu kreuzen ' +

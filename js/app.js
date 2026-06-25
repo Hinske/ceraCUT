@@ -1,5 +1,9 @@
 /**
- * CeraCUT V6.23 - Main Application
+ * CeraCUT V6.24 - Main Application
+ * V6.24: Refactor — _applyLeadToContour() übernimmt jetzt optional cornerLeadType/
+ *        cornerLeadAngle/cornerDegradeThreshold (neuer Corner-Lead-Slot, cam-contour
+ *        V5.19) — bisher noch ohne UI-Felder, Pass-Through analog zu den anderen
+ *        optionalen Eigenschaften vorbereitet.
  * V6.23: Feat — Multi-Kontur-Kollisionsprüfung (CamContour.checkAllCollisions) lief
  *        bisher nur über den manuellen "Multi-Collision"-Button; autoPlaceStartPoint()
  *        kennt nur Clearance zu Nachbarn fürs Scoring, prüft aber nicht ob der finale
@@ -3746,6 +3750,14 @@ class CeraCutApp {
             c.leadInDynamic    = vals.leadInDynamic;
             c.leadInLengthMin  = vals.leadInLengthMin;
             c.leadInLengthMax  = vals.leadInLengthMax;
+        }
+        // V6.44: Corner-Lead (eigener Slot, cam-contour.js) — noch kein UI-Feld, daher
+        // bisher immer undefined; Pass-Through analog zu den anderen optionalen Feldern
+        // schon vorbereitet, sobald Properties-Panel/Profil-Editor das liefern.
+        if (vals.cornerLeadType !== undefined) {
+            c.cornerLeadType = vals.cornerLeadType;
+            c.cornerLeadAngle = vals.cornerLeadAngle;
+            c.cornerDegradeThreshold = vals.cornerDegradeThreshold;
         }
         // V4.5: Alternativ-Lead auf Kontur setzen (Undo-safe: aus altVals oder aktuellen UI-Werten)
         if (vals.altLeadEnabled !== undefined) {
