@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '5c09d66',
-        date: '2026-06-25 18:30:42 +0200',
-        message: 'fix: Bug-Sweep — 5 Robustheitsfixes aus systematischer Code-Inspektion (V6.51)'
+        hash: 'b244e4b',
+        date: '2026-06-25 18:34:21 +0200',
+        message: 'fix: Zombie-Event-Listener in Modal-ESC-Handlern beseitigt (V6.28)'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.27', build: '20260625-bugfixsweep' },
+        'app':                { version: '6.28', build: '20260625-zombielistener' },
         'document-manager':   { version: '1.2', build: '20260625-deletedcontourguard' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },

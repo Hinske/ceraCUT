@@ -1,5 +1,8 @@
 /**
- * CeraCUT V6.27 - Main Application
+ * CeraCUT V6.28 - Main Application
+ * V6.28: Fix — Zombie-Event-Listener in _showShortcutDialog() und _showPreviewModal():
+ *        escHandler wurde nur bei ESC-Schließung entfernt; Schließen per Button/Hintergrund
+ *        ließ ihn als toten Listener am document hängen. Akkumulierte bei jedem Öffnen.
  * V6.27: Fix — getContourPerimeter() zählte das Schließungssegment (letzter→erster Punkt)
  *        bei geschlossenen Konturen nicht. Folge: Auto-Microjoint-Positionen (Gleichverteilung
  *        per Perimeteranteil) lagen leicht verschoben, der letzte Microjoint fehlte im
@@ -2717,16 +2720,15 @@ class CeraCutApp {
 
         // Close handlers
         const closeBtn = document.getElementById('shortcut-modal-close');
-        const closeModal = () => { modal.style.display = 'none'; };
+        let escHandler;
+        const closeModal = () => { modal.style.display = 'none'; document.removeEventListener('keydown', escHandler); };
         closeBtn?.addEventListener('click', closeModal, { once: true });
         modal.addEventListener('click', (e) => {
             if (e.target === modal) closeModal();
         }, { once: true });
 
         // ESC closes
-        const escHandler = (e) => {
-            if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', escHandler); }
-        };
+        escHandler = (e) => { if (e.key === 'Escape') closeModal(); };
         document.addEventListener('keydown', escHandler);
     }
 
@@ -4854,8 +4856,10 @@ class CeraCutApp {
         });
 
         // Events
-        modal.querySelector('#gcode-close-btn').addEventListener('click', () => modal.remove());
-        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+        let escHandler;
+        const closePreview = () => { modal.remove(); document.removeEventListener('keydown', escHandler); };
+        modal.querySelector('#gcode-close-btn').addEventListener('click', closePreview);
+        modal.addEventListener('click', (e) => { if (e.target === modal) closePreview(); });
         modal.querySelector('#gcode-copy-btn').addEventListener('click', () => {
             navigator.clipboard.writeText(code).then(() => {
                 this.showToast('G-Code in Zwischenablage kopiert', 'success');
@@ -4863,9 +4867,7 @@ class CeraCutApp {
         });
 
         // ESC zum Schließen
-        const escHandler = (e) => {
-            if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', escHandler); }
-        };
+        escHandler = (e) => { if (e.key === 'Escape') closePreview(); };
         document.addEventListener('keydown', escHandler);
 
         // V6.0: Toolpath zeichnen
