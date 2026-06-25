@@ -1,5 +1,13 @@
 /**
- * CeraCUT V6.29 - Main Application
+ * CeraCUT V6.30 - Main Application
+ * V6.30: Fix — 3 Robustheitsfixes aus systematischer Code-Inspektion (Agent-gestützt):
+ *        (1) Startpunkt-Grip-Edit: _notifyStateChange() fehlte nach undoStack.push() —
+ *        Undo/Redo-Buttons blieben nach Startpunkt-Verschiebung in veraltetem State.
+ *        (2) invalidateGrips() fehlte in 5 isSelected-Pfaden (Cut-Order-Click,
+ *        btn-select-all/none, Konturen-Panel-Click, ESC, STRG+A) — Grip-Punkte wurden
+ *        nicht angezeigt, obwohl Kontur selektiert war.
+ *        (3) isSetupComplete() erforderte zwingend eine Referenzkontur — Einzelteil-
+ *        Workflow ohne Plattenrahmen war komplett gesperrt; Origin-Setzung allein reicht.
  * V6.29: Fix — 3 Robustheitsfixes: (1) autoSortContours() speicherte Array-Indizes in
  *        Undo-Commands — nach Delete/Insert verschoben diese auf falsche Konturen und
  *        korrumpierten die Geometrie beim Redo. Jetzt Objekt-Referenzen (_lastReversedContours).
@@ -953,6 +961,7 @@ class CeraCutApp {
             contour._rotationCount = (contour._rotationCount || 0) + 1;
             this.undoManager.undoStack.push(cmd);
             this.undoManager.redoStack = [];
+            this.undoManager._notifyStateChange();
 
             this.showToast(`📍 Startpunkt verschoben (Punkt ${nearestIndex})`, 'success');
             this.renderer.render();
@@ -1957,6 +1966,7 @@ class CeraCutApp {
                 if (this.contours[contourIdx]) {
                     this.contours[contourIdx].isSelected = true;
                 }
+                this.renderer?.invalidateGrips?.();
                 this.renderer?.render();
                 this.updateContourPanel();
             });
@@ -2064,15 +2074,17 @@ class CeraCutApp {
         });
         
         document.getElementById('btn-select-all')?.addEventListener('click', () => {
-            this.contours.forEach(c => { 
-                if (!c.isReference) c.isSelected = true; 
+            this.contours.forEach(c => {
+                if (!c.isReference) c.isSelected = true;
             });
+            this.renderer?.invalidateGrips?.();
             this.renderer?.render();
             this.updateContourPanel();
         });
-        
+
         document.getElementById('btn-select-none')?.addEventListener('click', () => {
             this.contours.forEach(c => { c.isSelected = false; });
+            this.renderer?.invalidateGrips?.();
             this.renderer?.render();
             this.updateContourPanel();
         });
@@ -2155,7 +2167,8 @@ class CeraCutApp {
                     this.contours.forEach(c => { c.isSelected = false; });
                     contour.isSelected = true;
                 }
-                
+
+                this.renderer?.invalidateGrips?.();
                 this.renderer?.render();
                 this.updateContourPanel();
             });
@@ -2348,6 +2361,7 @@ class CeraCutApp {
                     }
                     // Selektion aufheben
                     this.contours.forEach(c => { c.isSelected = false; });
+                    this.renderer?.invalidateGrips?.();
                     this.renderer?.render();
                     this.updateContourPanel();
                     this.hideContextMenu();
@@ -2384,6 +2398,7 @@ class CeraCutApp {
                     if (ctrl) {
                         e.preventDefault();
                         this.contours.forEach(c => { if (!c.isReference) c.isSelected = true; });
+                        this.renderer?.invalidateGrips?.();
                         this.renderer?.render();
                         this.updateContourPanel();
                     }
@@ -3371,9 +3386,10 @@ class CeraCutApp {
         this.updateStepUI();
     }
 
-    /** V6.21: Setup-Status — CAM-Funktionen erst nach Referenz + Nullpunkt freigeschaltet */
+    /** V6.21: Setup-Status — CAM-Funktionen nach Nullpunkt-Setzung freigeschaltet.
+     *  V6.29: Referenz optional — Einzelteil-Workflow ohne Plattenrahmen muss funktionieren. */
     isSetupComplete() {
-        return this.contours.some(c => c.isReference) && !!this.settings.originSet;
+        return !!this.settings.originSet;
     }
     
     // ════════════════════════════════════════════════════════════════

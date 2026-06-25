@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.51
- * Version: V6.51
+ * CeraCUT Build Info V6.52
+ * Version: V6.52
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-bugfixsweep
+ * Build: 20260625-gripselectfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.51',
-    build: '20260625-bugfixsweep',
+    version: '6.52',
+    build: '20260625-gripselectfix',
     date: '2026-06-25',
     time: '17:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '93a8af3',
-        date: '2026-06-25 18:49:43 +0200',
-        message: 'fix: 4 Sicherheits- und Robustheitsfixes (Tab-Korruption, Slowloris, Undo-Index, FSAPI-Race)'
+        hash: 'bd6743b',
+        date: '2026-06-25 18:53:37 +0200',
+        message: 'fix: 3 Robustheitsfixes — Grip-Anzeige, Undo-Buttons, Einzelteil-Workflow (app.js V6.30, build-info V6.52)'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.29', build: '20260625-undoidxfix' },
+        'app':                { version: '6.30', build: '20260625-gripselectfix' },
         'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
@@ -63,6 +63,16 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.52: Fix — 3 Robustheitsfixes (agent-gestuetzte Code-Inspektion): ' +
+        '(1) app.js V6.30: Startpunkt-Grip-Edit rief undoStack.push()+redoStack=[] ohne ' +
+        '_notifyStateChange() — Undo/Redo-Buttons blieben nach Startpunkt-Verschiebung im ' +
+        'veralteten State (weder aktiv noch grayed korrekt). ' +
+        '(2) app.js V6.30: invalidateGrips() fehlte in 5 Selektions-Pfaden (Cut-Order-Click, ' +
+        'btn-select-all, btn-select-none, Konturen-Panel-Click, ESC, STRG+A) — _hasSelection ' +
+        'blieb false, Grip-Punkte wurden nach Selektion nicht angezeigt. ' +
+        '(3) app.js V6.30: isSetupComplete() verlangte zwingend isReference-Kontur UND originSet ' +
+        '— Einzelteil-Workflow ohne Plattenrahmen war vollstaendig gesperrt. Origin-Setzung ' +
+        'allein reicht; Referenz ist optional.',
         'V6.51: Fix (Bug-Sweep) — 5 Robustheitsfixes aus systematischer Code-Inspektion: ' +
         '(1) sinumerik-postprocessor.js V1.9: _processArcLeadExact() hatte keinen pts.length-' +
         'Check — bei 1-Punkt-Lead-Pfad wurde pts[1]=undefined indexiert und NaN-I/J in den ' +
