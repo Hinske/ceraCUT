@@ -1,5 +1,12 @@
 /**
- * CeraCUT V6.22 - Main Application
+ * CeraCUT V6.23 - Main Application
+ * V6.23: Feat — Multi-Kontur-Kollisionsprüfung (CamContour.checkAllCollisions) lief
+ *        bisher nur über den manuellen "Multi-Collision"-Button; autoPlaceStartPoint()
+ *        kennt nur Clearance zu Nachbarn fürs Scoring, prüft aber nicht ob der finale
+ *        Lead/Alt-Lead tatsächlich in eine Nachbarkontur läuft. Neue
+ *        _runMultiContourCollisionCheck() läuft jetzt automatisch nach jedem finalen
+ *        Lead-Apply (_commitLeadChanges(), Wizard-Step-4-Eintritt) — Dog-Leg/Rotation/
+ *        Shortening gegen Nachbarn greifen jetzt ohne manuellen Button-Klick.
  * V6.22: Fix — toggleReference()/autoDetectReference() triggern jetzt
  *        _recalcTopologyAfterReferenceChange() (ruft CeraCutPipeline._analyzeTopology()
  *        erneut auf), statt nur isReference zu setzen. Vorher blieb die Inselerkennung
@@ -2725,6 +2732,7 @@ class CeraCutApp {
             case 4:
                 if (this.renderer) this.renderer.currentMode = 'anschuss';
                 this._applyLeadValues();
+                this._runMultiContourCollisionCheck();
                 this.updateContourPanel();
                 break;
             case 5:
@@ -3881,6 +3889,27 @@ class CeraCutApp {
         this.undoManager.redoStack.length = 0;
         this.undoManager._notifyStateChange();
         console.log(`[UndoManager V4.5] Lead-Parameter registriert (${snapshot.length} Konturen, Außen/Innen/Alt differenziert)`);
+
+        // V6.41: Multi-Kontur-Kollisionsprüfung lief bisher NUR über den manuellen
+        // "Multi-Collision"-Button — Smart-Placement (autoPlaceStartPoint) kennt nur die
+        // EIGENE Kontur, nicht eng benachbarte Teile. Bei dicht gepackten Mustern (Intarsien-
+        // Raster, enge Stege) blieben dadurch Alt-Leads/Primär-Leads unkontrolliert in
+        // Nachbarteile hinein stehen. Läuft jetzt automatisch nach jedem finalen Lead-Apply.
+        this._runMultiContourCollisionCheck();
+    }
+
+    /** V6.41: Multi-Kontur-Kollisionsprüfung automatisch nach Lead-Apply ausführen
+     *  (bisher nur über den manuellen "Multi-Collision"-Button, siehe index.html
+     *  btn-multi-collision). Mutiert Lead-Caches direkt wie der Button — kein eigener
+     *  Undo-Eintrag, analog zum bisherigen manuellen Verhalten. */
+    _runMultiContourCollisionCheck() {
+        if (typeof CamContour === 'undefined' || !this.contours?.length) return;
+        const margin = parseFloat(document.getElementById('collision-margin')?.value) || 0.5;
+        const modified = CamContour.checkAllCollisions(this.contours, margin);
+        if (modified > 0) {
+            console.log(`[App V6.41] Auto-Multi-Collision: ${modified} Lead(s) angepasst`);
+            this.renderer?.render();
+        }
     }
     
     // ════════════════════════════════════════════════════════════════

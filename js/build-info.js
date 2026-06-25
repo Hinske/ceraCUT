@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.40
- * Version: V6.40
+ * CeraCUT Build Info V6.41
+ * Version: V6.41
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-cornerleadangle0
+ * Build: 20260625-automulticollision
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.40',
-    build: '20260625-cornerleadangle0',
+    version: '6.41',
+    build: '20260625-automulticollision',
     date: '2026-06-25',
-    time: '10:45 MEZ',
+    time: '11:15 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'a562cb7',
-        date: '2026-06-25 07:43:30 +0200',
-        message: 'feat: Linearer Lead-Winkel an Ecken auf 0° (tangential) statt 90° (senkrecht)'
+        hash: 'bfed3a8',
+        date: '2026-06-25 08:21:26 +0200',
+        message: 'feat: Website-Icon ergänzt; Multi-Kontur-Kollisionsprüfung läuft jetzt automatisch nach Lead-Apply'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.9', build: '20260624-orphanlayer' },
         'lead-profiles':      { version: '1.3', build: '20260624-leadoverhaul' },
-        'app':                { version: '6.22', build: '20260624-referencerefresh' },
+        'app':                { version: '6.23', build: '20260625-automulticollision' },
         'document-manager':   { version: '1.1', build: '20260623-camsetupgate' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
@@ -63,6 +63,13 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.41: Feat — Multi-Kontur-Kollisionsprüfung (CamContour.checkAllCollisions) lief ' +
+        'bisher nur über den manuellen "Multi-Collision"-Button im CAM-Ribbon. autoPlaceStartPoint() ' +
+        'nutzt Nachbar-Clearance nur fürs Scoring, der finale Lead/Alt-Lead konnte trotzdem in eine ' +
+        'eng benachbarte Kontur laufen (sichtbar bei dicht gepackten Mustern, z.B. Intarsien-Raster) ' +
+        '— die Dog-Leg/Rotation/Shortening-Strategien griffen erst nach manuellem Klick. Neue ' +
+        '_runMultiContourCollisionCheck() (app.js) läuft jetzt automatisch nach jedem finalen ' +
+        'Lead-Apply (_commitLeadChanges(), Wizard-Step-4-Eintritt) (app V6.23).',
         'V6.40: Feat — Linearer Lead-Winkel an Ecken (z.B. 90°-Aussenecken) jetzt 0° (rein ' +
         'tangential zum Eck-Bisektor) statt vorher 90° (senkrecht zur Verschnittflaeche) — ' +
         'Lead laeuft jetzt entlang der Eck-Diagonale an statt frontal senkrecht ' +
