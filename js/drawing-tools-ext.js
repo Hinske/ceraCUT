@@ -1,9 +1,9 @@
 /**
  * CeraCUT Drawing Tools Extension V1.10
  * Zusätzliche Zeichentools: Ellipse, Spline, Donut, XLine, OverlapBreak, Hatch
- * V1.10: Fix SplineTool geschlossener Ringschluss — Startpunkt wird als exakter Endpunkt
- *         in fitPoints eingetragen (handleClick + handleOption), _tessellate erzwingt
- *         points[0] === points[last] → Pipeline erkennt Disc/Hole korrekt (kein Slit-Fallback).
+ * V1.10: Fix SplineTool geschlossener Ringschluss — _tessellate erzwingt exakten
+ *         Ringschluss (finalPts[last] = first) → Pipeline erkennt Disc/Hole korrekt.
+ *         fitPoints-Push NICHT: würde p0 doppelt in SplineUtils-Input erzeugen → Absturz.
  * V1.9: Fix — (5) Math.abs in _findEnclosingContour reverted (getArea() ist immer positiv).
  *        (6) isClosed-Filter: near-closed Konturen (< 1mm Lücke) werden ebenfalls akzeptiert —
  *        JoinTool erzeugt isClosed=false wenn join-Toleranz (0.5mm) > _detectClosed (0.01mm).
@@ -201,7 +201,6 @@ class SplineTool extends BaseTool {
             const snapDist = scale > 0 ? 10 / scale : 5;
             if (Math.hypot(point.x - fp.x, point.y - fp.y) < snapDist) {
                 this.closed = true;
-                this.fitPoints.push({ x: fp.x, y: fp.y });
                 this._createSpline();
                 return;
             }
@@ -243,8 +242,6 @@ class SplineTool extends BaseTool {
         if (option === 'S') {
             if (this.fitPoints.length >= 3) {
                 this.closed = true;
-                const fp = this.fitPoints[0];
-                this.fitPoints.push({ x: fp.x, y: fp.y });
                 this._createSpline();
             } else {
                 this.cmd?.log('Mindestens 3 Punkte zum Schließen!', 'error');

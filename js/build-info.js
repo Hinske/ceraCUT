@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '0e06bf1',
-        date: '2026-06-25 19:32:35 +0200',
-        message: 'fix: SplineTool geschlossener Ringschluss (drawing-tools-ext V1.10)'
+        hash: 'aad4bfb',
+        date: '2026-06-25 19:36:19 +0200',
+        message: 'fix: SplineTool — fitPoints.push(p0) revertiert (drawing-tools-ext V1.10)'
     },
 
     modules: {
