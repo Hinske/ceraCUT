@@ -1,5 +1,9 @@
 /**
- * CeraCUT CamContour V5.15 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.16 - IGEMS-konformes Lead-In/Out System
+ * V5.16: Feat — Linearer Lead-Winkel an Ecken (isSharpVertexCorner) jetzt 0° (rein
+ *        tangential zum Eck-Bisektor) statt vorher 90° (senkrecht zur Verschnittflaeche).
+ *        Auf Anfrage: an 90°-Ecken soll der Lead entlang der Eck-Diagonale anlaufen statt
+ *        frontal senkrecht (getLeadInPath/getLeadOutPath safeLinearAngle).
  * V5.15: Fix — Arc-Lead an echten Ecken (z.B. 90°-Aussenecken) erzeugte eine unnoetige
  *        S-Schleife (Gerade+Bogen tangential nur zum Bisektor, nicht zur tatsaechlichen
  *        Kante — der Tangentialitaets-Vorteil eines Arcs ist an einer Ecke ohnehin
@@ -540,11 +544,10 @@ class CamContour {
         if (cornerAngle > 60 && effectiveType === 'arc') {
             effectiveType = 'linear';
         }
-        // V5.14: An scharfen Ecken ist ein flacher/tangentialer Lead-Winkel unsicher (die
-        // Bisektor-Tangente ist nur eine 90°-Rotation der sicheren Normalen, KEINE
-        // garantiert kollisionsfreie Richtung) — Winkel auf 90° (rein normal/senkrecht
-        // in die Verschnittflaeche) erzwingen, unabhaengig vom konfigurierten leadInAngle.
-        const safeLinearAngle = isSharpVertexCorner ? 90 : this.leadInAngle;
+        // V6.40: An Ecken (z.B. 90°) wird der Lead-Winkel auf 0° (rein tangential zum
+        // Eck-Bisektor) erzwungen statt der bisherigen 90°-Normalen — unabhaengig vom
+        // konfigurierten leadInAngle.
+        const safeLinearAngle = isSharpVertexCorner ? 0 : this.leadInAngle;
 
         let leadPath;
         switch (effectiveType) {
@@ -1050,8 +1053,8 @@ class CamContour {
         if (cornerAngle > 60 && effectiveType === 'arc') {
             effectiveType = 'linear';
         }
-        // V5.14: siehe getLeadInPath — flacher Winkel an scharfen Ecken unsicher
-        const safeLinearAngle = isSharpVertexCorner ? 90 : this.leadOutAngle;
+        // V6.40: siehe getLeadInPath — Winkel an Ecken auf 0° (tangential) statt 90° erzwungen
+        const safeLinearAngle = isSharpVertexCorner ? 0 : this.leadOutAngle;
 
         // 4. Lead-Out berechnen
         let leadPath;

@@ -1,30 +1,30 @@
 /**
- * CeraCUT Build Info V6.39
- * Version: V6.39
+ * CeraCUT Build Info V6.40
+ * Version: V6.40
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-arcdegradethreshold
+ * Build: 20260625-cornerleadangle0
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.39',
-    build: '20260625-arcdegradethreshold',
+    version: '6.40',
+    build: '20260625-cornerleadangle0',
     date: '2026-06-25',
-    time: '10:30 MEZ',
+    time: '10:45 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '70d6fe0',
-        date: '2026-06-25 07:35:26 +0200',
-        message: 'fix: Arc-Lead an echten Ecken (z.B. 90°-Aussenecken) auf Linear degradiert'
+        hash: 'a562cb7',
+        date: '2026-06-25 07:43:30 +0200',
+        message: 'feat: Linearer Lead-Winkel an Ecken auf 0° (tangential) statt 90° (senkrecht)'
     },
 
     modules: {
         'dxf-parser':         { version: '3.15', build: '20260624-gapfix' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
-        'cam-contour':        { version: '5.15', build: '20260625-arcdegradethreshold' },
+        'cam-contour':        { version: '5.16', build: '20260625-cornerleadangle0' },
         'canvas-renderer':    { version: '3.40', build: '20260625-arcleadsweepfix' },
         'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
         'sinumerik-pp':       { version: '1.8', build: '20260624-leadoverhaul' },
@@ -63,6 +63,10 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.40: Feat — Linearer Lead-Winkel an Ecken (z.B. 90°-Aussenecken) jetzt 0° (rein ' +
+        'tangential zum Eck-Bisektor) statt vorher 90° (senkrecht zur Verschnittflaeche) — ' +
+        'Lead laeuft jetzt entlang der Eck-Diagonale an statt frontal senkrecht ' +
+        '(cam-contour V5.16).',
         'V6.39: Fix — Arc-Lead an echten Ecken (z.B. 90°-Aussenecken) erzeugte eine ' +
         'unnoetige S-Schleife (Gerade+Bogen tangential nur zum Eck-Bisektor statt zur ' +
         'tatsaechlichen Kante — der Tangentialitaets-Vorteil eines Arc-Leads ist an einer ' +
