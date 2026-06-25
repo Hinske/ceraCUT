@@ -1,5 +1,15 @@
 /**
- * CeraCUT CamContour V5.17 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.18 - IGEMS-konformes Lead-In/Out System
+ * V5.18: Fix — V5.17 (Halbierung bei Selbst-Kollision) griff nur, wenn der Lead die
+ *        gegenueberliegende Kante tatsaechlich KREUZT (Segment-Schnitt-Test). Ein an
+ *        Ecken auf 0° (tangential) erzwungener Lead (V5.16) laeuft in einem engen,
+ *        gekruemmten Kanal aber LAENGS, ohne je zu kreuzen — lief dadurch ungebremst bis
+ *        zum Ende des Kanals (sichtbar als langer Lead, der durch die ganze Kontur
+ *        laeuft). Neue _capLengthForNarrowChannel() kappt die Lead-Laenge jetzt VOR der
+ *        Pfad-Berechnung direkt auf die Haelfte des kuerzesten Eigenabstands (= halbe
+ *        Kanalbreite), unabhaengig von der Lead-Richtung. leadInLength/leadOutLength
+ *        werden dabei nur temporaer ueberschrieben und danach wiederhergestellt (wie
+ *        bisher bei Dynamic Lead) — keine dauerhafte Mutation der konfigurierten Werte.
  * V5.17: Feat — Bei engen Konturen (Selbst-Kollision in _shortenLeadIfCollision, d.h.
  *        gegenueberliegende Kante derselben Kontur sehr nah) wird der Lead jetzt nur bis
  *        zur HAELFTE der Distanz zur Kante gekuerzt statt bis zur Kante selbst — der Pierce-
@@ -537,6 +547,15 @@ class CamContour {
             this.leadInLength = this._calcDynamicLeadLength(entry, tangent, normal, pts);
         }
 
+        // V6.43: Enge-Kontur-Kappung VOR der Pfad-Berechnung (nicht nur danach per
+        // Kollisions-Kuerzung) — _shortenLeadIfCollision findet nur Treffer, wenn der Lead
+        // tatsaechlich eine Kontur-Kante KREUZT. Ein tangentialer Lead (0°-Winkel an Ecken,
+        // V6.40) laeuft in einem engen, gekruemmten Kanal aber oft LAENGS parallel zur
+        // gegenueberliegenden Kante, ohne sie je zu kreuzen — die Kollisionspruefung griff
+        // dort nicht und der Lead lief ungebremst bis zum Ende des Kanals. Kappt die Laenge
+        // jetzt direkt auf die Haelfte des kuerzesten Eigenabstands (= halbe Kanalbreite).
+        this.leadInLength = this._capLengthForNarrowChannel(entry, pts, this.leadInLength);
+
         // CORNER DETECTION: Arc zu Linear degradieren ab echten Ecken (>60°, z.B. 90°-
         // Rechteckecken). V6.39: Schwelle von 120° auf 60° gesenkt — ein Arc-Lead ist
         // tangential zu einer Schnittrichtung konstruiert, an einer Ecke gibt es aber ZWEI
@@ -599,10 +618,11 @@ class CamContour {
             }
         }
 
-        // DYNAMIC LEAD: User-Wert wiederherstellen (wurde nur temporär geändert)
-        if (this.leadInDynamic) {
-            this.leadInLength = _origLeadInLength;
-        }
+        // DYNAMIC LEAD + V6.43 Enge-Kontur-Kappung: User-Wert wiederherstellen (this.leadInLength
+        // wurde oben temporär ueberschrieben — wie leadInDynamic muss auch die Kappung den
+        // konfigurierten Wert unveraendert lassen, sonst "vergisst" die Kontur dauerhaft den
+        // eingestellten Wert, sobald sie einmal an einer engen Stelle gekappt wurde).
+        this.leadInLength = _origLeadInLength;
 
         this._cachedLeadInPath = leadPath;
         return leadPath;
@@ -1052,6 +1072,13 @@ class CamContour {
             exitTangent = basis.tangent;
         }
 
+        // V6.43: siehe getLeadInPath — Enge-Kontur-Kappung VOR der Pfad-Berechnung, deckt
+        // auch tangentiale Leads ab, die laengs durch einen engen Kanal laufen statt eine
+        // Kante zu kreuzen (dort greift _shortenLeadIfCollision sonst nicht). Temporär wie
+        // bei getLeadInPath — am Ende wieder auf den konfigurierten Wert zurueckgesetzt.
+        const _origLeadOutLength = this.leadOutLength;
+        this.leadOutLength = this._capLengthForNarrowChannel(exitPoint, pts, this.leadOutLength);
+
         // 3. CORNER DETECTION: Arc zu Linear degradieren ab echten Ecken (>60°) — siehe
         // getLeadInPath V6.39 fuer die Begruendung (Bisektor-Tangente statt Kantentangente).
         const cornerAngle = this._isAtCorner(pts);
@@ -1105,6 +1132,9 @@ class CamContour {
                 console.debug(`[CamContour V5.12] Center-Exit Fallback: ${this.name}`);
             }
         }
+
+        // V6.43: konfigurierten Wert wiederherstellen (siehe getLeadInPath)
+        this.leadOutLength = _origLeadOutLength;
 
         this._cachedLeadOutPath = leadPath;
         return leadPath;
@@ -1442,6 +1472,46 @@ class CamContour {
             acc += segLen;
         }
         return points;
+    }
+
+    /**
+     * V6.43: Kappt eine angeforderte Lead-Laenge auf maximal die HAELFTE des kuerzesten
+     * Eigenabstands zur gegenueberliegenden Kontur-Kante (= halbe Kanalbreite an einer
+     * engen Stelle). Laeuft VOR der eigentlichen Pfad-Berechnung, deckt damit auch
+     * tangentiale Leads ab, die laengs durch einen engen, gekruemmten Kanal verlaufen
+     * ohne dessen Kante je zu KREUZEN — _shortenLeadIfCollision (Segment-Schnitt-Test)
+     * greift dort nicht, weil schlicht kein Schnittpunkt existiert.
+     * @param {{x,y}} point - Anschlusspunkt (Entry/Exit)
+     * @param {Array} contourPts - eigene (Kerf-Offset-)Punktliste
+     * @param {number} requestedLength - aktuell konfigurierte Lead-Laenge
+     */
+    _capLengthForNarrowChannel(point, contourPts, requestedLength) {
+        const n = contourPts ? contourPts.length - 1 : 0; // closed: letzter=erster
+        if (n < 3 || !(requestedLength > 0)) return requestedLength;
+
+        // V6.43: Ausschluss der eigenen, unmittelbar angrenzenden Kante(n) — FIX, nicht von
+        // requestedLength abhaengig (sonst wuerde bei grosser angeforderter Laenge die nahe
+        // gegenueberliegende Wand selbst ausgeschlossen und die Engstelle bliebe unerkannt).
+        // Zwei Faelle: (a) Segment, auf dem "point" selbst liegt (Distanz ≈ 0, aber das andere
+        // Segment-Ende kann beliebig weit weg sein — z.B. eine lange Kanalwand) UND
+        // (b) kurze, eng tessellierte Nachbarsegmente (beide Endpunkte nah an point).
+        const skipRadius = Math.max(this.kerfWidth * 2, 1.0);
+        const onSegEps = 1e-6;
+
+        let minDist = Infinity;
+        for (let i = 0; i < n; i++) {
+            const a = contourPts[i], b = contourPts[i + 1];
+            const distA = Math.hypot(a.x - point.x, a.y - point.y);
+            const distB = Math.hypot(b.x - point.x, b.y - point.y);
+            if (distA < skipRadius && distB < skipRadius) continue;          // (b)
+            if (this._pointToSegDist(point, a, b) < onSegEps) continue;      // (a)
+
+            const d = this._pointToSegDist(point, a, b);
+            if (d < minDist) minDist = d;
+        }
+
+        if (!(minDist < Infinity)) return requestedLength;
+        return Math.min(requestedLength, minDist / 2);
     }
 
     /**

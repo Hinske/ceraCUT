@@ -1,30 +1,30 @@
 /**
- * CeraCUT Build Info V6.42
- * Version: V6.42
+ * CeraCUT Build Info V6.43
+ * Version: V6.43
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-narrowhalflead
+ * Build: 20260625-narrowchannelcap
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.42',
-    build: '20260625-narrowhalflead',
+    version: '6.43',
+    build: '20260625-narrowchannelcap',
     date: '2026-06-25',
-    time: '11:40 MEZ',
+    time: '12:10 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'e3d2c2d',
-        date: '2026-06-25 08:38:59 +0200',
-        message: 'feat: Lead bei engen Konturen nur bis zur Hälfte der Kanten-Distanz kürzen'
+        hash: '9e8a5c7',
+        date: '2026-06-25 09:12:31 +0200',
+        message: 'fix: Lead-Längen-Kappung bei engen Konturen griff nicht bei tangentialen Leads (Regression)'
     },
 
     modules: {
         'dxf-parser':         { version: '3.15', build: '20260624-gapfix' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
-        'cam-contour':        { version: '5.17', build: '20260625-narrowhalflead' },
+        'cam-contour':        { version: '5.18', build: '20260625-narrowchannelcap' },
         'canvas-renderer':    { version: '3.40', build: '20260625-arcleadsweepfix' },
         'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
         'sinumerik-pp':       { version: '1.8', build: '20260624-leadoverhaul' },
@@ -63,6 +63,15 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.43: Fix — V6.42 (Halbierung bei Selbst-Kollision) griff nur, wenn der Lead die ' +
+        'gegenüberliegende Kante tatsächlich KREUZT. Ein an Ecken auf 0° (tangential, V6.40) ' +
+        'erzwungener Lead läuft in einem engen, gekrümmten Kanal aber LÄNGS ohne je zu kreuzen ' +
+        '— lief dadurch ungebremst bis zum Ende des Kanals (Regression, sichtbar als langer ' +
+        'Lead quer durch die ganze Kontur). Neue _capLengthForNarrowChannel() kappt die ' +
+        'Lead-Länge jetzt VOR der Pfad-Berechnung direkt auf die Hälfte des kürzesten ' +
+        'Eigenabstands, unabhängig von der Lead-Richtung; leadInLength/leadOutLength werden ' +
+        'dabei nur temporär überschrieben (wie Dynamic Lead), keine dauerhafte Mutation ' +
+        '(cam-contour V5.18).',
         'V6.42: Feat — Bei engen Konturen (Selbst-Kollision: gegenüberliegende Kante derselben ' +
         'Kontur sehr nah, z.B. schmale Stege/Nuten) wird der Lead jetzt nur bis zur HÄLFTE der ' +
         'Distanz zur Kante gekürzt statt bis zur Kante selbst — der Pierce-Punkt bleibt damit ' +
