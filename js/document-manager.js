@@ -1,5 +1,7 @@
 /**
- * CeraCUT Document Manager V1.1
+ * CeraCUT Document Manager V1.2
+ * V1.2: Fix — deletedContourNames-Set (geloeschte Konturen pro Tab) wird jetzt mit
+ *       erfasst/angewendet (_captureFromApp/_applyToApp), analog zu dxfResult.
  * V1.1: Fix — settings.originSet-Default ergänzt (Gate für CAM-Freischaltung erst nach Setup)
  * Multi-Dokument-Tabs (AutoCAD-Stil) — mehrere DXF-Dateien gleichzeitig offen.
  *
@@ -34,6 +36,7 @@ class CeraDocument {
         this.fileLoaded = false;
         this.dxfContent = null;
         this.dxfResult = null;     // Wird NICHT persistiert (reine Parse-Diagnostik)
+        this.deletedContourNames = new Set(); // V6.25: ueberlebt Layer-Sichtbarkeits-Reruns, pro Tab
         this.contours = [];
         this.intarsiaPosContours = null;
         this.intarsiaNegContours = null;
@@ -247,6 +250,7 @@ class DocumentManager {
         doc.fileLoaded = app.fileLoaded;
         doc.dxfContent = app.dxfContent;
         doc.dxfResult = app.dxfResult;
+        doc.deletedContourNames = app.deletedContourNames;
         doc.contours = app.contours;
         doc.intarsiaPosContours = app.intarsiaPosContours;
         doc.intarsiaNegContours = app.intarsiaNegContours;
@@ -276,6 +280,7 @@ class DocumentManager {
         app.fileLoaded = doc.fileLoaded;
         app.dxfContent = doc.dxfContent;
         app.dxfResult = doc.dxfResult;
+        app.deletedContourNames = doc.deletedContourNames;
         app.contours = doc.contours;
         app.intarsiaPosContours = doc.intarsiaPosContours;
         app.intarsiaNegContours = doc.intarsiaNegContours;

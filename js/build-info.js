@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.46
- * Version: V6.46
+ * CeraCUT Build Info V6.47
+ * Version: V6.47
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-stalecacheguard
+ * Build: 20260625-deletedcontourguard
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.46',
-    build: '20260625-stalecacheguard',
+    version: '6.47',
+    build: '20260625-deletedcontourguard',
     date: '2026-06-25',
-    time: '15:10 MEZ',
+    time: '16:05 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'b52ce6c',
-        date: '2026-06-25 14:37:07 +0200',
-        message: 'fix: DXF-Export verwirft veralteten Spline/Circle-Cache statt falsche Position zu schreiben'
+        hash: '8c7e435',
+        date: '2026-06-25 15:02:37 +0200',
+        message: 'fix: Geloeschte Konturen tauchten nach Layer-Sichtbarkeits-Toggle wieder auf'
     },
 
     modules: {
@@ -26,12 +26,12 @@ const CERACUT_BUILD = {
         'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
         'cam-contour':        { version: '5.19', build: '20260625-cornerleadslot' },
         'canvas-renderer':    { version: '3.40', build: '20260625-arcleadsweepfix' },
-        'undo-manager':       { version: '1.2', build: '20260624-crossdocpaste' },
+        'undo-manager':       { version: '1.3', build: '20260625-deletedcontourguard' },
         'sinumerik-pp':       { version: '1.8', build: '20260624-leadoverhaul' },
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.4', build: '20260623-bugfixaudit' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
-        'drawing-tools':      { version: '2.15', build: '20260624-cadimprovements7' },
+        'drawing-tools':      { version: '2.16', build: '20260625-deletedcontourguard' },
         'drawing-tools-ext':  { version: '1.8', build: '20260623-bugfixaudit' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
@@ -39,8 +39,8 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.10', build: '20260625-stalecacheguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.24', build: '20260625-cornerleadslot' },
-        'document-manager':   { version: '1.1', build: '20260623-camsetupgate' },
+        'app':                { version: '6.25', build: '20260625-deletedcontourguard' },
+        'document-manager':   { version: '1.2', build: '20260625-deletedcontourguard' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
         'debug-monitor':      { version: '1.1', build: '20260324-gitcommit' },
@@ -51,7 +51,7 @@ const CERACUT_BUILD = {
         'bridge-cutting':     { version: '1.0', build: '20260309' },
         'quality-zones':      { version: '1.1', build: '20260315-bugfix35' },
         'cam-tools':          { version: '1.3', build: '20260324-undofix' },
-        'advanced-tools':     { version: '1.6', build: '20260323-boundary' },
+        'advanced-tools':     { version: '1.7', build: '20260625-deletedcontourguard' },
         'arc-fitting':        { version: '3.1', build: '20260315-bugfix35' },
         'measure-tool':       { version: '1.2', build: '20260325-curvcheck' },
         'dimension-tool':     { version: '2.4', build: '20260326-dimedit' },
@@ -63,6 +63,22 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.47: Fix — Geloeschte Konturen tauchten nach einem Layer-Sichtbarkeits-Toggle ' +
+        'wieder auf: applyLayerSelection() baute die Konturliste bei JEDEM Aufruf (auch bei ' +
+        'reinem Visibility-Toggle) komplett neu aus dxfResult.contours auf — dem unveraenderten ' +
+        'Parse-Output, der bei Loeschungen nie aktualisiert wird (nur app.contours wird per ' +
+        'splice() angepasst). Neues persistentes Set app.deletedContourNames (Schluessel: ' +
+        'stabiler contour.name, da Objekt-Identitaet ueber Pipeline-Reruns nicht erhalten ' +
+        'bleibt) wird von DeleteContoursCommand befuellt/geleert und in applyLayerSelection() ' +
+        'als zusaetzlicher Ausschlussfilter angewendet; Reset bei neuem DXF-Import, ' +
+        'Persistenz pro Tab im Document-Manager-Swap. Dabei aufgefallen: _runPipelineKeepUndo() ' +
+        'wies this.contours bisher ein KOMPLETT NEUES Array zu — Undo-Stack-Commands (z.B. ' +
+        'DeleteContoursCommand), die das alte Array-Objekt referenzieren, griffen danach ins ' +
+        'Leere, STRG+Z wurde nach einem Sichtbarkeits-Toggle zum stillen No-Op (vorher durch ' +
+        'den dxfResult-Bug verdeckt, da die Loeschung ohnehin "von selbst" wieder rueckgaengig ' +
+        'wirkte). Jetzt length=0+push() statt Neuzuweisung, Array-Identitaet bleibt erhalten ' +
+        '(app V6.25, undo-manager V1.3, document-manager V1.2, drawing-tools V2.16, ' +
+        'advanced-tools V1.7).',
         'V6.46: Fix — _writeSpline()/_writeCircle() bevorzugten beim DXF-Export immer die ' +
         'rohen Import-Cache-Felder (_splineData.controlPoints/fitPoints, _fitPoints, _center) ' +
         'vor den aktuellen contour.points. Move/Rotate/Mirror/Scale (drawing-tools.js) ' +

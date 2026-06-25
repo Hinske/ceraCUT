@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.15
+ * CeraCUT Drawing & Modification Tools V2.16
  * AutoCAD-style CAD Tools für CeraCUT
  *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
@@ -12,6 +12,9 @@
  * - Window-Selection (Drag-Rechteck)
  * - Integration mit CommandLine + SnapManager + UndoManager
  *
+ * V2.16: Fix — EraseTool/Mirror-delete_source übergeben DeleteContoursCommand jetzt die
+ *        App-Referenz, damit geloeschte Konturen in app.deletedContourNames landen (siehe
+ *        app.js applyLayerSelection) und nicht bei einem Layer-Toggle wieder auftauchen.
  * V2.15: CAD-Improvements Abschnitt 7 komplett — LineTool Fortsetzung vom letzten
  *        Endpunkt (Enter ohne Eingabe, DrawingToolManager._lastDrawEndpoint),
  *        ModificationTool ALL/L (Letzte) Selektionsoptionen, RectangleTool
@@ -2215,7 +2218,8 @@ class MirrorTool extends ModificationTool {
                 app.rebuildCutOrder?.();
                 app.renderer?.setContours(app.contours);
                 app.updateContourPanel?.();
-            }
+            },
+            app
         );
         app.undoManager?.execute(deleteCmd);
 
@@ -2570,7 +2574,8 @@ class EraseTool extends ModificationTool {
                 app.rebuildCutOrder?.();
                 app.renderer?.setContours(app.contours);
                 app.updateContourPanel?.();
-            }
+            },
+            app
         );
         app.undoManager?.execute(deleteCmd);
 

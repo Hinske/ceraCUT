@@ -1,5 +1,12 @@
 /**
- * CeraCUT V6.24 - Main Application
+ * CeraCUT V6.25 - Main Application
+ * V6.25: Fix — deletedContourNames-Set verhindert, dass geloeschte Konturen bei einem
+ *        Layer-Sichtbarkeits-Toggle aus dxfResult.contours wieder auftauchen
+ *        (applyLayerSelection() baute die Liste sonst immer komplett neu auf).
+ *        Zusaetzlich: _runPipelineKeepUndo() aktualisiert this.contours jetzt IN-PLACE
+ *        (length=0+push) statt per Neuzuweisung — sonst haengen Undo-Stack-Commands
+ *        (z.B. DeleteContoursCommand), die das alte Array referenzieren, nach einem
+ *        Toggle aus und STRG+Z wird zum No-Op.
  * V6.24: Refactor — _applyLeadToContour() übernimmt jetzt optional cornerLeadType/
  *        cornerLeadAngle/cornerDegradeThreshold (neuer Corner-Lead-Slot, cam-contour
  *        V5.19) — bisher noch ohne UI-Felder, Pass-Through analog zu den anderen
@@ -83,6 +90,7 @@ class CeraCutApp {
         this.fileLoaded = false;
         this.dxfContent = null;
         this.dxfResult = null;
+        this.deletedContourNames = new Set(); // V6.25: ueberlebt Layer-Sichtbarkeits-Reruns
         this.contours = [];
         this.intarsiaPosContours = null;  // CamContour[] | null — Intarsien V2.0
         this.intarsiaNegContours = null;  // CamContour[] | null — Intarsien V2.0
@@ -1366,7 +1374,8 @@ class CeraCutApp {
                 this.renderer?.setContours(this.contours);
                 this.updateContourPanel();
                 this.updateStats({ totalEntities: this.contours.length });
-            }
+            },
+            this
         );
         this.undoManager.execute(deleteCmd);
         
@@ -1389,7 +1398,8 @@ class CeraCutApp {
                 this.rebuildCutOrder();
                 this.renderer?.setContours(this.contours);
                 this.updateContourPanel();
-            }
+            },
+            this
         );
         this.undoManager.execute(deleteCmd);
         
@@ -2923,6 +2933,7 @@ class CeraCutApp {
                     chainingTolerance: tolerance
                 });
                 console.timeEnd('[PERF] DXFParser.parse');
+                this.deletedContourNames = new Set(); // V6.25: neuer Import, alte Loeschungen verwerfen
                 
                 if (!this.dxfResult || !this.dxfResult.success) {
                     this.showToast('DXF Parse-Fehler', 'error');
@@ -3032,6 +3043,7 @@ class CeraCutApp {
             const layer = c.layer || '';
             if (!this.selectedLayers.includes(layer)) return false;
             if (lm && !lm.isVisible(layer)) return false;
+            if (this.deletedContourNames?.has(c.name)) return false; // V6.25: geloeschte Konturen bleiben weg
             return true;
         });
 
@@ -3046,10 +3058,17 @@ class CeraCutApp {
     /**
      * V6.2: Pipeline-Neuberechnung bei Layer-Sichtbarkeits-Wechsel.
      * Wie runPipeline(), aber OHNE Undo/Clipboard zu löschen.
+     *
+     * V6.25: this.contours wird hier per length=0+push IN-PLACE aktualisiert statt neu
+     * zugewiesen — Commands auf dem Undo-Stack (z.B. DeleteContoursCommand) halten eine
+     * Referenz auf das ORIGINALE Array. Eine Neuzuweisung haengt diese Commands aus, ihr
+     * splice() greift dann auf ein verwaistes Array ohne Wirkung auf das sichtbare
+     * this.contours — STRG+Z waere nach einem Sichtbarkeits-Toggle ein No-Op.
      */
     _runPipelineKeepUndo(contours) {
         if (typeof CeraCutPipeline === 'undefined') {
-            this.contours = contours;
+            this.contours.length = 0;
+            this.contours.push(...contours);
             this.updateRenderer();
             return;
         }
@@ -3066,7 +3085,8 @@ class CeraCutApp {
         });
 
         if (result.success) {
-            this.contours = result.contours;
+            this.contours.length = 0;
+            this.contours.push(...result.contours);
             this.updateStats?.(result);
             this.updateRenderer();
             this.updateContourPanel();

@@ -1,7 +1,10 @@
 /**
- * CeraCUT Advanced Tools V1.6 — Tier 5 CAD Tools
+ * CeraCUT Advanced Tools V1.7 — Tier 5 CAD Tools
  * 14 CAD-Werkzeuge + Ribbon-Alias-Fix
  *
+ * V1.7: Fix — OverkillTool übergibt DeleteContoursCommand jetzt die App-Referenz, damit
+ *       entfernte Duplikate in app.deletedContourNames landen und nicht bei einem
+ *       Layer-Sichtbarkeits-Toggle wieder auftauchen.
  * V1.6: Boundary Tool — DCEL-basierte Umgrenzung aus kreuzenden Konturen (AutoCAD BOUNDARY)
  * V1.5: Overkill-Tool (OK) — Duplikate + überlappende Linien entfernen, Toleranz-Dialog
  * V1.4: Aufteilen-Werkzeuge (CL2D, CLND, CLDCL)
@@ -1665,7 +1668,7 @@ class OverkillTool extends ModificationTool {
         app.undoManager.beginGroup('Overkill');
 
         if (deleteArr.length > 0) {
-            app.undoManager.execute(new DeleteContoursCommand(allContours, deleteArr, rerender));
+            app.undoManager.execute(new DeleteContoursCommand(allContours, deleteArr, rerender, app));
         }
         if (mergedArr.length > 0) {
             app.undoManager.execute(new AddContoursCommand(allContours, mergedArr, -1, rerender));

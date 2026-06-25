@@ -3,10 +3,14 @@
  *  CeraCUT / CeraCUT – Undo/Redo Manager (Command Pattern) + Clipboard
  * =========================================================================
  *  Datei:    undo-manager.js
- *  Version:  V1.2
+ *  Version:  V1.3
  *  Erstellt: 2026-02-12
- *  Build:    20260624-crossdocpaste
+ *  Build:    20260625-deletedcontourguard
  *
+ *  V1.3: Fix — DeleteContoursCommand trackt geloeschte Konturen jetzt zusaetzlich per Name
+ *        in app.deletedContourNames (execute() fuegt hinzu, undo() entfernt), damit
+ *        applyLayerSelection() (app.js) sie bei einem Layer-Sichtbarkeits-Rerun aus
+ *        dxfResult.contours ausschliessen kann statt sie wiederherzustellen.
  *  V1.2: Fix — Cross-Dokument Copy/Paste (wie AutoCAD): Jedes Dokument-Tab hat eine eigene
  *        ClipboardManager-Instanz (siehe document-manager.js), die beim Tab-Wechsel komplett
  *        ausgetauscht wurde — damit zeigte Strg+V nach einem Tab-Wechsel auf ein leeres,
@@ -149,11 +153,17 @@ class DeleteContoursCommand extends BaseCommand {
      * @param {Array}    contours     - Die zu löschenden Konturen
      * @param {Function} [onChanged]
      */
-    constructor(contourArray, contours, onChanged = null) {
+    /**
+     * @param {Object} [app] - App-Referenz für deletedContourNames-Tracking
+     *                         (verhindert Wiederauftauchen geloeschter Konturen
+     *                         bei Layer-Sichtbarkeits-Reruns, siehe app.js applyLayerSelection)
+     */
+    constructor(contourArray, contours, onChanged = null, app = null) {
         super(`${contours.length} Kontur(en) löschen`);
         this.contourArray = contourArray;
         this.contours = [...contours]; // Kopie
         this.onChanged = onChanged;
+        this.app = app;
         // Position jeder Kontur im Array merken (für Wiederherstellen)
         this.positions = contours.map(c => contourArray.indexOf(c));
     }
@@ -168,6 +178,11 @@ class DeleteContoursCommand extends BaseCommand {
                 this.contourArray.splice(pos, 1);
             }
         }
+        if (this.app?.deletedContourNames) {
+            for (const c of this.contours) {
+                if (c.name) this.app.deletedContourNames.add(c.name);
+            }
+        }
         this.onChanged?.();
     }
 
@@ -177,6 +192,11 @@ class DeleteContoursCommand extends BaseCommand {
             const pos = this.positions[i];
             if (pos >= 0) {
                 this.contourArray.splice(pos, 0, this.contours[i]);
+            }
+        }
+        if (this.app?.deletedContourNames) {
+            for (const c of this.contours) {
+                if (c.name) this.app.deletedContourNames.delete(c.name);
             }
         }
         this.onChanged?.();
