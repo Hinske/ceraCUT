@@ -1,7 +1,9 @@
 /**
- * CeraCUT Advanced Tools V1.7 — Tier 5 CAD Tools
+ * CeraCUT Advanced Tools V1.8 — Tier 5 CAD Tools
  * 14 CAD-Werkzeuge + Ribbon-Alias-Fix
  *
+ * V1.8: Fillet Cross-Contour JOIN — zwei offene Linien per Fillet zu einer Kontur verbinden
+ *       (R=0: spitze Ecke; R>0: Bogen). Preview für R>0 cross-contour ergänzt.
  * V1.7: Fix — OverkillTool übergibt DeleteContoursCommand jetzt die App-Referenz, damit
  *       entfernte Duplikate in app.deletedContourNames landen und nicht bei einem
  *       Layer-Sichtbarkeits-Toggle wieder auftauchen.
@@ -20,8 +22,8 @@
  *
  * Benötigt: geometry-ops.js V2.5, drawing-tools.js V2.3
  *
- * Last Modified: 2026-03-23 MEZ
- * Build: 20260323-boundary
+ * Last Modified: 2026-06-25 MEZ
+ * Build: 20260625-filletjoin
  */
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -102,7 +104,7 @@ class FilletTool extends BaseTool {
             this.seg1Contour = clicked;
             this.seg1Index = hit.segmentIndex;
             this.state = 'pick2';
-            this.cmd?.setPrompt('FILLET R=' + this.radius + ' — Zweites Segment anklicken' + (this.radius === 0 ? ' (auch andere Kontur):' : ' (benachbart):'));
+            this.cmd?.setPrompt('FILLET R=' + this.radius + ' — Zweites Segment anklicken (auch andere Kontur):');
             // V3.10: Erstes Segment als Cyan Highlight zeigen
             this._updatePreview(null);
             return;
@@ -110,11 +112,11 @@ class FilletTool extends BaseTool {
 
         if (this.state === 'pick2') {
             if (clicked !== this.seg1Contour) {
-                // V3.13: Cross-Contour Zero Fillet (wie AutoCAD FILLET R=0)
+                // Cross-Contour: R=0 → spitze Ecke, R>0 → Bogen (beide JOIN zu einer Kontur)
                 if (this.radius === 0) {
                     this._executeCrossContourZeroFillet(this.seg1Contour, this.seg1Index, clicked, hit.segmentIndex);
                 } else {
-                    this.cmd?.log('Cross-Contour nur mit R=0 möglich', 'error');
+                    this._executeCrossContourFillet(this.seg1Contour, this.seg1Index, clicked, hit.segmentIndex);
                 }
                 return;
             }
@@ -129,12 +131,16 @@ class FilletTool extends BaseTool {
         var tolerance = 10 / (this.manager.renderer?.scale || 1);
         var hovered = this.manager.renderer?.findContourAtPoint(point.x, point.y);
 
-        // Cross-Contour Preview bei R=0
+        // Cross-Contour Preview (R=0 oder R>0)
         if (hovered !== this.seg1Contour) {
-            if (this.radius === 0 && hovered) {
+            if (hovered) {
                 var hitB = GeometryOps.findNearestSegment(hovered.points, point.x, point.y, tolerance);
                 if (hitB) {
-                    this._updateCrossContourPreview(this.seg1Contour, this.seg1Index, hovered, hitB.segmentIndex);
+                    if (this.radius === 0) {
+                        this._updateCrossContourPreview(this.seg1Contour, this.seg1Index, hovered, hitB.segmentIndex);
+                    } else {
+                        this._updateCrossContourFilletPreview(this.seg1Contour, this.seg1Index, hovered, hitB.segmentIndex);
+                    }
                     return;
                 }
             }
@@ -264,80 +270,157 @@ class FilletTool extends BaseTool {
         this._resetToPick1();
     }
 
-    // ════ V3.13: Cross-Contour Zero Fillet ════
-    // Zwei separate Konturen zum Schnittpunkt verlängern/trimmen
+    // ════ Cross-Contour Fillet: zwei offene Linien verbinden und JOINen ════
 
     _executeCrossContourZeroFillet(contourA, segIdxA, contourB, segIdxB) {
-        console.log('[Fillet] Cross-Contour Zero Fillet: segA=%d, segB=%d', segIdxA, segIdxB);
-        console.time('[Fillet] CrossContour');
         var app = this.manager.app;
-        var ptsA = contourA.points;
-        var ptsB = contourB.points;
+        var ptsA = contourA.points, ptsB = contourB.points;
 
         if (!ptsA || ptsA.length < 2 || !ptsB || ptsB.length < 2) {
-            this.cmd?.log('Ungültige Konturen', 'error');
-            this._resetToPick1(); return;
+            this.cmd?.log('Ungültige Konturen', 'error'); this._resetToPick1(); return;
         }
         if (contourA.isClosed || contourB.isClosed) {
-            this.cmd?.log('Cross-Contour Zero Fillet nur für offene Konturen', 'error');
-            this._resetToPick1(); return;
+            this.cmd?.log('Verbinden nur für offene Konturen', 'error'); this._resetToPick1(); return;
         }
 
-        // Welches Ende jeder Kontur ist näher am geklickten Segment?
         var endA = this._nearerEnd(ptsA, segIdxA);
         var endB = this._nearerEnd(ptsB, segIdxB);
-        console.log('[Fillet] EndA=%s, EndB=%s', endA, endB);
 
-        // Endsegmente extrahieren (Richtung: Kontur-Inneres → Endpunkt)
-        var segA1, segA2, segB1, segB2;
-        if (endA === 'start') { segA1 = ptsA[1]; segA2 = ptsA[0]; }
-        else { segA1 = ptsA[ptsA.length - 2]; segA2 = ptsA[ptsA.length - 1]; }
-        if (endB === 'start') { segB1 = ptsB[1]; segB2 = ptsB[0]; }
-        else { segB1 = ptsB[ptsB.length - 2]; segB2 = ptsB[ptsB.length - 1]; }
+        var segA1, segB1;
+        if (endA === 'start') { segA1 = ptsA[1]; } else { segA1 = ptsA[ptsA.length - 2]; }
+        if (endB === 'start') { segB1 = ptsB[1]; } else { segB1 = ptsB[ptsB.length - 2]; }
+        var segA2 = (endA === 'start') ? ptsA[0] : ptsA[ptsA.length - 1];
+        var segB2 = (endB === 'start') ? ptsB[0] : ptsB[ptsB.length - 1];
 
-        // Unbounded Schnittpunkt (Geraden, nicht Segmente)
         var isect = GeometryOps.lineLineIntersection(segA1, segA2, segB1, segB2);
         if (!isect) {
-            this.cmd?.log('Parallele Linien — kein Schnittpunkt', 'error');
-            this._resetToPick1(); return;
+            this.cmd?.log('Parallele Linien — kein Schnittpunkt', 'error'); this._resetToPick1(); return;
         }
-        console.log('[Fillet] Intersection: (%.3f, %.3f)', isect.point.x, isect.point.y);
 
-        // Neue Punkte berechnen
-        var oldPtsA = ptsA.map(function(p) { return {x: p.x, y: p.y}; });
-        var oldPtsB = ptsB.map(function(p) { return {x: p.x, y: p.y}; });
+        var ip = {x: isect.point.x, y: isect.point.y};
         var newPtsA = ptsA.map(function(p) { return {x: p.x, y: p.y}; });
         var newPtsB = ptsB.map(function(p) { return {x: p.x, y: p.y}; });
+        if (endA === 'start') newPtsA[0] = ip; else newPtsA[newPtsA.length - 1] = ip;
+        if (endB === 'start') newPtsB[0] = ip; else newPtsB[newPtsB.length - 1] = ip;
 
-        if (endA === 'start') newPtsA[0] = {x: isect.point.x, y: isect.point.y};
-        else newPtsA[newPtsA.length - 1] = {x: isect.point.x, y: isect.point.y};
-        if (endB === 'start') newPtsB[0] = {x: isect.point.x, y: isect.point.y};
-        else newPtsB[newPtsB.length - 1] = {x: isect.point.x, y: isect.point.y};
+        // Orient: A endet am Schnittpunkt, B beginnt am Schnittpunkt → JOIN
+        var orientedA = (endA === 'end') ? newPtsA : newPtsA.slice().reverse();
+        var orientedB = (endB === 'start') ? newPtsB : newPtsB.slice().reverse();
+        var merged = orientedA.concat(orientedB.slice(1));
 
-        // Undo-Command
+        var oldPtsA = ptsA.map(function(p) { return {x: p.x, y: p.y}; });
+        var oldPtsB = ptsB.map(function(p) { return {x: p.x, y: p.y}; });
+        var bIndex = app.contours.indexOf(contourB);
+
         var rerender = function() {
             ModificationTool.invalidateCache(contourA);
-            ModificationTool.invalidateCache(contourB);
             app.renderer?.setContours(app.contours);
             app.rebuildCutOrder?.();
             app.updateContourPanel?.();
             app.renderer?.render();
         };
-        var cmd = new FunctionCommand('Zero Fillet Cross-Contour',
+        var cmd = new FunctionCommand('Fillet R=0 Verbinden',
             function() {
-                contourA.points = newPtsA.map(function(p) { return {x: p.x, y: p.y}; });
-                contourB.points = newPtsB.map(function(p) { return {x: p.x, y: p.y}; });
+                contourA.points = merged.map(function(p) { return {x: p.x, y: p.y}; });
+                var idx = app.contours.indexOf(contourB);
+                if (idx !== -1) app.contours.splice(idx, 1);
                 rerender();
             },
             function() {
                 contourA.points = oldPtsA.map(function(p) { return {x: p.x, y: p.y}; });
+                if (app.contours.indexOf(contourB) === -1) app.contours.splice(bIndex, 0, contourB);
                 contourB.points = oldPtsB.map(function(p) { return {x: p.x, y: p.y}; });
+                ModificationTool.invalidateCache(contourB);
                 rerender();
             }
         );
         app.undoManager?.execute(cmd);
-        console.timeEnd('[Fillet] CrossContour');
-        this.cmd?.log('✔ Zero Fillet Cross-Contour (Strg+Z = Rückgängig)', 'success');
+        this.cmd?.log('✔ Linien verbunden R=0 (Strg+Z = Rückgängig)', 'success');
+        this._resetToPick1();
+    }
+
+    // Cross-Contour Fillet R>0: Bogen zwischen zwei offenen Linien einfügen und JOINen
+    _executeCrossContourFillet(contourA, segIdxA, contourB, segIdxB) {
+        var app = this.manager.app;
+        var ptsA = contourA.points, ptsB = contourB.points;
+
+        if (!ptsA || ptsA.length < 2 || !ptsB || ptsB.length < 2) {
+            this.cmd?.log('Ungültige Konturen', 'error'); this._resetToPick1(); return;
+        }
+        if (contourA.isClosed || contourB.isClosed) {
+            this.cmd?.log('Verbinden nur für offene Konturen', 'error'); this._resetToPick1(); return;
+        }
+
+        var endA = this._nearerEnd(ptsA, segIdxA);
+        var endB = this._nearerEnd(ptsB, segIdxB);
+
+        var segA1 = (endA === 'start') ? ptsA[1] : ptsA[ptsA.length - 2];
+        var segA2 = (endA === 'start') ? ptsA[0] : ptsA[ptsA.length - 1];
+        var segB1 = (endB === 'start') ? ptsB[1] : ptsB[ptsB.length - 2];
+        var segB2 = (endB === 'start') ? ptsB[0] : ptsB[ptsB.length - 1];
+
+        var isect = GeometryOps.lineLineIntersection(segA1, segA2, segB1, segB2);
+        if (!isect) {
+            this.cmd?.log('Parallele Linien — kein Schnittpunkt', 'error'); this._resetToPick1(); return;
+        }
+        var ip = isect.point;
+
+        // Richtungsvektoren von ip aus (weit entfernte Punkte für computeFillet)
+        var dAx = segA1.x - ip.x, dAy = segA1.y - ip.y;
+        var dBx = segB1.x - ip.x, dBy = segB1.y - ip.y;
+        var lenA = Math.hypot(dAx, dAy), lenB = Math.hypot(dBx, dBy);
+        if (lenA < 1e-10 || lenB < 1e-10) { this.cmd?.log('Segmente zu kurz', 'error'); this._resetToPick1(); return; }
+
+        var farA = {x: ip.x + (dAx / lenA) * 10000, y: ip.y + (dAy / lenA) * 10000};
+        var farB = {x: ip.x + (dBx / lenB) * 10000, y: ip.y + (dBy / lenB) * 10000};
+
+        var fillet = GeometryOps.computeFillet(farA, ip, farB, this.radius);
+        if (!fillet) {
+            this.cmd?.log('Radius zu groß für diese Winkelstellung', 'error'); this._resetToPick1(); return;
+        }
+
+        // fillet.tangent1 liegt auf A's Linie, tangent2 auf B's Linie
+        var t1 = fillet.tangent1, t2 = fillet.tangent2;
+
+        var newPtsA = ptsA.map(function(p) { return {x: p.x, y: p.y}; });
+        var newPtsB = ptsB.map(function(p) { return {x: p.x, y: p.y}; });
+        if (endA === 'start') newPtsA[0] = {x: t1.x, y: t1.y}; else newPtsA[newPtsA.length - 1] = {x: t1.x, y: t1.y};
+        if (endB === 'start') newPtsB[0] = {x: t2.x, y: t2.y}; else newPtsB[newPtsB.length - 1] = {x: t2.x, y: t2.y};
+
+        var orientedA = (endA === 'end') ? newPtsA : newPtsA.slice().reverse();
+        var orientedB = (endB === 'start') ? newPtsB : newPtsB.slice().reverse();
+        // arcPoints: [t1, ..., t2] — t1 ist bereits letzter Punkt von orientedA, t2 erster von orientedB
+        var merged = orientedA.concat(fillet.arcPoints.slice(1)).concat(orientedB.slice(1));
+
+        var oldPtsA = ptsA.map(function(p) { return {x: p.x, y: p.y}; });
+        var oldPtsB = ptsB.map(function(p) { return {x: p.x, y: p.y}; });
+        var bIndex = app.contours.indexOf(contourB);
+        var radius = this.radius;
+
+        var rerender = function() {
+            ModificationTool.invalidateCache(contourA);
+            app.renderer?.setContours(app.contours);
+            app.rebuildCutOrder?.();
+            app.updateContourPanel?.();
+            app.renderer?.render();
+        };
+        var cmd = new FunctionCommand('Fillet R=' + radius + ' Verbinden',
+            function() {
+                contourA.points = merged.map(function(p) { return {x: p.x, y: p.y}; });
+                var idx = app.contours.indexOf(contourB);
+                if (idx !== -1) app.contours.splice(idx, 1);
+                rerender();
+            },
+            function() {
+                contourA.points = oldPtsA.map(function(p) { return {x: p.x, y: p.y}; });
+                if (app.contours.indexOf(contourB) === -1) app.contours.splice(bIndex, 0, contourB);
+                contourB.points = oldPtsB.map(function(p) { return {x: p.x, y: p.y}; });
+                ModificationTool.invalidateCache(contourB);
+                rerender();
+            }
+        );
+        app.undoManager?.execute(cmd);
+        this.cmd?.log('✔ Fillet R=' + radius + ' Verbinden (Strg+Z = Rückgängig)', 'success');
         this._resetToPick1();
     }
 
@@ -387,6 +470,50 @@ class FilletTool extends BaseTool {
                     {x: segB2.x, y: segB2.y}
                 ]
             }
+        };
+        this.manager.renderer?.render();
+    }
+
+    // Preview für Cross-Contour Fillet R>0 (Bogen-Vorschau)
+    _updateCrossContourFilletPreview(contourA, segIdxA, contourB, segIdxB) {
+        var ptsA = contourA.points, ptsB = contourB.points;
+        if (!ptsA || ptsA.length < 2 || !ptsB || ptsB.length < 2) { this._updatePreview(null); return; }
+        if (contourA.isClosed || contourB.isClosed) { this._updatePreview(null); return; }
+
+        var endA = this._nearerEnd(ptsA, segIdxA);
+        var endB = this._nearerEnd(ptsB, segIdxB);
+        var segA1 = (endA === 'start') ? ptsA[1] : ptsA[ptsA.length - 2];
+        var segA2 = (endA === 'start') ? ptsA[0] : ptsA[ptsA.length - 1];
+        var segB1 = (endB === 'start') ? ptsB[1] : ptsB[ptsB.length - 2];
+        var segB2 = (endB === 'start') ? ptsB[0] : ptsB[ptsB.length - 1];
+
+        var isect = GeometryOps.lineLineIntersection(segA1, segA2, segB1, segB2);
+        if (!isect) { this._updatePreview(null); return; }
+        var ip = isect.point;
+
+        var dAx = segA1.x - ip.x, dAy = segA1.y - ip.y;
+        var dBx = segB1.x - ip.x, dBy = segB1.y - ip.y;
+        var lenA = Math.hypot(dAx, dAy), lenB = Math.hypot(dBx, dBy);
+        if (lenA < 1e-10 || lenB < 1e-10) { this._updatePreview(null); return; }
+
+        var farA = {x: ip.x + (dAx / lenA) * 10000, y: ip.y + (dAy / lenA) * 10000};
+        var farB = {x: ip.x + (dBx / lenB) * 10000, y: ip.y + (dBy / lenB) * 10000};
+        var fillet = GeometryOps.computeFillet(farA, ip, farB, this.radius);
+        if (!fillet) { this._updatePreview(null); return; }
+
+        var segments = [];
+        if (this.seg1Contour && this.seg1Index >= 0) {
+            var pts1 = this.seg1Contour.points;
+            if (this.seg1Index < pts1.length - 1) {
+                segments.push({
+                    start: {x: pts1[this.seg1Index].x, y: pts1[this.seg1Index].y},
+                    end: {x: pts1[this.seg1Index + 1].x, y: pts1[this.seg1Index + 1].y}
+                });
+            }
+        }
+        this.manager.rubberBand = {
+            type: 'filletPreview',
+            data: { segments: segments, arcPoints: fillet.arcPoints }
         };
         this.manager.renderer?.render();
     }

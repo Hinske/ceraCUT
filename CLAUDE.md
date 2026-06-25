@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-06-25
-> **Version:** V6.57
-> **Build:** 20260625-thickerpreview
+> **Version:** V6.58
+> **Build:** 20260625-filletjoin
 
 ---
 
@@ -219,7 +219,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Pipeline** | `ceracut-pipeline.js` | **V3.9** | Topologie (disc/hole/reference/slit/none), Kerf-Offset, interiorPoint-basierte Nesting-Erkennung, Validation Engine (Pre-Export), Hatch-Konturen ausgeschlossen |
 | **Drawing Tools** | `drawing-tools.js` | **V2.18** | Tier 1+2 CAD-Tools, AutoCAD-Aliases, Continuous Mode, BreakTool, Enter/Rechtsklick=Beenden (AutoCAD), Layerfarbe, Auto-Apply pending Entities, Locked-Layer-Guard Window-Selection, ArcTool 8 Konstruktionsarten, PolylineTool Bogen-Modus, RectangleTool Fillet/Chamfer/Rotation, LineTool Fortsetzung, ALL/L-Selektion |
 | **Drawing Tools Ext** | `drawing-tools-ext.js` | **V1.10** | Ellipse, Spline, Donut, XLine, Overlap Break (OB), Hatch (H, eigenständige CamContour, Live-Preview, Farbpalette) |
-| **Advanced Tools** | `advanced-tools.js` | **V1.7** | Fillet, Trim, Extend, Offset (Ghost-Preview), Chamfer, Arabeske, Aufteilen, Overkill, Boundary (DCEL) |
+| **Advanced Tools** | `advanced-tools.js` | **V1.8** | Fillet, Trim, Extend, Offset (Ghost-Preview), Chamfer, Arabeske, Aufteilen, Overkill, Boundary (DCEL) |
 | **CAM Tools** | `cam-tools.js` | **V1.1** | CAM-spezifische Werkzeuge, Hit-Test Zoom-Scaling |
 | **Tool Manager** | `tool-manager.js` | **V2.2** | Tool-Routing, Always-Active, Shortcut-Dispatch, Tier 4 |
 | **Command Line** | `command-line.js` | **V1.5** | AutoCAD-style Prompt, Koordinaten-Parser, History, ArrowUp/Down Navigation, Input-Validation-Feedback |
@@ -248,7 +248,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **User-Store** | `lib/user-store.js` | **V1.0** | Benutzerverwaltung (scrypt-Hashing), Bootstrap erster Admin via Env-Vars |
 | **Session-Store** | `lib/session-store.js` | **V1.0** | In-Memory Session-Map, Sliding Expiry |
 | **Auth-Helper** | `lib/auth.js` | **V1.0** | Cookie-Parsing, Session-Cookie-Helper, JSON-Body-Parsing |
-| **Build-Info** | `build-info.js` | **V6.57** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V6.58** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.10 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -283,9 +283,9 @@ ceraCUT/
 │   └── auth.js                        ← Cookie/Body-Parsing-Helper V1.0
 ├── data/                               ← users.json (gitignored — Passwort-Hashes)
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V6.57
+│   ├── build-info.js                  ← Versions-Banner V6.58
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
-│   ├── app.js                         ← Hauptanwendung V6.57 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
+│   ├── app.js                         ← Hauptanwendung V6.58 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.18 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.13
 │   ├── geometry-ops.js                ← GeometryOps V2.6 (Intersection, Arabeske, splitAndOverlap)
@@ -302,7 +302,7 @@ ceraCUT/
 │   ├── snap-manager.js               ← Snap-System V1.5
 │   ├── drawing-tools.js              ← CAD-Tools V2.18 (Auto-Apply, Locked-Layer-Guard)
 │   ├── drawing-tools-ext.js           ← Ellipse, Spline, Donut, XLine, OB, Hatch V1.10
-│   ├── advanced-tools.js              ← Tier 5 Tools V1.7 (Fillet/Trim/Extend/Offset/Chamfer/Overkill)
+│   ├── advanced-tools.js              ← Tier 5 Tools V1.8 (Fillet/Trim/Extend/Offset/Chamfer/Overkill)
 │   ├── cam-tools.js                   ← CAM-Werkzeuge
 │   ├── tool-manager.js               ← Tool-Routing V2.2
 │   ├── layer-manager.js              ← Layer-System V1.2 (Drag-to-Reorder)
@@ -550,7 +550,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   bridge-cutting: V1.0 (20260309)
   quality-zones: V1.1 (20260315-bugfix35)
   cam-tools: V1.4 (20260625-analyzefix)
-  advanced-tools: V1.7 (20260625-deletedcontourguard)
+  advanced-tools: V1.8 (20260625-filletjoin)
   arc-fitting: V3.1 (20260315-bugfix35)
   dxf-browser: V1.1 (20260624-userlogin)
   server: V1.6 (20260625-slowlorisfix)

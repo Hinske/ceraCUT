@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.57
- * Version: V6.57
+ * CeraCUT Build Info V6.58
+ * Version: V6.58
  * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-thickerpreview
+ * Build: 20260625-filletjoin
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.57',
-    build: '20260625-thickerpreview',
+    version: '6.58',
+    build: '20260625-filletjoin',
     date: '2026-06-25',
-    time: '22:00 MEZ',
+    time: '22:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'f135435',
-        date: '2026-06-25 20:54:03 +0200',
-        message: 'ux: Preview-Linie beim Zeichnen dicker (drawing-tools V2.18, build V6.57)'
+        hash: 'a1e53ea',
+        date: '2026-06-25 21:04:44 +0200',
+        message: 'feat: Fillet-Tool verbindet zwei separate Linien zu einer Kontur (advanced-tools V1.8, build V6.58)'
     },
 
     modules: {
@@ -51,7 +51,7 @@ const CERACUT_BUILD = {
         'bridge-cutting':     { version: '1.0', build: '20260309' },
         'quality-zones':      { version: '1.1', build: '20260315-bugfix35' },
         'cam-tools':          { version: '1.4', build: '20260625-analyzefix' },
-        'advanced-tools':     { version: '1.7', build: '20260625-deletedcontourguard' },
+        'advanced-tools':     { version: '1.8', build: '20260625-filletjoin' },
         'arc-fitting':        { version: '3.1', build: '20260315-bugfix35' },
         'measure-tool':       { version: '1.2', build: '20260325-curvcheck' },
         'dimension-tool':     { version: '2.4', build: '20260326-dimedit' },
@@ -63,6 +63,11 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.58: Feature — Fillet Cross-Contour JOIN (advanced-tools.js V1.8): ' +
+        'Fillet-Tool verbindet jetzt zwei separate offene Linien zu einer Kontur. ' +
+        'R=0: spitze Ecke (trim/extend zum Schnittpunkt + JOIN). ' +
+        'R>0: Bogen einfügen + JOIN. Beide Varianten sind vollständig undo-bar. ' +
+        'Preview für R>0 cross-contour ergänzt.',
         'V6.57: UX — Preview-Linie beim Zeichnen dicker (drawing-tools.js V2.18): ' +
         'Rubber-Band lineWidth 1.0→2.0/scale, Opazität 0.6→0.85, Strichlänge [4,4]→[6,3] ' +
         'für bessere Erkennbarkeit von Kreis/Rechteck/Linie/Bogen vor der Bestätigung. ' +
