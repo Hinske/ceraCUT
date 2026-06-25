@@ -218,7 +218,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Arc-Fitting** | `arc-fitting.js` | **V3.1** | Polylinie → G02/G03 Bogen (fur PP-Ausgabe) |
 | **Pipeline** | `ceracut-pipeline.js` | **V3.9** | Topologie (disc/hole/reference/slit/none), Kerf-Offset, interiorPoint-basierte Nesting-Erkennung, Validation Engine (Pre-Export), Hatch-Konturen ausgeschlossen |
 | **Drawing Tools** | `drawing-tools.js` | **V2.16** | Tier 1+2 CAD-Tools, AutoCAD-Aliases, Continuous Mode, BreakTool, Enter/Rechtsklick=Beenden (AutoCAD), Layerfarbe, Auto-Apply pending Entities, Locked-Layer-Guard Window-Selection, ArcTool 8 Konstruktionsarten, PolylineTool Bogen-Modus, RectangleTool Fillet/Chamfer/Rotation, LineTool Fortsetzung, ALL/L-Selektion |
-| **Drawing Tools Ext** | `drawing-tools-ext.js` | **V1.8** | Ellipse, Spline, Donut, XLine, Overlap Break (OB), Hatch (H, eigenständige CamContour, Live-Preview, Farbpalette) |
+| **Drawing Tools Ext** | `drawing-tools-ext.js` | **V1.9** | Ellipse, Spline, Donut, XLine, Overlap Break (OB), Hatch (H, eigenständige CamContour, Live-Preview, Farbpalette) |
 | **Advanced Tools** | `advanced-tools.js` | **V1.7** | Fillet, Trim, Extend, Offset (Ghost-Preview), Chamfer, Arabeske, Aufteilen, Overkill, Boundary (DCEL) |
 | **CAM Tools** | `cam-tools.js` | **V1.1** | CAM-spezifische Werkzeuge, Hit-Test Zoom-Scaling |
 | **Tool Manager** | `tool-manager.js` | **V2.2** | Tool-Routing, Always-Active, Shortcut-Dispatch, Tier 4 |
@@ -301,7 +301,7 @@ ceraCUT/
 │   ├── dynamic-input.js              ← Dynamic Input HUD V1.1
 │   ├── snap-manager.js               ← Snap-System V1.5
 │   ├── drawing-tools.js              ← CAD-Tools V2.16 (Auto-Apply, Locked-Layer-Guard)
-│   ├── drawing-tools-ext.js           ← Ellipse, Spline, Donut, XLine, OB, Hatch V1.8
+│   ├── drawing-tools-ext.js           ← Ellipse, Spline, Donut, XLine, OB, Hatch V1.9
 │   ├── advanced-tools.js              ← Tier 5 Tools V1.7 (Fillet/Trim/Extend/Offset/Chamfer/Overkill)
 │   ├── cam-tools.js                   ← CAM-Werkzeuge
 │   ├── tool-manager.js               ← Tool-Routing V2.2
@@ -531,7 +531,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   snap-manager: V1.5 (20260625-snapcenterfix)
   geometry-ops: V2.6 (20260624-cadimprovements7)
   drawing-tools: V2.16 (20260625-deletedcontourguard)
-  drawing-tools-ext: V1.8 (20260623-bugfixaudit)
+  drawing-tools-ext: V1.9 (20260625-hatchtool4fix)
   dynamic-input: V1.1 (20260623-autocadfeel)
   tool-manager: V2.2 (20260216-0015)
   layer-manager: V1.2 (20260324-undofix)

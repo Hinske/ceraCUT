@@ -1,6 +1,13 @@
 /**
- * CeraCUT Drawing Tools Extension V1.8
+ * CeraCUT Drawing Tools Extension V1.9
  * Zusätzliche Zeichentools: Ellipse, Spline, Donut, XLine, OverlapBreak, Hatch
+ * V1.9: Fix — 4 HatchTool-Bugs: (1) cancel() löscht jetzt _hatchPreview/hoveredContour —
+ *        verhindert eingefrorene Schraffur-Vorschau nach ESC. (2) Undo/Redo rufen
+ *        updateContourPanel() auf — verhindert Geister-Konturen in der Seitenleiste.
+ *        (3) _findEnclosingContour() sortiert nach Math.abs(getArea()) — CW-Konturen
+ *        (negative Fläche) wurden sonst vor CCW-Konturen einsortiert und die falsche
+ *        äußere Kontur gewählt. (4) Duplikat-Check per _parentContourRef (Objekt-Referenz)
+ *        statt parentContourName — Namen sind in DXF-Dateien oft nicht eindeutig.
  * V1.8: Fix — HatchTool.cancel() entfernt Farbpalette (war zuvor nur in finish(), blieb nach ESC sichtbar)
  * V1.7: SplineTool AutoCAD-Overhaul — Dual-Preview, Close-to-Start, Continuous Mode, FitPoints erhalten
  * V1.6: Hatch Farbpalette — Floating Toolbar mit 8 AutoCAD-Farben + Pattern-Auswahl
@@ -10,8 +17,8 @@
  * V1.3: Hatch-Fix — Toast-Feedback, Panel-Refresh nach Hatch-Klick
  * Lazy-Patch Registration (wie advanced-tools.js)
  * Created: 2026-02-16 MEZ
- * Last Modified: 2026-03-23 MEZ
- * Build: 20260323-splinetool
+ * Last Modified: 2026-06-25 MEZ
+ * Build: 20260625-hatchtool4fix
  *
  * Abhängigkeiten:
  *   - drawing-tools.js (BaseTool, DrawingToolManager)
@@ -922,6 +929,11 @@ class HatchTool extends BaseTool {
     // V1.7: Farbpalette auch beim Abbrechen (ESC/Tool-Wechsel) entfernen
     cancel() {
         this._removeColorPalette();
+        this._previewContour = null;
+        if (this.manager.renderer) {
+            this.manager.renderer._hatchPreview = null;
+            this.manager.renderer.hoveredContour = null;
+        }
         super.cancel();
     }
 
@@ -1077,8 +1089,8 @@ class HatchTool extends BaseTool {
 
         if (candidates.length === 0) return null;
 
-        // Kleinste Fläche = innerste Kontur
-        candidates.sort((a, b) => a.getArea() - b.getArea());
+        // Kleinste absolute Fläche = innerste Kontur (Math.abs: CW-Konturen liefern negative Werte)
+        candidates.sort((a, b) => Math.abs(a.getArea()) - Math.abs(b.getArea()));
         return candidates[0];
     }
 
@@ -1108,6 +1120,9 @@ class HatchTool extends BaseTool {
             parentContourName: parentContour.name
         });
 
+        // Direkte Referenz für Duplikat-Check — Name ist in DXF-Dateien oft nicht eindeutig
+        hatchContour._parentContourRef = parentContour;
+
         return hatchContour;
     }
 
@@ -1121,9 +1136,10 @@ class HatchTool extends BaseTool {
             return;
         }
 
-        // Prüfe ob bereits ein Hatch für diese Kontur existiert
+        // Prüfe ob bereits ein Hatch für diese Kontur existiert — per Objekt-Referenz,
+        // nicht per Name (DXF-Konturen tragen oft denselben Namen wie ihren Layer).
         const app = this.manager.app;
-        const existing = app?.contours?.find(c => c.isHatchContour && c.parentContourName === contour.name);
+        const existing = app?.contours?.find(c => c.isHatchContour && c._parentContourRef === contour);
         if (existing) {
             this.cmd?.log(`Kontur "${contour.name}" hat bereits eine Schraffur — erst löschen (DEL)`, 'warning');
             return;
@@ -1144,11 +1160,13 @@ class HatchTool extends BaseTool {
                         app.contours.push(hatchContour);
                     }
                     app.renderer?.render();
+                    app.updateContourPanel?.();
                 },
                 () => {
                     const idx = app.contours.indexOf(hatchContour);
                     if (idx >= 0) app.contours.splice(idx, 1);
                     app.renderer?.render();
+                    app.updateContourPanel?.();
                 }
             );
             app.undoManager.execute(cmd);

@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'e543e3d',
-        date: '2026-06-25 19:15:11 +0200',
-        message: 'fix: Snap — Center/Endpoint-Punkte falsch positioniert (snap-manager V1.5, canvas-renderer V3.42, app V6.31)'
+        hash: '4ff0266',
+        date: '2026-06-25 19:17:55 +0200',
+        message: 'fix: 4 HatchTool-Bugs behoben (drawing-tools-ext V1.9)'
     },
 
     modules: {
@@ -32,7 +32,7 @@ const CERACUT_BUILD = {
         'snap-manager':       { version: '1.5', build: '20260625-snapcenterfix' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
         'drawing-tools':      { version: '2.16', build: '20260625-deletedcontourguard' },
-        'drawing-tools-ext':  { version: '1.8', build: '20260623-bugfixaudit' },
+        'drawing-tools-ext':  { version: '1.9', build: '20260625-hatchtool4fix' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
