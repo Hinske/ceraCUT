@@ -36,9 +36,14 @@
  *       Fix: I/J beibehalten, aber Bogenmittelpunkt auf Mittelsenkrechte der Sehne
  *       verschieben → r_start == r_end auf < 0.001mm (MD21010-Toleranz ~0.01mm).
  *       _adjustArcIJ()-Hilfsmethode added; curX/curY-Tracking in Ausgabe-Loops.
+ * V2.2: Minimaler Bogenradius — Bögen < kerfWidth×0.75 werden als G01 ausgegeben.
+ *       G41/G42 schlägt fehl wenn Bogenradius < Kerf/2 (kompensierter Radius ≤ 0).
+ *       WARICAM (Referenz) verwendet nur G01 — G01 unter G41/G42 ist immer korrekt.
+ *       Fix: ArcFitting.fitPolyline() bekommt minArcRadius = max(kerfWidth×0.75, 0.5mm).
+ *       ArcFitting.js hatte diesen Parameter bereits — nur der Aufruf fehlte.
  *
  * Last Modified: 2026-06-26
- * Build: 20260626-kreisfix
+ * Build: 20260626-minarc
  */
 
 class SinumerikPostprocessor {
@@ -390,6 +395,8 @@ class SinumerikPostprocessor {
     _generateClosedContour(contour, contourNum) {
         const lines = [];
         const pts = contour.points;
+        // V2.2: Mindestradius für G41/G42-sichere Bögen. Bögen < Schwelle → G01 via ArcFitting.
+        const minArcR = Math.max((contour.kerfWidth ?? 0.8) * 0.75, 0.5);
         if (!pts || pts.length < 3) {
             this._warnings.push(`Kontur ${contourNum}: Zu wenig Punkte (${pts?.length})`);
             return lines;
@@ -499,7 +506,7 @@ class SinumerikPostprocessor {
             : null;
 
         if (!bridgeSegs || bridgeSegs.length <= 1) {
-            const contourSegments = this._processContourPoints(pts);
+            const contourSegments = this._processContourPoints(pts, minArcR);
             for (let i = 0; i < contourSegments.length; i++) {
                 const seg = contourSegments[i];
                 const feedSuffix = (i === 0) ? ` F=${contourFeedParam}` : '';
@@ -520,7 +527,7 @@ class SinumerikPostprocessor {
             let isFirstOverall = true;
             for (const bseg of bridgeSegs) {
                 if (bseg.type === 'cut') {
-                    const segs = this._processContourPoints(bseg.points);
+                    const segs = this._processContourPoints(bseg.points, minArcR);
                     for (let i = 0; i < segs.length; i++) {
                         const seg = segs[i];
                         const feedSuffix = (isFirstOverall && i === 0) ? ` F=${contourFeedParam}` : '';
@@ -550,7 +557,7 @@ class SinumerikPostprocessor {
         // ── Overcut ──
         const overcut = contour.getOvercutPath?.();
         if (overcut?.points?.length >= 2) {
-            const overcutSegments = this._processContourPoints(overcut.points);
+            const overcutSegments = this._processContourPoints(overcut.points, minArcR);
             for (let i = 0; i < overcutSegments.length; i++) {
                 const seg = overcutSegments[i];
                 if (seg.type === 'line') {
@@ -777,15 +784,15 @@ class SinumerikPostprocessor {
      * @param {Array<{x,y}>} points
      * @returns {Array<{type:'line'|'arc', x, y, i?, j?, clockwise?}>}
      */
-    _processContourPoints(points) {
+    _processContourPoints(points, minArcRadius = null) {
         if (!points || points.length < 2) return [];
 
         // Versuch Arc-Fitting
         if (this.useArcFitting && typeof ArcFitting !== 'undefined') {
             try {
-                const fitted = ArcFitting.fitPolyline(points, {
-                    chordTolerance: this.arcTolerance
-                });
+                const arcOptions = { chordTolerance: this.arcTolerance };
+                if (minArcRadius !== null) arcOptions.minArcRadius = minArcRadius;
+                const fitted = ArcFitting.fitPolyline(points, arcOptions);
 
                 if (fitted && fitted.length > 0) {
                     return fitted.map(seg => {

@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.62
- * Version: V6.62
+ * CeraCUT Build Info V6.63
+ * Version: V6.63
  * Last Modified: 2026-06-26 MEZ
- * Build: 20260626-kreisfix
+ * Build: 20260626-minarc
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.62',
-    build: '20260626-kreisfix',
+    version: '6.63',
+    build: '20260626-minarc',
     date: '2026-06-26',
     time: '14:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '591d3f9',
-        date: '2026-06-26 13:49:16 +0200',
-        message: 'fix: Kreisendpunktfehler — geometrische I/J-Korrektur statt CR= (sinumerik-pp V2.1, build V6.62)'
+        hash: '9dd51c0',
+        date: '2026-06-26 14:47:09 +0200',
+        message: 'fix: Minimaler Bogenradius für G41/G42 — kleine Bögen als G01 (sinumerik-pp V2.2, build V6.63)'
     },
 
     modules: {
@@ -27,7 +27,7 @@ const CERACUT_BUILD = {
         'cam-contour':        { version: '5.21', build: '20260626-r923fix' },
         'canvas-renderer':    { version: '3.42', build: '20260625-snapcenterfix' },
         'undo-manager':       { version: '1.3', build: '20260625-deletedcontourguard' },
-        'sinumerik-pp':       { version: '2.1', build: '20260626-kreisfix' },
+        'sinumerik-pp':       { version: '2.2', build: '20260626-minarc' },
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.5', build: '20260625-snapcenterfix' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
@@ -63,6 +63,13 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.63: Fix — Minimaler Bogenradius für G41/G42 (sinumerik-postprocessor.js V2.2): ' +
+        'G41/G42 wirft "Bahnkomponente wird Null" / "Kollisionsgefahr" wenn Bogenradius < Kerf/2 ' +
+        '(kompensierter Radius ≤ 0). Betrifft Splines, Schriften, enge Konturen. ' +
+        'ArcFitting.fitPolyline() hat minArcRadius-Parameter bereits eingebaut (arc-fitting.js Zeile 276). ' +
+        'Fix: _processContourPoints() übergibt minArcRadius = max(kerfWidth×0.75, 0.5mm). ' +
+        'Bögen unter dem Schwellwert werden von ArcFitting als G01 ausgegeben — ' +
+        'wie WARICAM (Referenz), das ebenfalls G41/G42 mit nur G01 verwendet.',
         'V6.62: Fix — Kreisendpunktfehler + G41/G42-Kompatibilität (sinumerik-postprocessor.js V2.1): ' +
         'ArcFitting (Least-Squares) erzeugt Kreise die nicht exakt durch Start/Endpunkt gehen — ' +
         'Δr bis 0.4mm bei großen Radien → Alarm "Kreisendpunktfehler" (MD21010, Toleranz ~0.01mm). ' +
