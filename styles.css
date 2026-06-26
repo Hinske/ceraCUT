@@ -468,7 +468,88 @@ html, body {
     border-color: var(--accent-blue);
 }
 
+/* ═══ Lead-Panel UX-Verbesserungen (V3.14+) ═══ */
 
+/* Größere Klickflächen nur im Lead-Panel */
+.ribbon-group.lead-group .ribbon-inline-row {
+    height: 26px;
+}
+.ribbon-group.lead-group .ribbon-input {
+    height: 24px;
+}
+.ribbon-group.lead-group .ribbon-select {
+    height: 24px;
+}
+
+/* Micro-Header für Anfahrt / Ausfahrt / Anschluss */
+.lead-col-header {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 1px 2px 0 2px;
+    white-space: nowrap;
+    line-height: 1;
+}
+.lead-col-in  { color: #6dbf67; }
+.lead-col-out { color: #e08040; }
+.lead-col-pierce { color: #4fc3f7; }
+
+/* Trennlinie zwischen Anfahrt- und Ausfahrt-Stack */
+.lead-out-stack {
+    border-left: 1px solid var(--ribbon-separator);
+    padding-left: 4px;
+    margin-left: 2px;
+}
+
+/* Tooltip-Glossar: gepunktete Unterstreichung auf Kürzel-Labels */
+.lead-tip {
+    border-bottom: 1px dotted var(--ribbon-label);
+    cursor: help;
+    text-decoration: none;
+}
+
+/* Stepper-Wrapper (+/- Buttons um number-Inputs) */
+.stepper-wrap {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+}
+.stepper-btn {
+    width: 18px;
+    height: 22px;
+    border: 1px solid var(--ribbon-border);
+    background: var(--panel-input-bg);
+    color: var(--ribbon-label);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 0;
+    line-height: 1;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.stepper-btn:hover {
+    background: var(--ribbon-hover);
+    color: var(--panel-text);
+    border-color: var(--accent-blue);
+}
+.stepper-btn:active {
+    background: var(--accent-blue);
+    color: white;
+    border-color: var(--accent-blue);
+}
+.lead-group .stepper-btn {
+    height: 24px;
+}
+
+/* Mini-Skizze: Lead-Typ-Vorschau SVG */
+.lead-sketch {
+    display: block;
+    margin: 1px 2px 2px 2px;
+    flex-shrink: 0;
+}
 
 .ribbon-stats {
     font-size: 11px;

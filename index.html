@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CeraCUT V6.63 — Wasserstrahl CAM</title>
+    <title>CeraCUT V6.64 — Wasserstrahl CAM</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260625-favicon">
-    <link rel="stylesheet" href="styles.css?v=20260624-userlogin">
+    <link rel="stylesheet" href="styles.css?v=20260626-leaduxv2">
     <link rel="stylesheet" href="properties-panel-styles.css?v=20260315-ctxmenu">
     <script>
         // V6.32: Login/User-Management — Server injiziert window.CeraCutCurrentUser
@@ -58,7 +58,7 @@
             </button>
         </div>
         <span class="title-text">
-            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V6.63 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
+            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V6.64 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
         </span>
         <div class="title-right">
             <span class="version-badge">SINUMERIK 840D</span>
@@ -593,41 +593,76 @@
             <div class="ribbon-group-label">Profil</div>
         </div>
 
-        <!-- ═══ Außen-Lead (V3.14 — ersetzt alte "Anfahrt/Ausfahrt") ═══ -->
-        <div class="ribbon-group">
+        <!-- ═══ Außen-Lead (V3.15 — UX-Verbesserungen: Touch, Tooltips, Farbcodes) ═══ -->
+        <div class="ribbon-group lead-group">
             <div class="ribbon-group-content">
+                <!-- ▼ Anfahrt-Spalte (grün) -->
                 <div class="ribbon-sm-stack">
                     <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label">Typ:</span>
-                        <select class="ribbon-select" id="lead-type" style="width:80px">
-                            <option value="arc" selected>Arc</option>
-                            <option value="linear">Linear</option>
-                            <option value="tangent">Tangential</option>
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Anfahrtform&#10;⌒ Arc — Bogen-Anfahrt (R = Radius, ∠ = Winkel)&#10;╱ Linear — Geradlinige Anfahrt&#10;↗ Tangential — Tangential zur Kontur&#10;&#10;In: Länge · R: Radius · ∠: Winkel&#10;Out: Ausfahrtlänge · OC: Überlauf">Typ:</span>
+                        <select class="ribbon-select" id="lead-type" style="width:96px">
+                            <option value="arc" selected>⌒ Arc</option>
+                            <option value="linear">╱ Linear</option>
+                            <option value="tangent">↗ Tangential</option>
                         </select>
                     </div>
                     <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label">In:</span>
-                        <input type="number" class="ribbon-input" id="lead-in-length" value="4.0" step="0.5" min="0.5" max="30" style="width:45px">
-                        <span class="ribbon-field-label">R:</span>
-                        <input type="number" class="ribbon-input" id="lead-in-radius" value="2.0" step="0.5" min="0.5" max="15" style="width:40px">
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Anfahrtlänge&#10;Strecke vom Einstichpunkt zur Kontur (mm)">In:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="lead-in-length" value="4.0" step="0.5" min="0.5" max="30" style="width:34px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Bogenradius&#10;Radius des Anfahrtbogens (nur bei Typ Arc, mm)">R:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="lead-in-radius" value="2.0" step="0.5" min="0.5" max="15" style="width:30px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
                     </div>
                     <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label">∠:</span>
-                        <input type="number" class="ribbon-input" id="lead-in-angle" value="90" step="5" min="15" max="90" style="width:40px">
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Anfahrtwinkel&#10;Winkel der Anfahrt zur Kontur (15°–90°)">∠:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="lead-in-angle" value="90" step="5" min="15" max="90" style="width:30px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
                         <span class="ribbon-field-label">°</span>
                         <input type="checkbox" id="prefer-corners" checked>
-                        <label for="prefer-corners" class="ribbon-cb-label">Ecken</label>
+                        <label for="prefer-corners" class="ribbon-cb-label lead-tip"
+                               data-tip="Startpunkt bevorzugt an Kontur-Ecken setzen">Ecken</label>
                     </div>
                 </div>
-                <div class="ribbon-sm-stack">
+                <!-- ▼ Ausfahrt-Spalte (orange) -->
+                <div class="ribbon-sm-stack lead-out-stack">
                     <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label">Out:</span>
-                        <input type="number" class="ribbon-input" id="lead-out-length" value="4.0" step="0.5" min="0" max="30" style="width:45px">
-                        <span class="ribbon-field-label">OC:</span>
-                        <input type="number" class="ribbon-input" id="overcut-length" value="1.0" step="0.5" min="-5" max="10" style="width:40px">
+                        <span class="ribbon-field-label lead-tip lead-col-out"
+                              data-tip="Ausfahrtlänge&#10;Strecke des Strahls nach dem Schnittende (mm)">Out:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="lead-out-length" value="4.0" step="0.5" min="0" max="30" style="width:34px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
                     </div>
                     <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label">Ansch:</span>
+                        <span class="ribbon-field-label lead-tip lead-col-out"
+                              data-tip="Overcut / Überlauf&#10;Strecke die der Strahl über den Startpunkt hinausschneidet — schließt den Schnitt (mm)">OC:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="overcut-length" value="1.0" step="0.5" min="-5" max="10" style="width:34px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- ▼ Anschluss / Piercing (blau) -->
+                <div class="ribbon-sm-stack lead-out-stack">
+                    <div class="ribbon-inline-row">
+                        <span class="ribbon-field-label lead-tip lead-col-pierce"
+                              data-tip="Anschlussart (Piercing)&#10;Wie der Wasserstrahl das Material initial durchdringt">Ansch:</span>
                         <select class="ribbon-select" id="piercing-type" style="width:90px">
                             <option value="auto" selected>Auto (Linear)</option>
                             <option value="blind">Blind Lead</option>
@@ -637,28 +672,54 @@
                         </select>
                     </div>
                     <div class="ribbon-inline-row piercing-stationary-field" style="display:none">
-                        <span class="ribbon-field-label">Zeit:</span>
-                        <input type="number" class="ribbon-input" id="piercing-stationary-time" value="1.5" step="0.1" min="0.1" max="30" style="width:45px">
+                        <span class="ribbon-field-label lead-tip"
+                              data-tip="Wartezeit beim stationären Piercing (Sekunden)">Zeit:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="piercing-stationary-time" value="1.5" step="0.1" min="0.1" max="30" style="width:36px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
                         <span class="ribbon-field-unit">s</span>
                     </div>
                     <div class="ribbon-inline-row piercing-circular-field" style="display:none">
-                        <span class="ribbon-field-label">⌀:</span>
-                        <input type="number" class="ribbon-input" id="piercing-circular-radius" value="2.0" step="0.5" min="0.5" max="10" style="width:38px">
-                        <span class="ribbon-field-label">t:</span>
-                        <input type="number" class="ribbon-input" id="piercing-circular-time" value="2.0" step="0.1" min="0.1" max="30" style="width:38px">
+                        <span class="ribbon-field-label lead-tip"
+                              data-tip="Kreisradius beim kreisförmigen Piercing (mm)">⌀:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="piercing-circular-radius" value="2.0" step="0.5" min="0.5" max="10" style="width:30px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
+                        <span class="ribbon-field-label lead-tip"
+                              data-tip="Wartezeit beim kreisförmigen Piercing (Sekunden)">t:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="piercing-circular-time" value="2.0" step="0.1" min="0.1" max="30" style="width:30px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
                         <span class="ribbon-field-unit">s</span>
                     </div>
                 </div>
-                <div class="ribbon-sm-stack">
+                <!-- ▼ Dynamisch / Manuell -->
+                <div class="ribbon-sm-stack lead-out-stack">
                     <div class="ribbon-inline-row">
                         <input type="checkbox" id="dynamic-lead-ext">
                         <label for="dynamic-lead-ext" class="ribbon-cb-label" style="color:#f0a030">Dynamisch</label>
                     </div>
                     <div class="ribbon-inline-row dyn-lead-ext-field" style="display:none">
-                        <span class="ribbon-field-label">Min:</span>
-                        <input type="number" class="ribbon-input" id="dyn-lead-min" value="1.0" step="0.5" min="0.5" max="30" style="width:38px">
-                        <span class="ribbon-field-label">Max:</span>
-                        <input type="number" class="ribbon-input" id="dyn-lead-max" value="15.0" step="0.5" min="1" max="50" style="width:38px">
+                        <span class="ribbon-field-label lead-tip"
+                              data-tip="Minimale Anfahrtlänge (dynamischer Modus, mm)">Min:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="dyn-lead-min" value="1.0" step="0.5" min="0.5" max="30" style="width:28px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
+                        <span class="ribbon-field-label lead-tip"
+                              data-tip="Maximale Anfahrtlänge (dynamischer Modus, mm)">Max:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="dyn-lead-max" value="15.0" step="0.5" min="1" max="50" style="width:28px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
                     </div>
                     <div class="ribbon-inline-row">
                         <button class="ribbon-btn-mini" id="btn-single-lead" title="Fahne manuell setzen">📌 Manuell</button>
@@ -668,8 +729,8 @@
             <div class="ribbon-group-label">Außen-Lead</div>
         </div>
 
-        <!-- ═══ Innen-Lead (NEU V3.14 — CeraCUT Kap. 6.2.2) ═══ -->
-        <div class="ribbon-group">
+        <!-- ═══ Innen-Lead (V3.15 — Tooltips + Stepper) ═══ -->
+        <div class="ribbon-group lead-group">
             <div class="ribbon-group-content">
                 <div class="ribbon-sm-stack">
                     <div class="ribbon-inline-row">
@@ -677,31 +738,57 @@
                         <label for="int-like-ext" class="ribbon-cb-label" style="font-weight:600;color:#4fc3f7">= Außen</label>
                     </div>
                     <div class="ribbon-inline-row int-lead-field">
-                        <span class="ribbon-field-label">Typ:</span>
-                        <select class="ribbon-select" id="int-lead-type" style="width:80px" disabled>
-                            <option value="arc" selected>Arc</option>
-                            <option value="linear">Linear</option>
-                            <option value="tangent">Tangential</option>
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Anfahrtform (Innen)&#10;⌒ Arc · ╱ Linear · ↗ Tangential">Typ:</span>
+                        <select class="ribbon-select" id="int-lead-type" style="width:96px" disabled>
+                            <option value="arc" selected>⌒ Arc</option>
+                            <option value="linear">╱ Linear</option>
+                            <option value="tangent">↗ Tangential</option>
                         </select>
                     </div>
                     <div class="ribbon-inline-row int-lead-field">
-                        <span class="ribbon-field-label">In:</span>
-                        <input type="number" class="ribbon-input" id="int-lead-in-length" value="4.0" step="0.5" min="0.5" max="30" style="width:45px" disabled>
-                        <span class="ribbon-field-label">R:</span>
-                        <input type="number" class="ribbon-input" id="int-lead-in-radius" value="2.0" step="0.5" min="0.5" max="15" style="width:40px" disabled>
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Anfahrtlänge (Innen, mm)">In:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="int-lead-in-length" value="4.0" step="0.5" min="0.5" max="30" style="width:34px" disabled>
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Bogenradius (Innen, mm)">R:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="int-lead-in-radius" value="2.0" step="0.5" min="0.5" max="15" style="width:30px" disabled>
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
                     </div>
                 </div>
-                <div class="ribbon-sm-stack">
+                <div class="ribbon-sm-stack lead-out-stack">
                     <div class="ribbon-inline-row int-lead-field">
-                        <span class="ribbon-field-label">∠:</span>
-                        <input type="number" class="ribbon-input" id="int-lead-in-angle" value="90" step="5" min="15" max="90" style="width:40px" disabled>
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Anfahrtwinkel (Innen, 15°–90°)">∠:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="int-lead-in-angle" value="90" step="5" min="15" max="90" style="width:30px" disabled>
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
                         <span class="ribbon-field-label">°</span>
                     </div>
                     <div class="ribbon-inline-row int-lead-field">
-                        <span class="ribbon-field-label">Out:</span>
-                        <input type="number" class="ribbon-input" id="int-lead-out-length" value="4.0" step="0.5" min="0" max="30" style="width:45px" disabled>
-                        <span class="ribbon-field-label">OC:</span>
-                        <input type="number" class="ribbon-input" id="int-overcut-length" value="1.0" step="0.5" min="-5" max="10" style="width:40px" disabled>
+                        <span class="ribbon-field-label lead-tip lead-col-out"
+                              data-tip="Ausfahrtlänge (Innen, mm)">Out:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="int-lead-out-length" value="4.0" step="0.5" min="0" max="30" style="width:34px" disabled>
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
+                        <span class="ribbon-field-label lead-tip lead-col-out"
+                              data-tip="Overcut / Überlauf (Innen, mm)">OC:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="int-overcut-length" value="1.0" step="0.5" min="-5" max="10" style="width:30px" disabled>
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
                     </div>
                     <div class="ribbon-inline-row">
                         <input type="checkbox" id="use-area-classes">
@@ -1464,7 +1551,7 @@
 <!-- Scripts -->
 <!-- DebugMonitor: MUSS als ERSTES geladen werden — fängt alle Fehler ab -->
 <script src="js/debug-monitor.js?v=20260324-gitcommit"></script>
-<script src="js/build-info.js?v=20260626-minarc"></script>
+<script src="js/build-info.js?v=20260626-leaduxv2"></script>
 <script src="js/constants.js?v=20260623-autocadfeel"></script>
 <script src="js/geometry.js?v=20260624-gapfix"></script>
 <script src="js/arc-fitting.js?v=20260316-quietlogs"></script>
@@ -3324,7 +3411,7 @@
                     dynLeadFields.forEach(el => el.style.display = on ? 'flex' : 'none');
                     // Feste Länge ausblenden wenn dynamisch
                     const fixedLen = document.getElementById('lead-in-length');
-                    if (fixedLen) fixedLen.parentElement.style.opacity = on ? '0.4' : '1';
+                    if (fixedLen) fixedLen.closest('.ribbon-inline-row').style.opacity = on ? '0.4' : '1';
                     console.debug(`[Phase B.2] Dynamische Leads: ${on ? 'AN' : 'AUS'}`);
                 };
                 dynLeadExt.addEventListener('change', () => {
@@ -3452,6 +3539,32 @@
                 console.debug('[Phase B.3] Flächenklassen gespeichert + angewandt');
             });
             console.debug('%c[Phase B.3] Flächenklassen-UI aktiviert (6 IGEMS-Klassen)', 'color: #8bc34a');
+
+            // ---- B.4: Stepper-Buttons (+/−) für alle Lead-Inputs ----
+            (function initStepperButtons() {
+                document.querySelectorAll('.ribbon-group.lead-group .stepper-wrap').forEach(wrap => {
+                    const input = wrap.querySelector('input[type="number"]');
+                    const dec   = wrap.querySelector('.stepper-dec');
+                    const inc   = wrap.querySelector('.stepper-inc');
+                    if (!input || !dec || !inc) return;
+
+                    const step = (dir) => {
+                        if (input.disabled) return;
+                        const delta = parseFloat(input.step) || 1;
+                        let val = parseFloat(input.value) || 0;
+                        val = dir > 0 ? val + delta : val - delta;
+                        const min = input.min !== '' ? parseFloat(input.min) : -Infinity;
+                        const max = input.max !== '' ? parseFloat(input.max) : Infinity;
+                        val = Math.min(max, Math.max(min, Math.round(val / delta) * delta));
+                        input.value = parseFloat(val.toFixed(10));
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    };
+                    dec.addEventListener('click', () => step(-1));
+                    inc.addEventListener('click', () => step(+1));
+                });
+                console.debug('%c[Phase B.4] Stepper-Buttons initialisiert', 'color: #4fc3f7');
+            })();
 
             // ---- B.5: Single-Mode (Manuelle Fahne) ----
             const singleLeadBtn = document.getElementById('btn-single-lead');

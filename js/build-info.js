@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.63
- * Version: V6.63
+ * CeraCUT Build Info V6.64
+ * Version: V6.64
  * Last Modified: 2026-06-26 MEZ
- * Build: 20260626-minarc
+ * Build: 20260626-leaduxv2
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.63',
-    build: '20260626-minarc',
+    version: '6.64',
+    build: '20260626-leaduxv2',
     date: '2026-06-26',
     time: '14:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '9dd51c0',
-        date: '2026-06-26 14:47:09 +0200',
-        message: 'fix: Minimaler Bogenradius für G41/G42 — kleine Bögen als G01 (sinumerik-pp V2.2, build V6.63)'
+        hash: '3a48419',
+        date: '2026-06-26 17:35:54 +0200',
+        message: 'feat: Lead-Panel UX V2 — Touch-Stepper, Tooltip-Glossar, Farbcodes, Icons (build V6.64)'
     },
 
     modules: {
@@ -63,6 +63,14 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.64: UX — Lead-Panel Touch-Optimierung + Tooltip-Glossar (index.html + styles.css): ' +
+        '4 Verbesserungen: (1) Stepper-Buttons (−/+) um alle Lead-number-Inputs — initStepperButtons(). ' +
+        '(2) Tooltip-Glossar: data-tip auf alle Kürzel-Labels (OC, R, ∠, Ansch, Min, Max). ' +
+        '(3) Farbcodes: Anfahrt-Labels grün (#6dbf67), Ausfahrt-Labels orange (#e08040), Piercing blau. ' +
+        '(4) Unicode-Icons in Typ-Dropdowns: ⌒ Arc, ╱ Linear, ↗ Tangential. ' +
+        'Layout: 4 Stacks (Anfahrt | Ausfahrt | Anschluss | Dyn/Manuell) mit Trennlinie. ' +
+        'Innen-Lead ebenfalls mit Steppern und Tooltips. ' +
+        'JS-Fix: fixedLen.parentElement → .closest(.ribbon-inline-row) in Phase B.2.',
         'V6.63: Fix — Minimaler Bogenradius für G41/G42 (sinumerik-postprocessor.js V2.2): ' +
         'G41/G42 wirft "Bahnkomponente wird Null" / "Kollisionsgefahr" wenn Bogenradius < Kerf/2 ' +
         '(kompensierter Radius ≤ 0). Betrifft Splines, Schriften, enge Konturen. ' +
