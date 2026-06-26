@@ -30,14 +30,19 @@
  * V2.0: Koordinaten-Normierung — Nullpunkt (settings.origin) wird von allen absoluten
  *       X/Y-Koordinaten subtrahiert. Ergebnis: maschinenrelative Koordinaten (0,0 = Plattenecke).
  *       Arc I/J-Werte (relative Vektoren) bleiben unverändert.
+ * V2.1: CR=-Format statt I/J für G02/G03. ArcFitting (Least-Squares) erzeugt Kreise
+ *       die nicht exakt durch Start/Endpunkt gehen (bis 0.4mm Δr bei großen Radien) —
+ *       weit über MD21010-Toleranz (~0.01mm). Mit CR= berechnet die Sinumerik das
+ *       Zentrum selbst; kein Kreisendpunkt-Check. Alle Bögen in _generateClosedContour()
+ *       und _generateSlitContour() verwenden jetzt CR=. _cr()-Hilfsmethode added.
  *
  * Last Modified: 2026-06-26
- * Build: 20260626-coordnorm
+ * Build: 20260626-kreisfix
  */
 
 class SinumerikPostprocessor {
 
-    static VERSION = '2.0';
+    static VERSION = '2.1';
 
     constructor(options = {}) {
         // ═══ Formatierung ═══
@@ -402,6 +407,9 @@ class SinumerikPostprocessor {
 
         // G00: Eilgang zum Anstichpunkt
         lines.push(`N${this._lineNum++} G00 X${this._tx(piercePoint.x)} Y${this._ty(piercePoint.y)}`);
+        // V2.1: curX/curY verfolgen für CR=-Berechnung
+        let curX = +this._tx(piercePoint.x);
+        let curY = +this._ty(piercePoint.y);
 
         // Schneidreihe (Qualität)
         const quality = contour.quality || 2;
@@ -462,19 +470,24 @@ class SinumerikPostprocessor {
                     } else {
                         lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
                     }
+                    curX = +this._tx(seg.x); curY = +this._ty(seg.y);
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
+                    const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
+                    const cr = this._cr(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
                     if (isFirst) {
                         const feedStr = hasSpeedRamp ? 'F=VAKT FLIN H1' : `F=${this._getEckenVorschubParam(quality)} FLIN H1`;
-                        lines.push(`N${this._lineNum++} ${kerfCode} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)} ${feedStr}`);
+                        lines.push(`N${this._lineNum++} ${kerfCode} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)} ${feedStr}`);
                     } else {
-                        lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
+                        lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
                     }
+                    curX = endX; curY = endY;
                 }
             }
         } else {
             const feedStr = hasSpeedRamp ? 'F=VAKT FLIN H1' : `F=${this._getEckenVorschubParam(quality)} FLIN H1`;
             lines.push(`N${this._lineNum++} ${kerfCode} G01 X${this._tx(pts[0].x)} Y${this._ty(pts[0].y)} ${feedStr}`);
+            curX = +this._tx(pts[0].x); curY = +this._ty(pts[0].y);
         }
 
         // ── Kontur-Punkte (G01/G02/G03) — V1.5: expliziter F-Code auf erstem Segment ──
@@ -491,9 +504,13 @@ class SinumerikPostprocessor {
                 const feedSuffix = (i === 0) ? ` F=${contourFeedParam}` : '';
                 if (seg.type === 'line') {
                     lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}${feedSuffix}`);
+                    curX = +this._tx(seg.x); curY = +this._ty(seg.y);
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
-                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}${feedSuffix}`);
+                    const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
+                    const cr = this._cr(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
+                    lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}${feedSuffix}`);
+                    curX = endX; curY = endY;
                 }
             }
         } else {
@@ -508,9 +525,13 @@ class SinumerikPostprocessor {
                         const feedSuffix = (isFirstOverall && i === 0) ? ` F=${contourFeedParam}` : '';
                         if (seg.type === 'line') {
                             lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}${feedSuffix}`);
+                            curX = +this._tx(seg.x); curY = +this._ty(seg.y);
                         } else {
                             const arcCmd = seg.clockwise ? 'G02' : 'G03';
-                            lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}${feedSuffix}`);
+                            const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
+                            const cr = this._cr(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
+                            lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}${feedSuffix}`);
+                            curX = endX; curY = endY;
                         }
                     }
                     isFirstOverall = false;
@@ -518,6 +539,7 @@ class SinumerikPostprocessor {
                     lines.push(`N${this._lineNum++} ${abrasiveOff}                            ; Steg — Abrasiv aus`);
                     for (const p of bseg.points) {
                         lines.push(`N${this._lineNum++} G01 X${this._tx(p.x)} Y${this._ty(p.y)}`);
+                        curX = +this._tx(p.x); curY = +this._ty(p.y);
                     }
                     lines.push(`N${this._lineNum++} ${abrasiveOn}                            ; Steg Ende — Abrasiv an`);
                 }
@@ -532,9 +554,13 @@ class SinumerikPostprocessor {
                 const seg = overcutSegments[i];
                 if (seg.type === 'line') {
                     lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
+                    curX = +this._tx(seg.x); curY = +this._ty(seg.y);
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
-                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
+                    const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
+                    const cr = this._cr(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
+                    lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
+                    curX = endX; curY = endY;
                 }
             }
         }
@@ -554,9 +580,13 @@ class SinumerikPostprocessor {
                 const seg = leadOutSegments[i];
                 if (seg.type === 'line') {
                     lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
+                    curX = +this._tx(seg.x); curY = +this._ty(seg.y);
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
-                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
+                    const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
+                    const cr = this._cr(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
+                    lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
+                    curX = endX; curY = endY;
                 }
             }
 
@@ -565,7 +595,9 @@ class SinumerikPostprocessor {
                 lines.push(`N${this._lineNum++} G40 G01 X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)}`);
             } else {
                 const arcCmd = lastSeg.clockwise ? 'G02' : 'G03';
-                lines.push(`N${this._lineNum++} G40 ${arcCmd} X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)} I${this._fc(lastSeg.i)} J${this._fc(lastSeg.j)}`);
+                const endX = +this._tx(lastSeg.x), endY = +this._ty(lastSeg.y);
+                const cr = this._cr(curX, curY, +this._fc(lastSeg.i), +this._fc(lastSeg.j), endX, endY, lastSeg.clockwise);
+                lines.push(`N${this._lineNum++} G40 ${arcCmd} CR=${this._fc(cr)} X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)}`);
             }
             } // Ende: leadOutSegments.length > 0
         } else {
@@ -631,15 +663,26 @@ class SinumerikPostprocessor {
             lines.push(`N${this._lineNum++} G01 X${this._tx(secondSeg.x)} Y${this._ty(secondSeg.y)} F=${normalParam} FLIN`);
         }
 
+        // Slit: curX/curY nach G41 G01 auf firstSeg setzen
+        let slitCurX = +this._tx(firstSeg.x), slitCurY = +this._ty(firstSeg.y);
+        if (segments.length > 1) {
+            slitCurX = +this._tx(segments[1].x);
+            slitCurY = +this._ty(segments[1].y);
+        }
+
         // Hauptschnitt
         for (let i = 2; i < segments.length - 1; i++) {
             const seg = segments[i];
             if (seg.type === 'line') {
                 const suffix = (i === 2) ? ' H0' : '';
                 lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}${suffix}`);
+                slitCurX = +this._tx(seg.x); slitCurY = +this._ty(seg.y);
             } else {
                 const arcCmd = seg.clockwise ? 'G02' : 'G03';
-                lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
+                const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
+                const cr = this._cr(slitCurX, slitCurY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
+                lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
+                slitCurX = endX; slitCurY = endY;
             }
         }
 
@@ -880,7 +923,7 @@ class SinumerikPostprocessor {
     _fc(value) {
         if (value == null || !isFinite(value)) {
             const msg = `KOORDINATEN-FEHLER: ungültiger Wert (${value})`;
-            console.error(`[PP V2.0] ${msg}`);
+            console.error(`[PP V2.1] ${msg}`);
             this._warnings.push(msg);
             this._hasFatalError = true;
             return '0.000';  // Fallback, aber Export wird durch _hasFatalError blockiert
@@ -893,6 +936,36 @@ class SinumerikPostprocessor {
     _tx(x) { return this._fc(x - (this._ox || 0)); }
     // Nur für absolute Y-Koordinaten verwenden
     _ty(y) { return this._fc(y - (this._oy || 0)); }
+
+    /**
+     * V2.1: CR-Wert (Sinumerik Radius-Format) statt I/J für G02/G03.
+     * Vermeidet "Kreisendpunktfehler": ArcFitting (Least-Squares) erzeugt Kreise
+     * die NICHT exakt durch Start- und Endpunkt gehen — der Radiusunterschied
+     * kann 0.4mm betragen, weit über MD21010-Toleranz (0.01mm).
+     * Mit CR= berechnet die Steuerung das Zentrum selbst; kein Endpunkt-Check.
+     * CR > 0: kurzer Bogen (< 180°), CR < 0: langer Bogen (> 180°).
+     *
+     * @param {number} curX - aktuelles X (Ausgabe-Koordinate, gerundet)
+     * @param {number} curY - aktuelles Y (Ausgabe-Koordinate, gerundet)
+     * @param {number} i    - I-Wert (Zentrum relativ zu curX, bereits _fc()-gerundet)
+     * @param {number} j    - J-Wert (Zentrum relativ zu curY, bereits _fc()-gerundet)
+     * @param {number} endX - Ziel-X (Ausgabe-Koordinate, gerundet)
+     * @param {number} endY - Ziel-Y (Ausgabe-Koordinate, gerundet)
+     * @param {boolean} clockwise - true = G02 (CW), false = G03 (CCW)
+     */
+    _cr(curX, curY, i, j, endX, endY, clockwise) {
+        const r = Math.sqrt(i * i + j * j);
+        if (r < 1e-9) return 0;
+        // Kreuzprodukt (Zentrum→Start) × (Zentrum→Ende): bestimmt kurz/langen Bogen
+        // center→start = (-i, -j); center→end = (endX-curX-i, endY-curY-j)
+        const ex = endX - curX - i;
+        const ey = endY - curY - j;
+        const cross = (-i) * ey - (-j) * ex;   // = -i*ey + j*ex
+        // CCW (G03): kurzer Bogen wenn cross > 0
+        // CW  (G02): kurzer Bogen wenn cross < 0
+        const isShort = clockwise ? cross <= 0 : cross >= 0;
+        return isShort ? r : -r;
+    }
 
     // ════════════════════════════════════════════════════════════════
     // MULTI-HEAD SUPPORT (V1.3)

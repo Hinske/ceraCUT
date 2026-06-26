@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.61
- * Version: V6.61
+ * CeraCUT Build Info V6.62
+ * Version: V6.62
  * Last Modified: 2026-06-26 MEZ
- * Build: 20260626-r923fix
+ * Build: 20260626-kreisfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.61',
-    build: '20260626-r923fix',
+    version: '6.62',
+    build: '20260626-kreisfix',
     date: '2026-06-26',
-    time: '13:00 MEZ',
+    time: '14:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'c1d60c9',
-        date: '2026-06-26 12:33:37 +0200',
-        message: 'fix: R923=9 als Standard-Anschlussart — kein "fehlende Anschlussparameter" mehr (cam-contour V5.21, build V6.61)'
+        hash: '2b21004',
+        date: '2026-06-26 13:10:05 +0200',
+        message: 'fix: Kreisendpunktfehler — G03/G02 jetzt mit CR= statt I/J (sinumerik-pp V2.1, build V6.62)'
     },
 
     modules: {
@@ -27,7 +27,7 @@ const CERACUT_BUILD = {
         'cam-contour':        { version: '5.21', build: '20260626-r923fix' },
         'canvas-renderer':    { version: '3.42', build: '20260625-snapcenterfix' },
         'undo-manager':       { version: '1.3', build: '20260625-deletedcontourguard' },
-        'sinumerik-pp':       { version: '2.0', build: '20260626-coordnorm' },
+        'sinumerik-pp':       { version: '2.1', build: '20260626-kreisfix' },
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.5', build: '20260625-snapcenterfix' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
@@ -63,6 +63,14 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.62: Fix — Kreisendpunktfehler behoben (sinumerik-postprocessor.js V2.1): ' +
+        'ArcFitting (Least-Squares) erzeugt Kreise die nicht exakt durch Start/Endpunkt gehen — ' +
+        'Δr bis 0.4mm bei großen Radien (202mm), weit über Sinumerik-Toleranz MD21010 (~0.01mm). ' +
+        'Folge: Alarm "Kanal 1 Satz N11 Kreisendpunktfehler" — Maschine bricht ab. ' +
+        'Fix: CR=-Format statt I/J in allen G02/G03-Ausgaben. Mit CR= berechnet die Sinumerik ' +
+        'das Zentrum selbst aus Radius + Start + End — kein Endpunkt-Check. ' +
+        'Neue _cr()-Methode berechnet signierten CR-Wert (positiv=kurz, negativ=lang). ' +
+        'curX/curY-Tracking in _generateClosedContour() und _generateSlitContour() added.',
         'V6.61: Fix — R923=9 als Standard-Anschlussart (cam-contour.js V5.21): ' +
         'getPiercingR923(): piercingType="auto" lieferte R923=1 (Linearer Anschuss) — ' +
         'L201 dieser Maschine kennt R923=1 nicht, wirft "fehlende Anschlussparameter". ' +
