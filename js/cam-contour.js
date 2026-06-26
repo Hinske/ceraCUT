@@ -1,5 +1,10 @@
 /**
- * CeraCUT CamContour V5.20 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.21 - IGEMS-konformes Lead-In/Out System
+ * V5.21: Fix — getPiercingR923(): 'auto' mapped jetzt auf R923=9 (Rotationsanschuss)
+ *        statt R923=1 (Linearer Anschuss). L201-Subroutine dieser Maschine kennt R923=1
+ *        nicht (oder braucht undokumentierte R918/R919-Parameter) → "fehlende Anschuss-
+ *        parameter" Alarm. WARICAM (Referenz) verwendet R923=9 für alle Konturen.
+ *        Fallback ?? ebenfalls auf 9 geändert.
  * V5.20: Fix — _truncatePathToHalfLength() indexierte points[0] ohne vorherige
  *        Längenprüfung: bei leerem Array → return [undefined]. Neuer Guard
  *        if (!points || points.length === 0) return [] vor der _pathLength()-Berechnung.
@@ -90,7 +95,7 @@
  * V5.4: Hatch-Property (Schraffur — reine Visualisierung) + clone()-Support
  * V5.6: Hatch als eigenständige CamContour (cuttingMode='none', isHatchContour)
  * V5.7: Gap Detection — gaps[], healedGaps[] Properties + hasGaps()/clearGapData()
- * Last Modified: 2026-03-16 UTC
+ * Last Modified: 2026-06-26
  */
 
 class CamContour {
@@ -2302,14 +2307,14 @@ class CamContour {
     getPiercingR923() {
         const MAP = {
             'air_start':     0,
-            'auto':          1,
+            'auto':          9,  // Rotationsanschuss — L201 dieser Maschine braucht R923=9
             'pierce_linear': 1,
             'stationary':    2,
             'circular':      3,
             'drilling':      4,
             'blind':         9
         };
-        return MAP[this.piercingType] ?? 1;
+        return MAP[this.piercingType] ?? 9;
     }
 
     // ════════════════════════════════════════════════════════════════

@@ -1,30 +1,30 @@
 /**
- * CeraCUT Build Info V6.60
- * Version: V6.60
+ * CeraCUT Build Info V6.61
+ * Version: V6.61
  * Last Modified: 2026-06-26 MEZ
- * Build: 20260626-coordnorm
+ * Build: 20260626-r923fix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.60',
-    build: '20260626-coordnorm',
+    version: '6.61',
+    build: '20260626-r923fix',
     date: '2026-06-26',
-    time: '12:00 MEZ',
+    time: '13:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'dd4eedf',
-        date: '2026-06-26 09:40:18 +0200',
-        message: 'fix: Koordinaten-Normierung im Postprozessor — Nullpunkt wird jetzt abgezogen (sinumerik-pp V2.0, build V6.60)'
+        hash: 'c1d60c9',
+        date: '2026-06-26 12:33:37 +0200',
+        message: 'fix: R923=9 als Standard-Anschlussart — kein "fehlende Anschlussparameter" mehr (cam-contour V5.21, build V6.61)'
     },
 
     modules: {
         'dxf-parser':         { version: '3.18', build: '20260625-chainsplinedataloss' },
         'geometry':           { version: '2.13', build: '20260624-gapfix' },
         'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
-        'cam-contour':        { version: '5.20', build: '20260625-bugfixsweep' },
+        'cam-contour':        { version: '5.21', build: '20260626-r923fix' },
         'canvas-renderer':    { version: '3.42', build: '20260625-snapcenterfix' },
         'undo-manager':       { version: '1.3', build: '20260625-deletedcontourguard' },
         'sinumerik-pp':       { version: '2.0', build: '20260626-coordnorm' },
@@ -63,6 +63,12 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.61: Fix — R923=9 als Standard-Anschlussart (cam-contour.js V5.21): ' +
+        'getPiercingR923(): piercingType="auto" lieferte R923=1 (Linearer Anschuss) — ' +
+        'L201 dieser Maschine kennt R923=1 nicht, wirft "fehlende Anschlussparameter". ' +
+        'WARICAM (Referenz, läuft auf der Maschine) benutzt R923=9 für alle Konturen. ' +
+        'Fix: "auto"→9, Fallback ??→9. piercingType="pierce_linear" bleibt auf R923=1 ' +
+        '(explizite Wahl des Benutzers, kein Auto-Fallback).',
         'V6.60: Fix — Koordinaten-Normierung im Postprozessor (sinumerik-postprocessor.js V2.0): ' +
         'Der Nullpunkt (settings.origin) wurde nie an den Postprozessor übergeben — alle X/Y-Koordinaten ' +
         'im CNC-Code waren rohe DXF-Weltkoordinaten statt maschinenrelative Koordinaten. ' +
