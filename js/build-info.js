@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.58
- * Version: V6.58
- * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-filletjoin
+ * CeraCUT Build Info V6.59
+ * Version: V6.59
+ * Last Modified: 2026-06-26 MEZ
+ * Build: 20260626-sortfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.58',
-    build: '20260625-filletjoin',
-    date: '2026-06-25',
-    time: '22:30 MEZ',
+    version: '6.59',
+    build: '20260626-sortfix',
+    date: '2026-06-26',
+    time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'a1e53ea',
-        date: '2026-06-25 21:04:44 +0200',
-        message: 'feat: Fillet-Tool verbindet zwei separate Linien zu einer Kontur (advanced-tools V1.8, build V6.58)'
+        hash: '3c0428b',
+        date: '2026-06-26 07:34:14 +0200',
+        message: 'fix: Schnitt-Reihenfolge — Innen-vor-Außen und Verfahrweg-Optimierung (app V6.32, build V6.59)'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.31', build: '20260625-snapcenterfix' },
+        'app':                { version: '6.32', build: '20260626-sortfix' },
         'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },

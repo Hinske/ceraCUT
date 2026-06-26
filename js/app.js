@@ -1,5 +1,5 @@
 /**
- * CeraCUT V6.30 - Main Application
+ * CeraCUT V6.32 - Main Application
  * V6.30: Fix — 3 Robustheitsfixes aus systematischer Code-Inspektion (Agent-gestützt):
  *        (1) Startpunkt-Grip-Edit: _notifyStateChange() fehlte nach undoStack.push() —
  *        Undo/Redo-Buttons blieben nach Startpunkt-Verschiebung in veraltetem State.
@@ -1695,14 +1695,63 @@ class CeraCutApp {
         }
         
         switch (method) {
-            case 'inside-out':
-                // Kleinste (Löcher) zuerst, dann größere (Scheiben)
-                cuttable.sort((a, b) => {
-                    const areaA = Math.abs(this.computeArea(a.contour.points));
-                    const areaB = Math.abs(this.computeArea(b.contour.points));
-                    return areaA - areaB;
-                });
+            case 'inside-out': {
+                // Hierarchie-Baum aufbauen: direkter Parent jedes Items
+                const { parent: ioParent, children: ioChildren } = this._buildParentChildMap(cuttable);
+
+                // Bounding-Box-Zentrum eines Items
+                const bbCenter = (item) => {
+                    const pts = item.contour.points;
+                    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                    for (const p of pts) {
+                        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+                    }
+                    return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+                };
+
+                // DFS Post-Order: erst alle Kinder (Blätter zuerst), dann der Knoten selbst
+                const visited = new Set();
+                const dfsPost = (item) => {
+                    if (visited.has(item)) return [];
+                    visited.add(item);
+                    const kids = [...(ioChildren.get(item) || [])].sort((a, b) =>
+                        this.computeArea(a.contour.points) - this.computeArea(b.contour.points));
+                    const out = [];
+                    for (const kid of kids) out.push(...dfsPost(kid));
+                    out.push(item);
+                    return out;
+                };
+
+                // Top-Level Items (kein Parent): Nearest-Neighbor-Reihenfolge
+                const roots = cuttable.filter(item => ioParent.get(item) === null);
+                let maxX = -Infinity, maxY = -Infinity;
+                for (const r of roots) { const c = bbCenter(r); if (c.x > maxX) maxX = c.x; if (c.y > maxY) maxY = c.y; }
+                let curPos = { x: maxX + 10, y: maxY + 10 };
+                const remRoots = [...roots];
+                const sortedRoots = [];
+                while (remRoots.length > 0) {
+                    let bi = 0, bd = Infinity;
+                    for (let i = 0; i < remRoots.length; i++) {
+                        const c = bbCenter(remRoots[i]);
+                        const d = (c.x - curPos.x) ** 2 + (c.y - curPos.y) ** 2;
+                        if (d < bd) { bd = d; bi = i; }
+                    }
+                    const best = remRoots.splice(bi, 1)[0];
+                    sortedRoots.push(best);
+                    curPos = bbCenter(best);
+                }
+
+                // Alle Items per DFS Post-Order sammeln
+                const ioResult = [];
+                for (const root of sortedRoots) ioResult.push(...dfsPost(root));
+                // Orphans (Slits ohne Polygon-Prüfung etc.) anhängen
+                for (const item of cuttable) { if (!visited.has(item)) ioResult.push(item); }
+
+                cuttable.length = 0;
+                cuttable.push(...ioResult);
                 break;
+            }
                 
             case 'outside-in':
                 // Größte zuerst
@@ -1774,111 +1823,104 @@ class CeraCutApp {
     sortByShortestPath(cuttable, startItem = null) {
         if (cuttable.length < 2) return;
         console.time('[SORT] sortByShortestPath');
-        
-        // Endpunkte vorab berechnen (Start + Ende jeder Kontur)
+
+        // Topologie-Hierarchie: Holes müssen vor ihrer Parent-Disc geschnitten werden
+        const { parent: tpParent, children: tpChildren } = this._buildParentChildMap(cuttable);
+
+        // Pending-Kinder-Count: eine Kontur ist "bereit" wenn alle ihre Kinder geschnitten sind
+        const pendingCount = new Map();
+        for (const item of cuttable) {
+            pendingCount.set(item, (tpChildren.get(item) || []).length);
+        }
+
+        // Endpunkte vorab berechnen
         const endpoints = new Map();
         let maxX = -Infinity, maxY = -Infinity;
-        
         for (const item of cuttable) {
             const pts = item.contour.points;
             const first = pts[0];
             const last = pts[pts.length - 1];
             endpoints.set(item, { first, last });
-            // Für Startpunkt-Berechnung
             const cx = (first.x + last.x) / 2;
             const cy = (first.y + last.y) / 2;
             if (cx > maxX) maxX = cx;
             if (cy > maxY) maxY = cy;
         }
-        
+
         const sorted = [];
-        const remaining = [...cuttable];
+        const remaining = new Set(cuttable);
         let currentPos;
-        
+
+        const markDone = (item) => {
+            const par = tpParent.get(item);
+            if (par && pendingCount.has(par)) {
+                pendingCount.set(par, pendingCount.get(par) - 1);
+            }
+        };
+
         // Startpunkt bestimmen
         if (startItem) {
-            const startIdx = remaining.findIndex(item => item === startItem);
-            if (startIdx !== -1) {
-                const first = remaining.splice(startIdx, 1)[0];
-                sorted.push(first);
-                const ep = endpoints.get(first);
-                currentPos = ep.last; // Ende des ersten Schnitts
-                console.log('[SORT] TSP ab Kontur:', first.contour.name || first.index);
-            }
+            remaining.delete(startItem);
+            sorted.push(startItem);
+            markDone(startItem);
+            currentPos = endpoints.get(startItem).last;
+            console.log('[SORT] TSP ab Kontur:', startItem.contour.name || startItem.index);
         } else {
-            // Standard: Hinten-Rechts (maxX, maxY) für Spritzer-Vermeidung
             currentPos = { x: maxX + 10, y: maxY + 10 };
         }
-        
-        // Greedy nearest-neighbor mit Endpunkt-Awareness
-        // Für jede Kontur: prüfe Distanz zu Start UND Ende
-        // Wähle nächste Kontur + optimale Richtung
-        // → Erzeugt automatisch Serpentinen/Boustrophedon bei Slits
+
         let reversals = 0;
-        const reversedContourRefs = []; // Kontur-Objekte die umgekehrt wurden (nicht Indizes — Shift-sicher)
-        
-        while (remaining.length > 0) {
-            let bestIdx = 0;
-            let bestDist = Infinity;
-            let bestReverse = false;
-            
-            for (let i = 0; i < remaining.length; i++) {
-                const ep = endpoints.get(remaining[i]);
-                const isClosed = remaining[i].contour.isClosed;
-                
-                // Distanz zum Start der Kontur (normale Richtung)
+        const reversedContourRefs = [];
+
+        while (remaining.size > 0) {
+            // Nur Kandidaten deren Kinder bereits geschnitten sind (pendingCount = 0)
+            let candidates = [...remaining].filter(item => pendingCount.get(item) === 0);
+            if (candidates.length === 0) {
+                // Fallback: kein Topologie-Constraint, verhindert Deadlock
+                candidates = [...remaining];
+                console.warn('[SORT] Topologie-Deadlock — Fallback auf beliebige Kontur');
+            }
+
+            let bestIdx = 0, bestDist = Infinity, bestReverse = false;
+
+            for (let i = 0; i < candidates.length; i++) {
+                const ep = endpoints.get(candidates[i]);
+                const isClosed = candidates[i].contour.isClosed;
+
                 const dxS = ep.first.x - currentPos.x;
                 const dyS = ep.first.y - currentPos.y;
-                const distToStart = dxS * dxS + dyS * dyS; // Quadrat reicht für Vergleich
-                
-                if (distToStart < bestDist) {
-                    bestDist = distToStart;
-                    bestIdx = i;
-                    bestReverse = false;
-                }
-                
-                // Distanz zum Ende der Kontur (umgekehrte Richtung)
-                // Nur für offene Konturen (Slits) — geschlossene sind richtungsunabhängig
+                const distToStart = dxS * dxS + dyS * dyS;
+                if (distToStart < bestDist) { bestDist = distToStart; bestIdx = i; bestReverse = false; }
+
                 if (!isClosed) {
                     const dxE = ep.last.x - currentPos.x;
                     const dyE = ep.last.y - currentPos.y;
                     const distToEnd = dxE * dxE + dyE * dyE;
-                    
-                    if (distToEnd < bestDist) {
-                        bestDist = distToEnd;
-                        bestIdx = i;
-                        bestReverse = true;
-                    }
+                    if (distToEnd < bestDist) { bestDist = distToEnd; bestIdx = i; bestReverse = true; }
                 }
             }
-            
-            const best = remaining.splice(bestIdx, 1)[0];
-            
-            // Kontur umkehren wenn das Ende näher war
+
+            const best = candidates[bestIdx];
+            remaining.delete(best);
+            sorted.push(best);
+            markDone(best);
+
             if (bestReverse && best.contour.points) {
                 best.contour.points.reverse();
                 best.contour.invalidate?.();
-                // Endpunkte-Cache aktualisieren
                 const ep = endpoints.get(best);
-                const tmp = ep.first;
-                ep.first = ep.last;
-                ep.last = tmp;
+                const tmp = ep.first; ep.first = ep.last; ep.last = tmp;
                 reversals++;
                 reversedContourRefs.push(best.contour);
             }
-            
-            sorted.push(best);
-            const ep = endpoints.get(best);
-            currentPos = ep.last; // Weiter vom Ende des Schnitts
+
+            currentPos = endpoints.get(best).last;
         }
-        
-        // In-place sortieren
+
         cuttable.length = 0;
         cuttable.push(...sorted);
-        
-        // Objekt-Referenzen für Undo verfügbar machen
         this._lastReversedContours = reversedContourRefs;
-        
+
         console.timeEnd('[SORT] sortByShortestPath');
         console.log(`[SORT] ${sorted.length} Konturen, ${reversals} Richtungsumkehrungen (Serpentine)`);
     }
@@ -3506,6 +3548,35 @@ class CeraCutApp {
             area -= points[j].x * points[i].y;
         }
         return Math.abs(area / 2);
+    }
+
+    // Hierarchie-Baum für Sortierung: direkter Parent jedes Items (kleinste enthaltende Kontur)
+    _buildParentChildMap(cuttable) {
+        const children = new Map();
+        const parent = new Map();
+        for (const item of cuttable) {
+            children.set(item, []);
+            parent.set(item, null);
+        }
+        for (const item of cuttable) {
+            if (!item.contour.points || item.contour.points.length < 3) continue;
+            const testPt = (typeof Geometry !== 'undefined' && Geometry.interiorPoint)
+                ? Geometry.interiorPoint(item.contour.points)
+                : item.contour.points[0];
+            if (!testPt) continue;
+            let bestParent = null, bestArea = Infinity;
+            for (const candidate of cuttable) {
+                if (candidate === item) continue;
+                if (!candidate.contour.points || candidate.contour.points.length < 3) continue;
+                if (CeraCutPipeline._pointInPolygon(testPt, candidate.contour.points)) {
+                    const area = this.computeArea(candidate.contour.points);
+                    if (area < bestArea) { bestArea = area; bestParent = candidate; }
+                }
+            }
+            parent.set(item, bestParent);
+            if (bestParent) children.get(bestParent).push(item);
+        }
+        return { parent, children };
     }
     
     // ════════════════════════════════════════════════════════════════
