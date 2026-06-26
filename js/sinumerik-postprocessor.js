@@ -27,14 +27,17 @@
  *       die 12-Punkte-Tessellierung erneut zu fitten — vermeidet Diskrepanz zur Canvas-
  *       Vorschau an der Linie→Bogen-Nahtstelle. Gekürzte/alternative Leads fallen weiter
  *       auf ArcFitting.fitPolyline() zurück.
+ * V2.0: Koordinaten-Normierung — Nullpunkt (settings.origin) wird von allen absoluten
+ *       X/Y-Koordinaten subtrahiert. Ergebnis: maschinenrelative Koordinaten (0,0 = Plattenecke).
+ *       Arc I/J-Werte (relative Vektoren) bleiben unverändert.
  *
- * Last Modified: 2026-06-25
- * Build: 20260625-bugfixsweep
+ * Last Modified: 2026-06-26
+ * Build: 20260626-coordnorm
  */
 
 class SinumerikPostprocessor {
 
-    static VERSION = '1.9';
+    static VERSION = '2.0';
 
     constructor(options = {}) {
         // ═══ Formatierung ═══
@@ -84,6 +87,10 @@ class SinumerikPostprocessor {
         this._lineNum = 0;
         this._warnings = [];
         this._hasFatalError = false;
+
+        // V2.0: Nullpunkt-Offset — alle absoluten Koordinaten werden um diesen Wert verschoben
+        this._ox = settings.origin?.x ?? 0;
+        this._oy = settings.origin?.y ?? 0;
 
         const planName = (settings.planName || 'UNNAMED').toUpperCase().replace(/[^A-Z0-9_]/g, '_');
         const material = settings.material || 'AALLGEMEIN';
@@ -394,7 +401,7 @@ class SinumerikPostprocessor {
         const entryPoint = leadIn?.entryPoint || pts[0];
 
         // G00: Eilgang zum Anstichpunkt
-        lines.push(`N${this._lineNum++} G00 X${this._fc(piercePoint.x)} Y${this._fc(piercePoint.y)}`);
+        lines.push(`N${this._lineNum++} G00 X${this._tx(piercePoint.x)} Y${this._ty(piercePoint.y)}`);
 
         // Schneidreihe (Qualität)
         const quality = contour.quality || 2;
@@ -451,23 +458,23 @@ class SinumerikPostprocessor {
                 if (seg.type === 'line') {
                     if (isFirst) {
                         const feedStr = hasSpeedRamp ? 'F=VAKT FLIN H1' : `F=${this._getEckenVorschubParam(quality)} FLIN H1`;
-                        lines.push(`N${this._lineNum++} ${kerfCode} G01 X${this._fc(seg.x)} Y${this._fc(seg.y)} ${feedStr}`);
+                        lines.push(`N${this._lineNum++} ${kerfCode} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)} ${feedStr}`);
                     } else {
-                        lines.push(`N${this._lineNum++} G01 X${this._fc(seg.x)} Y${this._fc(seg.y)}`);
+                        lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
                     }
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
                     if (isFirst) {
                         const feedStr = hasSpeedRamp ? 'F=VAKT FLIN H1' : `F=${this._getEckenVorschubParam(quality)} FLIN H1`;
-                        lines.push(`N${this._lineNum++} ${kerfCode} ${arcCmd} X${this._fc(seg.x)} Y${this._fc(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)} ${feedStr}`);
+                        lines.push(`N${this._lineNum++} ${kerfCode} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)} ${feedStr}`);
                     } else {
-                        lines.push(`N${this._lineNum++} ${arcCmd} X${this._fc(seg.x)} Y${this._fc(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
+                        lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
                     }
                 }
             }
         } else {
             const feedStr = hasSpeedRamp ? 'F=VAKT FLIN H1' : `F=${this._getEckenVorschubParam(quality)} FLIN H1`;
-            lines.push(`N${this._lineNum++} ${kerfCode} G01 X${this._fc(pts[0].x)} Y${this._fc(pts[0].y)} ${feedStr}`);
+            lines.push(`N${this._lineNum++} ${kerfCode} G01 X${this._tx(pts[0].x)} Y${this._ty(pts[0].y)} ${feedStr}`);
         }
 
         // ── Kontur-Punkte (G01/G02/G03) — V1.5: expliziter F-Code auf erstem Segment ──
@@ -483,10 +490,10 @@ class SinumerikPostprocessor {
                 const seg = contourSegments[i];
                 const feedSuffix = (i === 0) ? ` F=${contourFeedParam}` : '';
                 if (seg.type === 'line') {
-                    lines.push(`N${this._lineNum++} G01 X${this._fc(seg.x)} Y${this._fc(seg.y)}${feedSuffix}`);
+                    lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}${feedSuffix}`);
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
-                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._fc(seg.x)} Y${this._fc(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}${feedSuffix}`);
+                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}${feedSuffix}`);
                 }
             }
         } else {
@@ -500,17 +507,17 @@ class SinumerikPostprocessor {
                         const seg = segs[i];
                         const feedSuffix = (isFirstOverall && i === 0) ? ` F=${contourFeedParam}` : '';
                         if (seg.type === 'line') {
-                            lines.push(`N${this._lineNum++} G01 X${this._fc(seg.x)} Y${this._fc(seg.y)}${feedSuffix}`);
+                            lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}${feedSuffix}`);
                         } else {
                             const arcCmd = seg.clockwise ? 'G02' : 'G03';
-                            lines.push(`N${this._lineNum++} ${arcCmd} X${this._fc(seg.x)} Y${this._fc(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}${feedSuffix}`);
+                            lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}${feedSuffix}`);
                         }
                     }
                     isFirstOverall = false;
                 } else {
                     lines.push(`N${this._lineNum++} ${abrasiveOff}                            ; Steg — Abrasiv aus`);
                     for (const p of bseg.points) {
-                        lines.push(`N${this._lineNum++} G01 X${this._fc(p.x)} Y${this._fc(p.y)}`);
+                        lines.push(`N${this._lineNum++} G01 X${this._tx(p.x)} Y${this._ty(p.y)}`);
                     }
                     lines.push(`N${this._lineNum++} ${abrasiveOn}                            ; Steg Ende — Abrasiv an`);
                 }
@@ -524,10 +531,10 @@ class SinumerikPostprocessor {
             for (let i = 0; i < overcutSegments.length; i++) {
                 const seg = overcutSegments[i];
                 if (seg.type === 'line') {
-                    lines.push(`N${this._lineNum++} G01 X${this._fc(seg.x)} Y${this._fc(seg.y)}`);
+                    lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
-                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._fc(seg.x)} Y${this._fc(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
+                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
                 }
             }
         }
@@ -539,31 +546,31 @@ class SinumerikPostprocessor {
             if (!leadOutSegments.length) {
                 // Fallback: Kerf abwählen am letzten Konturpunkt
                 const fallbackPt = overcut?.endPoint || pts[pts.length - 1];
-                if (fallbackPt) lines.push(`N${this._lineNum++} G40 G01 X${this._fc(fallbackPt.x)} Y${this._fc(fallbackPt.y)}`);
+                if (fallbackPt) lines.push(`N${this._lineNum++} G40 G01 X${this._tx(fallbackPt.x)} Y${this._ty(fallbackPt.y)}`);
             } else {
             const lastSeg = leadOutSegments[leadOutSegments.length - 1];
 
             for (let i = 0; i < leadOutSegments.length - 1; i++) {
                 const seg = leadOutSegments[i];
                 if (seg.type === 'line') {
-                    lines.push(`N${this._lineNum++} G01 X${this._fc(seg.x)} Y${this._fc(seg.y)}`);
+                    lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
-                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._fc(seg.x)} Y${this._fc(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
+                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
                 }
             }
 
             // Letztes Segment: G40 (Kerf abwählen)
             if (lastSeg.type === 'line') {
-                lines.push(`N${this._lineNum++} G40 G01 X${this._fc(lastSeg.x)} Y${this._fc(lastSeg.y)}`);
+                lines.push(`N${this._lineNum++} G40 G01 X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)}`);
             } else {
                 const arcCmd = lastSeg.clockwise ? 'G02' : 'G03';
-                lines.push(`N${this._lineNum++} G40 ${arcCmd} X${this._fc(lastSeg.x)} Y${this._fc(lastSeg.y)} I${this._fc(lastSeg.i)} J${this._fc(lastSeg.j)}`);
+                lines.push(`N${this._lineNum++} G40 ${arcCmd} X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)} I${this._fc(lastSeg.i)} J${this._fc(lastSeg.j)}`);
             }
             } // Ende: leadOutSegments.length > 0
         } else {
             const lastPt = overcut?.endPoint || (pts.length > 0 ? pts[pts.length - 1] : null);
-            if (lastPt) lines.push(`N${this._lineNum++} G40 G01 X${this._fc(lastPt.x)} Y${this._fc(lastPt.y)}`);
+            if (lastPt) lines.push(`N${this._lineNum++} G40 G01 X${this._tx(lastPt.x)} Y${this._ty(lastPt.y)}`);
         }
 
         // L205: Jet-Off
@@ -597,7 +604,7 @@ class SinumerikPostprocessor {
         const leadIn = contour.getLeadInPath?.();
         const startPt = leadIn?.piercingPoint || pts[0];
 
-        lines.push(`N${this._lineNum++} G00 X${this._fc(startPt.x)} Y${this._fc(startPt.y)}`);
+        lines.push(`N${this._lineNum++} G00 X${this._tx(startPt.x)} Y${this._ty(startPt.y)}`);
 
         const quality = contour.quality || 2;
         lines.push(`N${this._lineNum++} R957=${quality}                               ; Anwahl der Schneidreihe`);
@@ -616,12 +623,12 @@ class SinumerikPostprocessor {
 
         // Erster Punkt: Kerf-Anwahl + Eckengeschwindigkeit
         const firstSeg = segments[0];
-        lines.push(`N${this._lineNum++} ${kerfCode} G01 X${this._fc(firstSeg.x)} Y${this._fc(firstSeg.y)} F=${eckenParam} FLIN H1`);
+        lines.push(`N${this._lineNum++} ${kerfCode} G01 X${this._tx(firstSeg.x)} Y${this._ty(firstSeg.y)} F=${eckenParam} FLIN H1`);
 
         // Zweiter Punkt: Ramp-Up
         if (segments.length > 1) {
             const secondSeg = segments[1];
-            lines.push(`N${this._lineNum++} G01 X${this._fc(secondSeg.x)} Y${this._fc(secondSeg.y)} F=${normalParam} FLIN`);
+            lines.push(`N${this._lineNum++} G01 X${this._tx(secondSeg.x)} Y${this._ty(secondSeg.y)} F=${normalParam} FLIN`);
         }
 
         // Hauptschnitt
@@ -629,17 +636,17 @@ class SinumerikPostprocessor {
             const seg = segments[i];
             if (seg.type === 'line') {
                 const suffix = (i === 2) ? ' H0' : '';
-                lines.push(`N${this._lineNum++} G01 X${this._fc(seg.x)} Y${this._fc(seg.y)}${suffix}`);
+                lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}${suffix}`);
             } else {
                 const arcCmd = seg.clockwise ? 'G02' : 'G03';
-                lines.push(`N${this._lineNum++} ${arcCmd} X${this._fc(seg.x)} Y${this._fc(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
+                lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(seg.i)} J${this._fc(seg.j)}`);
             }
         }
 
         // Letzter Punkt: Ramp-Down
         if (segments.length > 2) {
             const lastSeg = segments[segments.length - 1];
-            lines.push(`N${this._lineNum++} G01 X${this._fc(lastSeg.x)} Y${this._fc(lastSeg.y)}  F=${eckenParam} FLIN H1`);
+            lines.push(`N${this._lineNum++} G01 X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)}  F=${eckenParam} FLIN H1`);
         }
 
         // L205: Jet-Off
@@ -873,13 +880,19 @@ class SinumerikPostprocessor {
     _fc(value) {
         if (value == null || !isFinite(value)) {
             const msg = `KOORDINATEN-FEHLER: ungültiger Wert (${value})`;
-            console.error(`[PP V1.8] ${msg}`);
+            console.error(`[PP V2.0] ${msg}`);
             this._warnings.push(msg);
             this._hasFatalError = true;
             return '0.000';  // Fallback, aber Export wird durch _hasFatalError blockiert
         }
         return value.toFixed(this.coordDecimals);
     }
+
+    // V2.0: Koordinaten-Normierung — subtrahiert Nullpunkt (Origin) vor Formatierung
+    // Nur für absolute X-Koordinaten verwenden; Arc I/J bleiben _fc()
+    _tx(x) { return this._fc(x - (this._ox || 0)); }
+    // Nur für absolute Y-Koordinaten verwenden
+    _ty(y) { return this._fc(y - (this._oy || 0)); }
 
     // ════════════════════════════════════════════════════════════════
     // MULTI-HEAD SUPPORT (V1.3)
@@ -915,6 +928,10 @@ class SinumerikPostprocessor {
         this._lineNum = 0;
         this._warnings = [];
         this._hasFatalError = false;
+
+        // V2.0: Nullpunkt-Offset
+        this._ox = settings.origin?.x ?? 0;
+        this._oy = settings.origin?.y ?? 0;
 
         const planName = (settings.planName || 'UNNAMED').toUpperCase().replace(/[^A-Z0-9_]/g, '_');
         const material = settings.material || 'AALLGEMEIN';

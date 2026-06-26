@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.59
- * Version: V6.59
+ * CeraCUT Build Info V6.60
+ * Version: V6.60
  * Last Modified: 2026-06-26 MEZ
- * Build: 20260626-sortfix
+ * Build: 20260626-coordnorm
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.59',
-    build: '20260626-sortfix',
+    version: '6.60',
+    build: '20260626-coordnorm',
     date: '2026-06-26',
-    time: '10:00 MEZ',
+    time: '12:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '3c0428b',
-        date: '2026-06-26 07:34:14 +0200',
-        message: 'fix: Schnitt-Reihenfolge — Innen-vor-Außen und Verfahrweg-Optimierung (app V6.32, build V6.59)'
+        hash: 'dd4eedf',
+        date: '2026-06-26 09:40:18 +0200',
+        message: 'fix: Koordinaten-Normierung im Postprozessor — Nullpunkt wird jetzt abgezogen (sinumerik-pp V2.0, build V6.60)'
     },
 
     modules: {
@@ -27,7 +27,7 @@ const CERACUT_BUILD = {
         'cam-contour':        { version: '5.20', build: '20260625-bugfixsweep' },
         'canvas-renderer':    { version: '3.42', build: '20260625-snapcenterfix' },
         'undo-manager':       { version: '1.3', build: '20260625-deletedcontourguard' },
-        'sinumerik-pp':       { version: '1.9', build: '20260625-bugfixsweep' },
+        'sinumerik-pp':       { version: '2.0', build: '20260626-coordnorm' },
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.5', build: '20260625-snapcenterfix' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
@@ -63,6 +63,15 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.60: Fix — Koordinaten-Normierung im Postprozessor (sinumerik-postprocessor.js V2.0): ' +
+        'Der Nullpunkt (settings.origin) wurde nie an den Postprozessor übergeben — alle X/Y-Koordinaten ' +
+        'im CNC-Code waren rohe DXF-Weltkoordinaten statt maschinenrelative Koordinaten. ' +
+        'Folge: G00 X1085 statt G00 X155 für eine 370mm-Platte — Schneidkopf würde weit außerhalb ' +
+        'der Platte ansetzen und mit Verfahrwegfehler abbrechen. ' +
+        'Fix: app.js übergibt origin an generate()/generateDownload() (alle 3 Call-Sites). ' +
+        'Postprozessor speichert _ox/_oy, neue Methoden _tx(x)/_ty(y) subtrahieren Origin vor Ausgabe. ' +
+        'Alle absoluten X/Y-Positionen (G00, G01, G02, G03, G40) nutzen _tx/_ty. ' +
+        'Arc I/J-Werte (relative Vektoren) bleiben unverändert (_fc).',
         'V6.58: Feature — Fillet Cross-Contour JOIN (advanced-tools.js V1.8): ' +
         'Fillet-Tool verbindet jetzt zwei separate offene Linien zu einer Kontur. ' +
         'R=0: spitze Ecke (trim/extend zum Schnittpunkt + JOIN). ' +

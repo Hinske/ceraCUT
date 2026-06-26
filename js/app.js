@@ -4404,7 +4404,8 @@ class CeraCutApp {
             planName,
             dicke: this.settings.materialThickness || 10.0,
             material: this._cerajetResult?.material?.name || 'AALLGEMEIN',
-            technologyParams
+            technologyParams,
+            origin: this.settings.origin
         });
 
         if (!result || !result.code || result.code.trim().length === 0) {
@@ -4550,7 +4551,8 @@ class CeraCutApp {
             planName,
             dicke: this.settings.materialThickness || 10.0,
             material: this._cerajetResult?.material?.name || 'AALLGEMEIN',
-            technologyParams
+            technologyParams,
+            origin: this.settings.origin
         });
 
         if (!result.code) {
@@ -4680,7 +4682,8 @@ class CeraCutApp {
         const commonSettings = {
             dicke: this.settings.materialThickness || 10.0,
             material: this._cerajetResult?.material?.name || 'AALLGEMEIN',
-            technologyParams
+            technologyParams,
+            origin: this.settings.origin
         };
 
         // V6.4: Multi-Material Gruppierung
