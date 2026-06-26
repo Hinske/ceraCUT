@@ -30,11 +30,12 @@
  * V2.0: Koordinaten-Normierung — Nullpunkt (settings.origin) wird von allen absoluten
  *       X/Y-Koordinaten subtrahiert. Ergebnis: maschinenrelative Koordinaten (0,0 = Plattenecke).
  *       Arc I/J-Werte (relative Vektoren) bleiben unverändert.
- * V2.1: CR=-Format statt I/J für G02/G03. ArcFitting (Least-Squares) erzeugt Kreise
- *       die nicht exakt durch Start/Endpunkt gehen (bis 0.4mm Δr bei großen Radien) —
- *       weit über MD21010-Toleranz (~0.01mm). Mit CR= berechnet die Sinumerik das
- *       Zentrum selbst; kein Kreisendpunkt-Check. Alle Bögen in _generateClosedContour()
- *       und _generateSlitContour() verwenden jetzt CR=. _cr()-Hilfsmethode added.
+ * V2.1: Kreisendpunktfehler-Fix mit geometrischer Mittelpunkt-Korrektur statt CR=.
+ *       CR= war inkompatibel mit G41/G42 (Werkzeugradiuskorrektur) auf dieser Maschine:
+ *       "Bahnkomponente wird Null" (N111) + "Kollisionsgefahr" (N432) + keine Vorschau.
+ *       Fix: I/J beibehalten, aber Bogenmittelpunkt auf Mittelsenkrechte der Sehne
+ *       verschieben → r_start == r_end auf < 0.001mm (MD21010-Toleranz ~0.01mm).
+ *       _adjustArcIJ()-Hilfsmethode added; curX/curY-Tracking in Ausgabe-Loops.
  *
  * Last Modified: 2026-06-26
  * Build: 20260626-kreisfix
@@ -474,12 +475,12 @@ class SinumerikPostprocessor {
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
                     const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
-                    const cr = this._cr(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
+                    const adj = this._adjustArcIJ(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY);
                     if (isFirst) {
                         const feedStr = hasSpeedRamp ? 'F=VAKT FLIN H1' : `F=${this._getEckenVorschubParam(quality)} FLIN H1`;
-                        lines.push(`N${this._lineNum++} ${kerfCode} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)} ${feedStr}`);
+                        lines.push(`N${this._lineNum++} ${kerfCode} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)} ${feedStr}`);
                     } else {
-                        lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
+                        lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}`);
                     }
                     curX = endX; curY = endY;
                 }
@@ -508,8 +509,8 @@ class SinumerikPostprocessor {
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
                     const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
-                    const cr = this._cr(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
-                    lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}${feedSuffix}`);
+                    const adj = this._adjustArcIJ(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY);
+                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}${feedSuffix}`);
                     curX = endX; curY = endY;
                 }
             }
@@ -529,8 +530,8 @@ class SinumerikPostprocessor {
                         } else {
                             const arcCmd = seg.clockwise ? 'G02' : 'G03';
                             const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
-                            const cr = this._cr(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
-                            lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}${feedSuffix}`);
+                            const adj = this._adjustArcIJ(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY);
+                            lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}${feedSuffix}`);
                             curX = endX; curY = endY;
                         }
                     }
@@ -558,8 +559,8 @@ class SinumerikPostprocessor {
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
                     const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
-                    const cr = this._cr(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
-                    lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
+                    const adj = this._adjustArcIJ(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY);
+                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}`);
                     curX = endX; curY = endY;
                 }
             }
@@ -584,8 +585,8 @@ class SinumerikPostprocessor {
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
                     const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
-                    const cr = this._cr(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
-                    lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
+                    const adj = this._adjustArcIJ(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY);
+                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}`);
                     curX = endX; curY = endY;
                 }
             }
@@ -596,8 +597,8 @@ class SinumerikPostprocessor {
             } else {
                 const arcCmd = lastSeg.clockwise ? 'G02' : 'G03';
                 const endX = +this._tx(lastSeg.x), endY = +this._ty(lastSeg.y);
-                const cr = this._cr(curX, curY, +this._fc(lastSeg.i), +this._fc(lastSeg.j), endX, endY, lastSeg.clockwise);
-                lines.push(`N${this._lineNum++} G40 ${arcCmd} CR=${this._fc(cr)} X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)}`);
+                const adj = this._adjustArcIJ(curX, curY, +this._fc(lastSeg.i), +this._fc(lastSeg.j), endX, endY);
+                lines.push(`N${this._lineNum++} G40 ${arcCmd} X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}`);
             }
             } // Ende: leadOutSegments.length > 0
         } else {
@@ -680,8 +681,8 @@ class SinumerikPostprocessor {
             } else {
                 const arcCmd = seg.clockwise ? 'G02' : 'G03';
                 const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
-                const cr = this._cr(slitCurX, slitCurY, +this._fc(seg.i), +this._fc(seg.j), endX, endY, seg.clockwise);
-                lines.push(`N${this._lineNum++} ${arcCmd} CR=${this._fc(cr)} X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
+                const adj = this._adjustArcIJ(slitCurX, slitCurY, +this._fc(seg.i), +this._fc(seg.j), endX, endY);
+                lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}`);
                 slitCurX = endX; slitCurY = endY;
             }
         }
@@ -938,33 +939,50 @@ class SinumerikPostprocessor {
     _ty(y) { return this._fc(y - (this._oy || 0)); }
 
     /**
-     * V2.1: CR-Wert (Sinumerik Radius-Format) statt I/J für G02/G03.
-     * Vermeidet "Kreisendpunktfehler": ArcFitting (Least-Squares) erzeugt Kreise
-     * die NICHT exakt durch Start- und Endpunkt gehen — der Radiusunterschied
-     * kann 0.4mm betragen, weit über MD21010-Toleranz (0.01mm).
-     * Mit CR= berechnet die Steuerung das Zentrum selbst; kein Endpunkt-Check.
-     * CR > 0: kurzer Bogen (< 180°), CR < 0: langer Bogen (> 180°).
+     * V2.1: Korrigiert Bogenmittelpunkt auf Mittelsenkrechte der Sehne (r_start == r_end).
+     * ArcFitting (Least-Squares) erzeugt Mittelpunkte die NICHT exakt durch Start/Endpunkt
+     * gehen — Δr bis 0.4mm bei großen Radien (z.B. 202mm) → Kreisendpunktfehler MD21010.
+     * Fix: Mittelpunkt entlang der Mittelsenkrechten der Sehne verschieben, gemittelter Radius.
+     * Ergebnis: Δr < 0.001mm nach _fc()-Rundung — weit unter MD21010-Toleranz (~0.01mm).
+     * CR= wird NICHT verwendet (inkompatibel mit G41/G42 auf dieser Maschine).
      *
-     * @param {number} curX - aktuelles X (Ausgabe-Koordinate, gerundet)
-     * @param {number} curY - aktuelles Y (Ausgabe-Koordinate, gerundet)
-     * @param {number} i    - I-Wert (Zentrum relativ zu curX, bereits _fc()-gerundet)
-     * @param {number} j    - J-Wert (Zentrum relativ zu curY, bereits _fc()-gerundet)
-     * @param {number} endX - Ziel-X (Ausgabe-Koordinate, gerundet)
-     * @param {number} endY - Ziel-Y (Ausgabe-Koordinate, gerundet)
-     * @param {boolean} clockwise - true = G02 (CW), false = G03 (CCW)
+     * @param {number} curX - Startpunkt X (Output-Koordinate, gerundet)
+     * @param {number} curY - Startpunkt Y (Output-Koordinate, gerundet)
+     * @param {number} i    - I-Wert (Zentrum relativ zu curX)
+     * @param {number} j    - J-Wert (Zentrum relativ zu curY)
+     * @param {number} endX - Endpunkt X (Output-Koordinate, gerundet)
+     * @param {number} endY - Endpunkt Y (Output-Koordinate, gerundet)
+     * @returns {{ i: number, j: number }} - korrigierte I/J-Werte
      */
-    _cr(curX, curY, i, j, endX, endY, clockwise) {
-        const r = Math.sqrt(i * i + j * j);
-        if (r < 1e-9) return 0;
-        // Kreuzprodukt (Zentrum→Start) × (Zentrum→Ende): bestimmt kurz/langen Bogen
-        // center→start = (-i, -j); center→end = (endX-curX-i, endY-curY-j)
-        const ex = endX - curX - i;
-        const ey = endY - curY - j;
-        const cross = (-i) * ey - (-j) * ex;   // = -i*ey + j*ex
-        // CCW (G03): kurzer Bogen wenn cross > 0
-        // CW  (G02): kurzer Bogen wenn cross < 0
-        const isShort = clockwise ? cross <= 0 : cross >= 0;
-        return isShort ? r : -r;
+    _adjustArcIJ(curX, curY, i, j, endX, endY) {
+        const cx = curX + i, cy = curY + j;
+        const r1 = Math.sqrt(i * i + j * j);
+        const dx = endX - cx, dy = endY - cy;
+        const r2 = Math.sqrt(dx * dx + dy * dy);
+
+        // Bereits präzise genug (z.B. Lead-In-Bögen aus exakten Metadaten)
+        if (Math.abs(r1 - r2) < 0.0005) return { i, j };
+
+        const r = (r1 + r2) / 2;
+        const mx = (curX + endX) / 2, my = (curY + endY) / 2;
+        const chordX = endX - curX, chordY = endY - curY;
+        const chordLen = Math.sqrt(chordX * chordX + chordY * chordY);
+
+        if (chordLen < 1e-9 || r < chordLen / 2 - 1e-6) return { i, j };
+
+        const perpX = -chordY / chordLen, perpY = chordX / chordLen;
+        const halfChord = chordLen / 2;
+        const h = Math.sqrt(Math.max(0, r * r - halfChord * halfChord));
+
+        const c1x = mx + h * perpX, c1y = my + h * perpY;
+        const c2x = mx - h * perpX, c2y = my - h * perpY;
+
+        const d1 = (c1x - cx) * (c1x - cx) + (c1y - cy) * (c1y - cy);
+        const d2 = (c2x - cx) * (c2x - cx) + (c2y - cy) * (c2y - cy);
+
+        const newCx = d1 <= d2 ? c1x : c2x;
+        const newCy = d1 <= d2 ? c1y : c2y;
+        return { i: newCx - curX, j: newCy - curY };
     }
 
     // ════════════════════════════════════════════════════════════════

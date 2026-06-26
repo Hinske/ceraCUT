@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '2b21004',
-        date: '2026-06-26 13:10:05 +0200',
-        message: 'fix: Kreisendpunktfehler — G03/G02 jetzt mit CR= statt I/J (sinumerik-pp V2.1, build V6.62)'
+        hash: '591d3f9',
+        date: '2026-06-26 13:49:16 +0200',
+        message: 'fix: Kreisendpunktfehler — geometrische I/J-Korrektur statt CR= (sinumerik-pp V2.1, build V6.62)'
     },
 
     modules: {
@@ -63,14 +63,14 @@ const CERACUT_BUILD = {
     },
 
     changes: [
-        'V6.62: Fix — Kreisendpunktfehler behoben (sinumerik-postprocessor.js V2.1): ' +
+        'V6.62: Fix — Kreisendpunktfehler + G41/G42-Kompatibilität (sinumerik-postprocessor.js V2.1): ' +
         'ArcFitting (Least-Squares) erzeugt Kreise die nicht exakt durch Start/Endpunkt gehen — ' +
-        'Δr bis 0.4mm bei großen Radien (202mm), weit über Sinumerik-Toleranz MD21010 (~0.01mm). ' +
-        'Folge: Alarm "Kanal 1 Satz N11 Kreisendpunktfehler" — Maschine bricht ab. ' +
-        'Fix: CR=-Format statt I/J in allen G02/G03-Ausgaben. Mit CR= berechnet die Sinumerik ' +
-        'das Zentrum selbst aus Radius + Start + End — kein Endpunkt-Check. ' +
-        'Neue _cr()-Methode berechnet signierten CR-Wert (positiv=kurz, negativ=lang). ' +
-        'curX/curY-Tracking in _generateClosedContour() und _generateSlitContour() added.',
+        'Δr bis 0.4mm bei großen Radien → Alarm "Kreisendpunktfehler" (MD21010, Toleranz ~0.01mm). ' +
+        'Erster Fixversuch mit CR=-Format scheiterte: CR= inkompatibel mit G41/G42 auf dieser Maschine ' +
+        '("Bahnkomponente wird Null" N111, "Kollisionsgefahr" N432, keine Vorschau). ' +
+        'Endlösung: I/J beibehalten, Bogenmittelpunkt geometrisch korrigieren — ' +
+        '_adjustArcIJ() verschiebt Mittelpunkt auf Mittelsenkrechte der Sehne (gemittelter Radius). ' +
+        'Ergebnis: r_start == r_end auf < 0.001mm, weit unter MD21010. G41/G42 funktioniert normal.',
         'V6.61: Fix — R923=9 als Standard-Anschlussart (cam-contour.js V5.21): ' +
         'getPiercingR923(): piercingType="auto" lieferte R923=1 (Linearer Anschuss) — ' +
         'L201 dieser Maschine kennt R923=1 nicht, wirft "fehlende Anschlussparameter". ' +
