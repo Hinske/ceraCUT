@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '1c2a0f5',
-        date: '2026-06-29 11:12:38 +0200',
-        message: 'fix: Inside-Out Schnittfolge + Piercing false-positive (app.js V6.33, toolpath-simulator.js V1.2, build V6.65)'
+        hash: 'cb1bca9',
+        date: '2026-06-29 11:17:02 +0200',
+        message: 'fix: rebuildCutOrder-Regression — einfache Lösung ohne Index-Verschiebung (app.js V6.33, build V6.65)'
     },
 
     modules: {

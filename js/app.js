@@ -1,10 +1,9 @@
 /**
  * CeraCUT V6.33 - Main Application
  * Last Modified: 2026-06-29
- * V6.33: Fix — (1) rebuildCutOrder() bewahrte bisherige Sortierung nicht — beim Betreten
- *        von Schritt 5 wurde cutOrder auf natürliche Import-Reihenfolge zurückgesetzt und
- *        jede manuelle Inside-Out-Sortierung verworfen. Jetzt: bestehende Reihenfolge bleibt
- *        erhalten, gelöschte Einträge werden entfernt, neue Konturen am Ende angehängt.
+ * V6.33: Fix — rebuildCutOrder() beim Betreten von Schritt 5 setzte cutOrder auf natürliche
+ *        Import-Reihenfolge zurück und verwarf jede manuelle Inside-Out-Sortierung.
+ *        Schritt-5-Initialisierung ruft rebuildCutOrder() jetzt nur noch wenn cutOrder leer ist.
  * V6.30: Fix — 3 Robustheitsfixes aus systematischer Code-Inspektion (Agent-gestützt):
  *        (1) Startpunkt-Grip-Edit: _notifyStateChange() fehlte nach undoStack.push() —
  *        Undo/Redo-Buttons blieben nach Startpunkt-Verschiebung in veraltetem State.
@@ -1665,27 +1664,13 @@ class CeraCutApp {
     }
     
     rebuildCutOrder() {
-        // Ermittle alle gültigen Indizes in natürlicher Reihenfolge
-        const expected = [];
+        // Alle nicht-Referenz, geschlossenen Konturen in cutOrder (natürliche Reihenfolge)
+        this.cutOrder = [];
         this.contours.forEach((c, i) => {
             if (!c.isReference && (c.isClosed || c.cuttingMode === 'slit')) {
-                expected.push(i);
+                this.cutOrder.push(i);
             }
         });
-
-        if (!this.cutOrder || this.cutOrder.length === 0) {
-            // Erstaufruf: natürliche Reihenfolge übernehmen
-            this.cutOrder = expected;
-        } else {
-            // Bestehende Sortierung bewahren: ungültige Einträge entfernen,
-            // neue Konturen (z.B. nach Duplikat/Import) am Ende anfügen
-            const expectedSet = new Set(expected);
-            const existingSet = new Set(this.cutOrder);
-            const preserved = this.cutOrder.filter(i => expectedSet.has(i));
-            const newEntries = expected.filter(i => !existingSet.has(i));
-            this.cutOrder = [...preserved, ...newEntries];
-        }
-
         this.renderer?.render();
     }
     
@@ -2850,7 +2835,9 @@ class CeraCutApp {
                 break;
             case 5:
                 if (this.renderer) this.renderer.currentMode = 'reihenfolge';
-                this.rebuildCutOrder();
+                // rebuildCutOrder() wird von Add/Delete-Handlern gepflegt —
+                // hier NICHT aufrufen, sonst geht jede manuelle Sortierung verloren
+                if (!this.cutOrder || this.cutOrder.length === 0) this.rebuildCutOrder();
                 this.updateCutOrderList();
                 this.updateOrderStats();
                 this.updateContourPanel();
