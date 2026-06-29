@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.66
- * Version: V6.66
+ * CeraCUT Build Info V6.67
+ * Version: V6.67
  * Last Modified: 2026-06-29 MEZ
- * Build: 20260629-insideoutalways
+ * Build: 20260629-shortsegfilter
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.66',
-    build: '20260629-insideoutalways',
+    version: '6.67',
+    build: '20260629-shortsegfilter',
     date: '2026-06-29',
-    time: '10:00 MEZ',
+    time: '13:30 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'f9d076a',
-        date: '2026-06-29 11:58:20 +0200',
-        message: 'fix: Inside-Out immer als Standardreihenfolge — _applyInsideOutSort() extrahiert (app.js V6.34, build V6.66)'
+        hash: 'cac3d38',
+        date: '2026-06-29 13:16:09 +0200',
+        message: 'fix: Kurzsegment-Filter im PP — verhindert Sinumerik-Fehler bei dichten Schriftpfaden (sinumerik-pp V2.3, build V6.67)'
     },
 
     modules: {
@@ -27,7 +27,7 @@ const CERACUT_BUILD = {
         'cam-contour':        { version: '5.21', build: '20260626-r923fix' },
         'canvas-renderer':    { version: '3.42', build: '20260625-snapcenterfix' },
         'undo-manager':       { version: '1.3', build: '20260625-deletedcontourguard' },
-        'sinumerik-pp':       { version: '2.2', build: '20260626-minarc' },
+        'sinumerik-pp':       { version: '2.3', build: '20260629-shortsegfilter' },
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.5', build: '20260625-snapcenterfix' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },

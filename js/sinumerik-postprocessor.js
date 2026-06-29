@@ -41,9 +41,14 @@
  *       WARICAM (Referenz) verwendet nur G01 — G01 unter G41/G42 ist immer korrekt.
  *       Fix: ArcFitting.fitPolyline() bekommt minArcRadius = max(kerfWidth×0.75, 0.5mm).
  *       ArcFitting.js hatte diesen Parameter bereits — nur der Aufruf fehlte.
+ * V2.3: Kurzsegment-Filter — Punkte < 0.005mm Abstand werden vor Arc-Fitting und G01-Fallback
+ *       entfernt. Verhindert "Bahnkomponente des Satzes ist Null" (Sinumerik-Fehler) bei
+ *       dichtem Schriftpfad-Polyline (Gravurschriften mit >100 eng gesetzten Punkten).
+ *       Referenz: WariCAM IRLICH_WARICAM.CNC N237 (0.148mm) → Fehler, Arc-Fitting löst das,
+ *       Filter als Sicherheitsnetz für G01-Fallback.
  *
- * Last Modified: 2026-06-26
- * Build: 20260626-minarc
+ * Last Modified: 2026-06-29
+ * Build: 20260629-shortsegfilter
  */
 
 class SinumerikPostprocessor {
@@ -787,12 +792,25 @@ class SinumerikPostprocessor {
     _processContourPoints(points, minArcRadius = null) {
         if (!points || points.length < 2) return [];
 
+        // V2.3: Kurzsegment-Filter — dichte Schriftpfade enthalten enge Punkt-Cluster
+        // die unter G41/G42 "Bahnkomponente = Null" auf der Sinumerik erzeugen.
+        // Punkte mit < 0.005mm Abstand zum vorherigen werden herausgefiltert.
+        const MIN_SEG = 0.005;
+        let pts = [points[0]];
+        for (let k = 1; k < points.length; k++) {
+            const prev = pts[pts.length - 1];
+            if (Math.hypot(points[k].x - prev.x, points[k].y - prev.y) >= MIN_SEG) {
+                pts.push(points[k]);
+            }
+        }
+        if (pts.length < 2) return [];
+
         // Versuch Arc-Fitting
         if (this.useArcFitting && typeof ArcFitting !== 'undefined') {
             try {
                 const arcOptions = { chordTolerance: this.arcTolerance };
                 if (minArcRadius !== null) arcOptions.minArcRadius = minArcRadius;
-                const fitted = ArcFitting.fitPolyline(points, arcOptions);
+                const fitted = ArcFitting.fitPolyline(pts, arcOptions);
 
                 if (fitted && fitted.length > 0) {
                     return fitted.map(seg => {
@@ -816,8 +834,8 @@ class SinumerikPostprocessor {
             }
         }
 
-        // Fallback: Alles als G01-Linien
-        return points.slice(1).map(pt => ({
+        // Fallback: Alles als G01-Linien (pts ist bereits kurzsegment-gefiltert)
+        return pts.slice(1).map(pt => ({
             type: 'line',
             x: pt.x,
             y: pt.y

@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-06-29
-> **Version:** V6.66
-> **Build:** 20260629-insideoutalways
+> **Version:** V6.67
+> **Build:** 20260629-shortsegfilter
 
 ---
 
@@ -213,7 +213,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Lead Profiles** | `lead-profiles.js` | **V1.1** | 8 Built-in Profile (inkl. Intarsien), Benutzerdefiniert (localStorage), Batch-Engine (disc/hole/smallHole/slit) |
 | **CeraJet Engine** | `cerajet-engine.js` | — | Technologie-Engine (Piercing, Speed-Ramping) |
 | **Renderer** | `canvas-renderer.js` | **V3.42** | Canvas-Rendering, Hit-Testing (Kante+Fläche), Arc-Leads, DPR-Fix, Grip-Editing, Window-Selection-Rect, Lead-Differenzierung, Trackpad-Navigation, Disc-Füllung (nur CAM-Modi), Intarsien-Overlay (Multi-Material), Entry-Pfeil, Hatch-Entity-Rendering, Hatch-Live-Preview, Locked-Layer-Guard, Cycle-Selection (findAllContoursAtPoint) |
-| **Postprozessor** | `sinumerik-postprocessor.js` | **V2.2** | Sinumerik 840D MPF, 3-in-1, G41/G42, Piercing-Types, Multi-Head, Machine-Profile, Safety-Guards, Hatch-Filter |
+| **Postprozessor** | `sinumerik-postprocessor.js` | **V2.3** | Sinumerik 840D MPF, 3-in-1, G41/G42, Piercing-Types, Multi-Head, Machine-Profile, Safety-Guards, Hatch-Filter |
 | **UndoManager** | `undo-manager.js` | **V1.3** | Command Pattern, Undo/Redo, Clipboard, WizardStepUndo |
 | **Arc-Fitting** | `arc-fitting.js` | **V3.1** | Polylinie → G02/G03 Bogen (fur PP-Ausgabe) |
 | **Pipeline** | `ceracut-pipeline.js` | **V3.9** | Topologie (disc/hole/reference/slit/none), Kerf-Offset, interiorPoint-basierte Nesting-Erkennung, Validation Engine (Pre-Export), Hatch-Konturen ausgeschlossen |
@@ -248,7 +248,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **User-Store** | `lib/user-store.js` | **V1.0** | Benutzerverwaltung (scrypt-Hashing), Bootstrap erster Admin via Env-Vars |
 | **Session-Store** | `lib/session-store.js` | **V1.0** | In-Memory Session-Map, Sliding Expiry |
 | **Auth-Helper** | `lib/auth.js` | **V1.0** | Cookie-Parsing, Session-Cookie-Helper, JSON-Body-Parsing |
-| **Build-Info** | `build-info.js` | **V6.66** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V6.67** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.10 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -283,9 +283,9 @@ ceraCUT/
 │   └── auth.js                        ← Cookie/Body-Parsing-Helper V1.0
 ├── data/                               ← users.json (gitignored — Passwort-Hashes)
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V6.66
+│   ├── build-info.js                  ← Versions-Banner V6.67
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
-│   ├── app.js                         ← Hauptanwendung V6.66 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
+│   ├── app.js                         ← Hauptanwendung V6.67 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.18 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.13
 │   ├── geometry-ops.js                ← GeometryOps V2.6 (Intersection, Arabeske, splitAndOverlap)
@@ -296,7 +296,7 @@ ceraCUT/
 │   ├── canvas-renderer.js             ← Canvas Rendering V3.42 (Flächen-Hit, Disc-Fill Fix, Cycle-Selection)
 │   ├── arc-fitting.js                 ← Arc Fitting V3.1
 │   ├── undo-manager.js               ← Undo/Redo + Clipboard V1.3 (WizardStepUndo)
-│   ├── sinumerik-postprocessor.js     ← Sinumerik PP V2.2 (Safety-Guards, Hatch-Filter)
+│   ├── sinumerik-postprocessor.js     ← Sinumerik PP V2.3 (Safety-Guards, Hatch-Filter)
 │   ├── command-line.js                ← Command-Line UI V1.5 (History, Validation-Feedback)
 │   ├── dynamic-input.js              ← Dynamic Input HUD V1.1
 │   ├── snap-manager.js               ← Snap-System V1.5
@@ -526,7 +526,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   cam-contour: V5.21 (20260626-r923fix)
   canvas-renderer: V3.42 (20260625-snapcenterfix)
   undo-manager: V1.3 (20260625-deletedcontourguard)
-  sinumerik-pp: V2.2 (20260626-minarc)
+  sinumerik-pp: V2.3 (20260629-shortsegfilter)
   command-line: V1.5 (20260624-polarinput)
   snap-manager: V1.5 (20260625-snapcenterfix)
   geometry-ops: V2.6 (20260624-cadimprovements7)
