@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'cb1bca9',
-        date: '2026-06-29 11:17:02 +0200',
-        message: 'fix: rebuildCutOrder-Regression — einfache Lösung ohne Index-Verschiebung (app.js V6.33, build V6.65)'
+        hash: '6259e06',
+        date: '2026-06-29 11:50:48 +0200',
+        message: 'fix: Rapid-Move false positive — bereits geschnittene Konturen ausschließen (toolpath-simulator.js V1.3, build V6.65)'
     },
 
     modules: {
@@ -45,7 +45,7 @@ const CERACUT_BUILD = {
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
         'debug-monitor':      { version: '1.1', build: '20260324-gitcommit' },
         'nesting':            { version: '1.1', build: '20260315-bugfix35' },
-        'toolpath-simulator': { version: '1.2', build: '20260629-piercingfix' },
+        'toolpath-simulator': { version: '1.3', build: '20260629-rapidfix' },
         'cost-calculator':    { version: '1.2', build: '20260623-bugfixaudit' },
         'machine-profiles':   { version: '1.1', build: '20260624-userlogin' },
         'bridge-cutting':     { version: '1.0', build: '20260309' },
@@ -63,13 +63,11 @@ const CERACUT_BUILD = {
     },
 
     changes: [
-        'V6.65: Fix — Inside-Out Schnittfolge + Piercing-Validierung (app.js V6.33, toolpath-simulator.js V1.2): ' +
-        '(1) rebuildCutOrder() überschrieb bisherige Sortierung bei jedem Betreten von Schritt 5 — ' +
-        'manuelle Inside-Out-Sortierung wurde verworfen. Jetzt: bestehende Reihenfolge bleibt erhalten, ' +
-        'nur gelöschte Einträge werden entfernt, neue Konturen am Ende angehängt. ' +
-        '(2) Piercing-Punkt-Validierung meldete false-positive Fehler für Löcher innerhalb ihrer Scheibe — ' +
-        'der Piercing-Punkt eines Lochs liegt erwartungsgemäß in der Scheibe (wird ja erst danach geschnitten). ' +
-        '_verifyLeadCollisions() überspringt jetzt den Check wenn hole-Zentroid in der disc liegt.',
+        'V6.65: Fix — Inside-Out Schnittfolge + Validierungs-false-positives (app.js V6.33, toolpath-simulator.js V1.3): ' +
+        '(1) rebuildCutOrder() überschrieb bisherige Sortierung bei jedem Betreten von Schritt 5. ' +
+        '(2) Piercing-Punkt-Validierung false positive für Löcher in ihrer Scheibe. ' +
+        '(3) Rapid-Move-Validierung false positive: Eilgänge über bereits geschnittene Löcher wurden als ' +
+        'Kollision gemeldet — jetzt wird anhand des Schnittindex geprüft ob das Material noch vorhanden ist.',
         'V6.64: UX — Lead-Panel Touch-Optimierung + Tooltip-Glossar (index.html + styles.css): ' +
         '4 Verbesserungen: (1) Stepper-Buttons (−/+) um alle Lead-number-Inputs — initStepperButtons(). ' +
         '(2) Tooltip-Glossar: data-tip auf alle Kürzel-Labels (OC, R, ∠, Ansch, Min, Max). ' +

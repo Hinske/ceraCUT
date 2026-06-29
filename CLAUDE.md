@@ -237,7 +237,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Measure Tool** | `measure-tool.js` | — | Messmodus |
 | **Debug Monitor** | `debug-monitor.js` | **V1.1** | Error-Catcher, Fallen-Erkennung, Strg+Shift+D Overlay |
 | **Nesting** | `nesting.js` | **V1.1** | BLF-Algorithmus, Multi-Rotation, Multi-Sheet |
-| **Toolpath Simulator** | `toolpath-simulator.js` | **V1.2** | Pfad-Verifikation, Animation, Kollisionsmatrix |
+| **Toolpath Simulator** | `toolpath-simulator.js` | **V1.3** | Pfad-Verifikation, Animation, Kollisionsmatrix |
 | **Cost Calculator** | `cost-calculator.js` | **V1.2** | Kosten-/Zeitkalkulation mit CeraJet-Integration |
 | **Machine Profiles** | `machine-profiles.js` | **V1.1** | Maschinenpark-Verwaltung, PP-Profile, localStorage |
 | **Bridge Cutting** | `bridge-cutting.js` | **V1.0** | Haltestege zwischen Teilen (auto/manuell) |
@@ -317,7 +317,7 @@ ceraCUT/
 │   ├── measure-tool.js               ← Messmodus
 │   ├── debug-monitor.js              ← Debug-Overlay (Strg+Shift+D)
 │   ├── nesting.js                    ← Nesting Engine V1.1
-│   ├── toolpath-simulator.js         ← Toolpath Simulator V1.2
+│   ├── toolpath-simulator.js         ← Toolpath Simulator V1.3
 │   ├── cost-calculator.js            ← Kalkulation V1.2
 │   ├── machine-profiles.js           ← Maschinenpark V1.1
 │   ├── bridge-cutting.js             ← Haltestege V1.0
@@ -544,7 +544,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   properties-panel: V1.5 (20260316-hatchentity)
   debug-monitor: V1.1 (20260324-gitcommit)
   nesting: V1.1 (20260315-bugfix35)
-  toolpath-simulator: V1.2 (20260629-piercingfix)
+  toolpath-simulator: V1.3 (20260629-rapidfix)
   cost-calculator: V1.2 (20260623-bugfixaudit)
   machine-profiles: V1.1 (20260624-userlogin)
   bridge-cutting: V1.0 (20260309)

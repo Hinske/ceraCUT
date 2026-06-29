@@ -1,5 +1,5 @@
 /**
- * CeraCUT Toolpath Simulator V1.2
+ * CeraCUT Toolpath Simulator V1.3
  * Simulation und Verifikation des Schneidpfads vor dem Export.
  *
  * Erkennt: Rapid-Moves durch Material, Lead-In/Out-Kollisionen,
@@ -8,6 +8,11 @@
  *
  * Animation-API: Schritt-für-Schritt-Visualisierung mit virtuellem Schneidkopf.
  *
+ * V1.3 (2026-06-29): Fix — Rapid-Move-Validierung false positive eliminiert:
+ *   _verifyRapidMoves() prüfte gegen alle Konturen gleichzeitig — Rapid-Moves über
+ *   bereits geschnittene Löcher wurden als Kollision gemeldet, obwohl das Material
+ *   längst weg ist. Fix: Schnittindex-Map; bereits geschnittene Konturen (obsIdx <= i)
+ *   werden übersprungen — nur noch-im-Material-Konturen lösen Warnungen aus.
  * V1.2 (2026-06-29): Fix — Piercing-Punkt-Validierung false positive eliminiert:
  *   Löcher innerhalb ihrer übergeordneten Scheibe haben ihren Piercing-Punkt
  *   erwartungsgemäß INNERHALB der Scheibe — das ist korrekt und kein Fehler.
@@ -19,15 +24,15 @@
  *   (3) options-Parameter war Number statt Object — wird jetzt defensiv gehandhabt.
  *
  * Last Modified: 2026-06-29
- * Build: 20260629-piercingfix
- * Version: V1.2
+ * Build: 20260629-rapidfix
+ * Version: V1.3
  */
 
 const ToolpathSimulator = {
 
-    VERSION: '1.2',
-    BUILD: '20260629-piercingfix',
-    PREFIX: '[ToolpathSim V1.2]',
+    VERSION: '1.3',
+    BUILD: '20260629-rapidfix',
+    PREFIX: '[ToolpathSim V1.3]',
 
     // ════════════════════════════════════════════════════════════════
     // KONFIGURATION
@@ -421,7 +426,10 @@ const ToolpathSimulator = {
     _verifyRapidMoves(cuttable, allContours, result) {
         if (cuttable.length < 2) return;
 
-        // Sammle alle geschlossenen Konturen als potenzielle Hindernisse
+        // Schnittindex für jede Kontur — bereits geschnittene haben kein Material mehr
+        const cutIndex = new Map();
+        for (let k = 0; k < cuttable.length; k++) cutIndex.set(cuttable[k], k);
+
         const obstacles = allContours.filter(c =>
             !c.isReference && c.isClosed && c.points?.length >= 3
         );
@@ -430,23 +438,24 @@ const ToolpathSimulator = {
             const current = cuttable[i];
             const next = cuttable[i + 1];
 
-            // Endpunkt der aktuellen Kontur (Lead-Out-Ende oder letzter Konturpunkt)
             const exitPt = this._getExitPoint(current);
-            // Startpunkt der nächsten Kontur (Pierce-Punkt vom Lead-In)
             const entryPt = this._getEntryPoint(next);
 
             if (!exitPt || !entryPt) continue;
 
-            // Prüfe ob der Rapid-Move durch ein Teil fährt
             for (const obs of obstacles) {
                 if (obs === current || obs === next) continue;
+
+                // Bereits geschnittene Kontur: kein Material mehr — kein Kollisionsrisiko
+                const obsIdx = cutIndex.get(obs);
+                if (obsIdx !== undefined && obsIdx <= i) continue;
 
                 if (this._segmentCrossesPolygon(exitPt, entryPt, obs.points)) {
                     result.warnings.push(
                         `Rapid-Move von "${current.name}" zu "${next.name}" kreuzt ` +
                         `Kontur "${obs.name}" (mögliche Kollision)`
                     );
-                    break; // Eine Warnung pro Rapid-Move reicht
+                    break;
                 }
             }
         }
