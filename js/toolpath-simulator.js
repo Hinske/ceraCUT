@@ -1,5 +1,5 @@
 /**
- * CeraCUT Toolpath Simulator V1.1
+ * CeraCUT Toolpath Simulator V1.2
  * Simulation und Verifikation des Schneidpfads vor dem Export.
  *
  * Erkennt: Rapid-Moves durch Material, Lead-In/Out-Kollisionen,
@@ -8,21 +8,26 @@
  *
  * Animation-API: Schritt-für-Schritt-Visualisierung mit virtuellem Schneidkopf.
  *
+ * V1.2 (2026-06-29): Fix — Piercing-Punkt-Validierung false positive eliminiert:
+ *   Löcher innerhalb ihrer übergeordneten Scheibe haben ihren Piercing-Punkt
+ *   erwartungsgemäß INNERHALB der Scheibe — das ist korrekt und kein Fehler.
+ *   _verifyLeadCollisions() überspringt jetzt den Piercing-Punkt-Check wenn
+ *   c ein Loch (hole) ist und other die enthaltende Scheibe (disc) ist.
  * V1.1 (2026-06-25): Crash-Fix —
  *   (1) Trail-Rendering von O(n²) auf O(1) umgestellt (Off-Screen-History-Canvas).
  *   (2) worldToCanvas-Formel korrigiert (entspricht jetzt renderer.worldToScreen).
  *   (3) options-Parameter war Number statt Object — wird jetzt defensiv gehandhabt.
  *
- * Last Modified: 2026-06-25
- * Build: 20260625-simcrashfix
- * Version: V1.1
+ * Last Modified: 2026-06-29
+ * Build: 20260629-piercingfix
+ * Version: V1.2
  */
 
 const ToolpathSimulator = {
 
-    VERSION: '1.1',
-    BUILD: '20260625-simcrashfix',
-    PREFIX: '[ToolpathSim V1.1]',
+    VERSION: '1.2',
+    BUILD: '20260629-piercingfix',
+    PREFIX: '[ToolpathSim V1.2]',
 
     // ════════════════════════════════════════════════════════════════
     // KONFIGURATION
@@ -325,6 +330,13 @@ const ToolpathSimulator = {
                 for (const other of allContours) {
                     if (other === c || other.isReference) continue;
                     if (!other.points || other.points.length < 3 || !other.isClosed) continue;
+
+                    // Loch innerhalb seiner Scheibe: Piercing liegt erwartungsgemäß
+                    // in der Scheibe — kein Fehler (Scheibe wird erst danach geschnitten)
+                    if (c.cuttingMode === 'hole' && other.cuttingMode === 'disc') {
+                        const centroid = this._simpleCentroid(c.points);
+                        if (centroid && this._pointInPolygon(centroid, other.points)) continue;
+                    }
 
                     if (this._pointInPolygon(leadIn.piercingPoint, other.points)) {
                         result.errors.push(

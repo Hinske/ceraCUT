@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.64
- * Version: V6.64
- * Last Modified: 2026-06-26 MEZ
- * Build: 20260626-leaduxv2
+ * CeraCUT Build Info V6.65
+ * Version: V6.65
+ * Last Modified: 2026-06-29 MEZ
+ * Build: 20260629-insideoutfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.64',
-    build: '20260626-leaduxv2',
-    date: '2026-06-26',
-    time: '14:30 MEZ',
+    version: '6.65',
+    build: '20260629-insideoutfix',
+    date: '2026-06-29',
+    time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '3a48419',
-        date: '2026-06-26 17:35:54 +0200',
-        message: 'feat: Lead-Panel UX V2 — Touch-Stepper, Tooltip-Glossar, Farbcodes, Icons (build V6.64)'
+        hash: '1c2a0f5',
+        date: '2026-06-29 11:12:38 +0200',
+        message: 'fix: Inside-Out Schnittfolge + Piercing false-positive (app.js V6.33, toolpath-simulator.js V1.2, build V6.65)'
     },
 
     modules: {
@@ -39,13 +39,13 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.32', build: '20260626-sortfix' },
+        'app':                { version: '6.33', build: '20260629-insideoutfix' },
         'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
         'debug-monitor':      { version: '1.1', build: '20260324-gitcommit' },
         'nesting':            { version: '1.1', build: '20260315-bugfix35' },
-        'toolpath-simulator': { version: '1.1', build: '20260625-simcrashfix' },
+        'toolpath-simulator': { version: '1.2', build: '20260629-piercingfix' },
         'cost-calculator':    { version: '1.2', build: '20260623-bugfixaudit' },
         'machine-profiles':   { version: '1.1', build: '20260624-userlogin' },
         'bridge-cutting':     { version: '1.0', build: '20260309' },
@@ -63,6 +63,13 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.65: Fix — Inside-Out Schnittfolge + Piercing-Validierung (app.js V6.33, toolpath-simulator.js V1.2): ' +
+        '(1) rebuildCutOrder() überschrieb bisherige Sortierung bei jedem Betreten von Schritt 5 — ' +
+        'manuelle Inside-Out-Sortierung wurde verworfen. Jetzt: bestehende Reihenfolge bleibt erhalten, ' +
+        'nur gelöschte Einträge werden entfernt, neue Konturen am Ende angehängt. ' +
+        '(2) Piercing-Punkt-Validierung meldete false-positive Fehler für Löcher innerhalb ihrer Scheibe — ' +
+        'der Piercing-Punkt eines Lochs liegt erwartungsgemäß in der Scheibe (wird ja erst danach geschnitten). ' +
+        '_verifyLeadCollisions() überspringt jetzt den Check wenn hole-Zentroid in der disc liegt.',
         'V6.64: UX — Lead-Panel Touch-Optimierung + Tooltip-Glossar (index.html + styles.css): ' +
         '4 Verbesserungen: (1) Stepper-Buttons (−/+) um alle Lead-number-Inputs — initStepperButtons(). ' +
         '(2) Tooltip-Glossar: data-tip auf alle Kürzel-Labels (OC, R, ∠, Ansch, Min, Max). ' +

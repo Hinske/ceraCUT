@@ -1,5 +1,10 @@
 /**
- * CeraCUT V6.32 - Main Application
+ * CeraCUT V6.33 - Main Application
+ * Last Modified: 2026-06-29
+ * V6.33: Fix — (1) rebuildCutOrder() bewahrte bisherige Sortierung nicht — beim Betreten
+ *        von Schritt 5 wurde cutOrder auf natürliche Import-Reihenfolge zurückgesetzt und
+ *        jede manuelle Inside-Out-Sortierung verworfen. Jetzt: bestehende Reihenfolge bleibt
+ *        erhalten, gelöschte Einträge werden entfernt, neue Konturen am Ende angehängt.
  * V6.30: Fix — 3 Robustheitsfixes aus systematischer Code-Inspektion (Agent-gestützt):
  *        (1) Startpunkt-Grip-Edit: _notifyStateChange() fehlte nach undoStack.push() —
  *        Undo/Redo-Buttons blieben nach Startpunkt-Verschiebung in veraltetem State.
@@ -1660,13 +1665,27 @@ class CeraCutApp {
     }
     
     rebuildCutOrder() {
-        // Alle nicht-Referenz, geschlossenen Konturen in cutOrder
-        this.cutOrder = [];
+        // Ermittle alle gültigen Indizes in natürlicher Reihenfolge
+        const expected = [];
         this.contours.forEach((c, i) => {
             if (!c.isReference && (c.isClosed || c.cuttingMode === 'slit')) {
-                this.cutOrder.push(i);
+                expected.push(i);
             }
         });
+
+        if (!this.cutOrder || this.cutOrder.length === 0) {
+            // Erstaufruf: natürliche Reihenfolge übernehmen
+            this.cutOrder = expected;
+        } else {
+            // Bestehende Sortierung bewahren: ungültige Einträge entfernen,
+            // neue Konturen (z.B. nach Duplikat/Import) am Ende anfügen
+            const expectedSet = new Set(expected);
+            const existingSet = new Set(this.cutOrder);
+            const preserved = this.cutOrder.filter(i => expectedSet.has(i));
+            const newEntries = expected.filter(i => !existingSet.has(i));
+            this.cutOrder = [...preserved, ...newEntries];
+        }
+
         this.renderer?.render();
     }
     
