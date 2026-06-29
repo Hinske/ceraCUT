@@ -1,6 +1,12 @@
 /**
- * CeraCUT V6.33 - Main Application
+ * CeraCUT V6.34 - Main Application
  * Last Modified: 2026-06-29
+ * Build: 20260629-insideoutalways
+ * V6.34: Fix — rebuildCutOrder() baute immer natürliche Reihenfolge (Scheibe zuerst) und
+ *        wurde bei Delete/Duplikat aufgerufen — Inside-Out-Sortierung ging verloren.
+ *        Jetzt: _applyInsideOutSort() als eigene Methode extrahiert; rebuildCutOrder() und
+ *        autoSortContours('inside-out') nutzen sie gemeinsam. Standardreihenfolge immer
+ *        Inside-Out (Löcher vor ihrer Scheibe).
  * V6.33: Fix — rebuildCutOrder() beim Betreten von Schritt 5 setzte cutOrder auf natürliche
  *        Import-Reihenfolge zurück und verwarf jede manuelle Inside-Out-Sortierung.
  *        Schritt-5-Initialisierung ruft rebuildCutOrder() jetzt nur noch wenn cutOrder leer ist.
@@ -1664,13 +1670,14 @@ class CeraCutApp {
     }
     
     rebuildCutOrder() {
-        // Alle nicht-Referenz, geschlossenen Konturen in cutOrder (natürliche Reihenfolge)
-        this.cutOrder = [];
+        const cuttable = [];
         this.contours.forEach((c, i) => {
             if (!c.isReference && (c.isClosed || c.cuttingMode === 'slit')) {
-                this.cutOrder.push(i);
+                cuttable.push({ contour: c, index: i });
             }
         });
+        this._applyInsideOutSort(cuttable);
+        this.cutOrder = cuttable.map(item => item.index);
         this.renderer?.render();
     }
     
@@ -1700,60 +1707,7 @@ class CeraCutApp {
         
         switch (method) {
             case 'inside-out': {
-                // Hierarchie-Baum aufbauen: direkter Parent jedes Items
-                const { parent: ioParent, children: ioChildren } = this._buildParentChildMap(cuttable);
-
-                // Bounding-Box-Zentrum eines Items
-                const bbCenter = (item) => {
-                    const pts = item.contour.points;
-                    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-                    for (const p of pts) {
-                        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-                        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
-                    }
-                    return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-                };
-
-                // DFS Post-Order: erst alle Kinder (Blätter zuerst), dann der Knoten selbst
-                const visited = new Set();
-                const dfsPost = (item) => {
-                    if (visited.has(item)) return [];
-                    visited.add(item);
-                    const kids = [...(ioChildren.get(item) || [])].sort((a, b) =>
-                        this.computeArea(a.contour.points) - this.computeArea(b.contour.points));
-                    const out = [];
-                    for (const kid of kids) out.push(...dfsPost(kid));
-                    out.push(item);
-                    return out;
-                };
-
-                // Top-Level Items (kein Parent): Nearest-Neighbor-Reihenfolge
-                const roots = cuttable.filter(item => ioParent.get(item) === null);
-                let maxX = -Infinity, maxY = -Infinity;
-                for (const r of roots) { const c = bbCenter(r); if (c.x > maxX) maxX = c.x; if (c.y > maxY) maxY = c.y; }
-                let curPos = { x: maxX + 10, y: maxY + 10 };
-                const remRoots = [...roots];
-                const sortedRoots = [];
-                while (remRoots.length > 0) {
-                    let bi = 0, bd = Infinity;
-                    for (let i = 0; i < remRoots.length; i++) {
-                        const c = bbCenter(remRoots[i]);
-                        const d = (c.x - curPos.x) ** 2 + (c.y - curPos.y) ** 2;
-                        if (d < bd) { bd = d; bi = i; }
-                    }
-                    const best = remRoots.splice(bi, 1)[0];
-                    sortedRoots.push(best);
-                    curPos = bbCenter(best);
-                }
-
-                // Alle Items per DFS Post-Order sammeln
-                const ioResult = [];
-                for (const root of sortedRoots) ioResult.push(...dfsPost(root));
-                // Orphans (Slits ohne Polygon-Prüfung etc.) anhängen
-                for (const item of cuttable) { if (!visited.has(item)) ioResult.push(item); }
-
-                cuttable.length = 0;
-                cuttable.push(...ioResult);
+                this._applyInsideOutSort(cuttable);
                 break;
             }
                 
@@ -3557,6 +3511,58 @@ class CeraCutApp {
     }
 
     // Hierarchie-Baum für Sortierung: direkter Parent jedes Items (kleinste enthaltende Kontur)
+    _applyInsideOutSort(cuttable) {
+        if (cuttable.length < 2) return;
+        const { parent: ioParent, children: ioChildren } = this._buildParentChildMap(cuttable);
+
+        const bbCenter = (item) => {
+            const pts = item.contour.points;
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for (const p of pts) {
+                if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+            }
+            return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+        };
+
+        const visited = new Set();
+        const dfsPost = (item) => {
+            if (visited.has(item)) return [];
+            visited.add(item);
+            const kids = [...(ioChildren.get(item) || [])].sort((a, b) =>
+                this.computeArea(a.contour.points) - this.computeArea(b.contour.points));
+            const out = [];
+            for (const kid of kids) out.push(...dfsPost(kid));
+            out.push(item);
+            return out;
+        };
+
+        const roots = cuttable.filter(item => ioParent.get(item) === null);
+        let maxX = -Infinity, maxY = -Infinity;
+        for (const r of roots) { const c = bbCenter(r); if (c.x > maxX) maxX = c.x; if (c.y > maxY) maxY = c.y; }
+        let curPos = { x: maxX + 10, y: maxY + 10 };
+        const remRoots = [...roots];
+        const sortedRoots = [];
+        while (remRoots.length > 0) {
+            let bi = 0, bd = Infinity;
+            for (let i = 0; i < remRoots.length; i++) {
+                const c = bbCenter(remRoots[i]);
+                const d = (c.x - curPos.x) ** 2 + (c.y - curPos.y) ** 2;
+                if (d < bd) { bd = d; bi = i; }
+            }
+            const best = remRoots.splice(bi, 1)[0];
+            sortedRoots.push(best);
+            curPos = bbCenter(best);
+        }
+
+        const ioResult = [];
+        for (const root of sortedRoots) ioResult.push(...dfsPost(root));
+        for (const item of cuttable) { if (!visited.has(item)) ioResult.push(item); }
+
+        cuttable.length = 0;
+        cuttable.push(...ioResult);
+    }
+
     _buildParentChildMap(cuttable) {
         const children = new Map();
         const parent = new Map();

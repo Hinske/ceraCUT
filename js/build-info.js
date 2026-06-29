@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.65
- * Version: V6.65
+ * CeraCUT Build Info V6.66
+ * Version: V6.66
  * Last Modified: 2026-06-29 MEZ
- * Build: 20260629-insideoutfix
+ * Build: 20260629-insideoutalways
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.65',
-    build: '20260629-insideoutfix',
+    version: '6.66',
+    build: '20260629-insideoutalways',
     date: '2026-06-29',
     time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '6259e06',
-        date: '2026-06-29 11:50:48 +0200',
-        message: 'fix: Rapid-Move false positive — bereits geschnittene Konturen ausschließen (toolpath-simulator.js V1.3, build V6.65)'
+        hash: 'f9d076a',
+        date: '2026-06-29 11:58:20 +0200',
+        message: 'fix: Inside-Out immer als Standardreihenfolge — _applyInsideOutSort() extrahiert (app.js V6.34, build V6.66)'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.33', build: '20260629-insideoutfix' },
+        'app':                { version: '6.34', build: '20260629-insideoutalways' },
         'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
