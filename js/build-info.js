@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.68
- * Version: V6.68
+ * CeraCUT Build Info V6.69
+ * Version: V6.69
  * Last Modified: 2026-06-29 MEZ
- * Build: 20260629-collinearmerge
+ * Build: 20260629-arcradiusfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.68',
-    build: '20260629-collinearmerge',
+    version: '6.69',
+    build: '20260629-arcradiusfix',
     date: '2026-06-29',
     time: '14:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '29b26ba',
-        date: '2026-06-29 13:37:53 +0200',
-        message: 'fix: Arc-Fitting kollineare Folge zusammenführen — verhindert kurze G01 bei Schriftpfaden (arc-fitting V3.2, build V6.68)'
+        hash: 'e592e90',
+        date: '2026-06-29 14:15:41 +0200',
+        message: 'fix: Bogenschwelle für G41/G42 korrigiert — verhindert Sinumerik Error 10763 bei Schriftpfaden (sinumerik-pp V2.4, build V6.69)'
     },
 
     modules: {
@@ -27,7 +27,7 @@ const CERACUT_BUILD = {
         'cam-contour':        { version: '5.21', build: '20260626-r923fix' },
         'canvas-renderer':    { version: '3.42', build: '20260625-snapcenterfix' },
         'undo-manager':       { version: '1.3', build: '20260625-deletedcontourguard' },
-        'sinumerik-pp':       { version: '2.3', build: '20260629-shortsegfilter' },
+        'sinumerik-pp':       { version: '2.4', build: '20260629-arcradiusfix' },
         'command-line':       { version: '1.5', build: '20260624-polarinput' },
         'snap-manager':       { version: '1.5', build: '20260625-snapcenterfix' },
         'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
@@ -63,6 +63,13 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.69: Fix — Bogenschwelle für G41/G42-sichere Bögen korrigiert (sinumerik-pp V2.4): ' +
+        'Schwelle war kerfWidth×0.75 (zu niedrig). Sinumerik Error 10763 tritt auf wenn ' +
+        'Bogen-Radius < Kerf — kompensierter Radius = R − Kerf wird negativ. ' +
+        'Bei Cursive-Schriftpfaden (z.B. Irlich Christine/Hans): alle 35 Buchstaben-Konturen ' +
+        'hatten Min-Krümmungsradius 0.15–0.66mm (deutlich unter Kerf 0.8mm). ' +
+        'Fix: minArcRadius = max(kerfWidth × 1.5, 1.0mm) — 50% Sicherheitsmarge über Kerf, ' +
+        'Bögen < Schwelle werden als G01 ausgegeben (wie WARICAM-Referenz).',
         'V6.65: Fix — Inside-Out Schnittfolge + Validierungs-false-positives (app.js V6.33, toolpath-simulator.js V1.3): ' +
         '(1) rebuildCutOrder() überschrieb bisherige Sortierung bei jedem Betreten von Schritt 5. ' +
         '(2) Piercing-Punkt-Validierung false positive für Löcher in ihrer Scheibe. ' +

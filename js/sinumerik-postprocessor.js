@@ -37,7 +37,6 @@
  *       verschieben → r_start == r_end auf < 0.001mm (MD21010-Toleranz ~0.01mm).
  *       _adjustArcIJ()-Hilfsmethode added; curX/curY-Tracking in Ausgabe-Loops.
  * V2.2: Minimaler Bogenradius — Bögen < kerfWidth×0.75 werden als G01 ausgegeben.
- *       G41/G42 schlägt fehl wenn Bogenradius < Kerf/2 (kompensierter Radius ≤ 0).
  *       WARICAM (Referenz) verwendet nur G01 — G01 unter G41/G42 ist immer korrekt.
  *       Fix: ArcFitting.fitPolyline() bekommt minArcRadius = max(kerfWidth×0.75, 0.5mm).
  *       ArcFitting.js hatte diesen Parameter bereits — nur der Aufruf fehlte.
@@ -46,14 +45,19 @@
  *       dichtem Schriftpfad-Polyline (Gravurschriften mit >100 eng gesetzten Punkten).
  *       Referenz: WariCAM IRLICH_WARICAM.CNC N237 (0.148mm) → Fehler, Arc-Fitting löst das,
  *       Filter als Sicherheitsnetz für G01-Fallback.
+ * V2.4: Bogenschwelle korrigiert: kerfWidth×0.75 war zu niedrig — Sinus Error 10763 tritt auf
+ *       wenn Bogen-Radius < Kerf (nicht < Kerf/2!). Kompensierter Radius = R − Kerf; bei
+ *       R = 0.75×Kerf → R_komp = −0.25×Kerf (negativ → Absturz). Alle Gravurschriften mit
+ *       engen Kurven (z.B. Cursive-DXF Irlich: Min-Radius 0.15–0.66mm) erzeugten Error 10763.
+ *       Fix: minArcRadius = max(kerfWidth × 1.5, 1.0mm) — 50% Sicherheitsmarge über Kerf.
  *
  * Last Modified: 2026-06-29
- * Build: 20260629-shortsegfilter
+ * Build: 20260629-arcradiusfix
  */
 
 class SinumerikPostprocessor {
 
-    static VERSION = '2.1';
+    static VERSION = '2.4';
 
     constructor(options = {}) {
         // ═══ Formatierung ═══
@@ -400,8 +404,9 @@ class SinumerikPostprocessor {
     _generateClosedContour(contour, contourNum) {
         const lines = [];
         const pts = contour.points;
-        // V2.2: Mindestradius für G41/G42-sichere Bögen. Bögen < Schwelle → G01 via ArcFitting.
-        const minArcR = Math.max((contour.kerfWidth ?? 0.8) * 0.75, 0.5);
+        // V2.4: Bogenschwelle: R_Bogen muss > Kerf sein, damit R_komp = R − Kerf > 0.
+        //       Faktor 1.5 gibt 50% Sicherheitsmarge (R_komp = 0.5×Kerf).
+        const minArcR = Math.max((contour.kerfWidth ?? 0.8) * 1.5, 1.0);
         if (!pts || pts.length < 3) {
             this._warnings.push(`Kontur ${contourNum}: Zu wenig Punkte (${pts?.length})`);
             return lines;
