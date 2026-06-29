@@ -1,5 +1,5 @@
 /**
- * CeraCUT V3.1 - Arc Fitting Module
+ * CeraCUT V3.2 - Arc Fitting Module
  * Konvertiert Splines/Polylines zu Bögen und Linien
  *
  * Algorithmen:
@@ -7,12 +7,17 @@
  * 2. Arc-Detection - Erkennung bestehender Bögen in Polylines
  * 3. Toleranz-basierte Segmentierung
  *
- * Last Modified: 2026-01-29
+ * V3.2: Kollineare Punkte-Folge in fitPolyline zusammenführen.
+ *       Bisher: bei nicht-fitbarem Bogen → ein Schritt G01(i→i+1) → bei geraden Strichzügen
+ *       (Schriften) 100+ einzelne 0.1–0.15mm G01-Blöcke → Sinumerik "Bahnkomponente = Null".
+ *       Neu: else-Zweig sucht weitesten Punkt innerhalb tolerance und erzeugt EINEN langen G01.
+ *
+ * Last Modified: 2026-06-29
  */
 
 const ArcFitting = {
 
-  VERSION: 'V3.0',
+  VERSION: 'V3.2',
 
   /**
    * Logging-Level: 'silent' | 'info' | 'verbose' | 'debug'
@@ -83,13 +88,18 @@ const ArcFitting = {
         this._log('debug', `Arc: i=${i} to ${arcResult.endIndex}, R=${arcResult.radius.toFixed(2)}`);
         i = arcResult.endIndex;
       } else {
-        // Linie
+        // Kein Bogen: gerade Folge zusammenführen (verhindert viele kurze G01 bei Schriftpfaden)
+        let lineEnd = i + 1;
+        while (lineEnd + 1 < points.length) {
+          if (this._distToLine(points[lineEnd + 1], points[i], points[lineEnd]) > tolerance) break;
+          lineEnd++;
+        }
         result.push({
           type: 'line',
           start: { x: points[i].x, y: points[i].y },
-          end: { x: points[i + 1].x, y: points[i + 1].y }
+          end: { x: points[lineEnd].x, y: points[lineEnd].y }
         });
-        i++;
+        i = lineEnd;
       }
     }
 
@@ -338,6 +348,17 @@ const ArcFitting = {
     const len = Math.hypot(v.x, v.y);
     if (len < 0.0001) return { x: 1, y: 0 };
     return { x: v.x / len, y: v.y / len };
+  },
+
+  /**
+   * Senkrechter Abstand von Punkt p zur Strecke a→b
+   */
+  _distToLine(p, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 1e-10) return Math.hypot(p.x - a.x, p.y - a.y);
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
   },
 
   /**

@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.67
- * Version: V6.67
+ * CeraCUT Build Info V6.68
+ * Version: V6.68
  * Last Modified: 2026-06-29 MEZ
- * Build: 20260629-shortsegfilter
+ * Build: 20260629-collinearmerge
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.67',
-    build: '20260629-shortsegfilter',
+    version: '6.68',
+    build: '20260629-collinearmerge',
     date: '2026-06-29',
-    time: '13:30 MEZ',
+    time: '14:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'cac3d38',
-        date: '2026-06-29 13:16:09 +0200',
-        message: 'fix: Kurzsegment-Filter im PP — verhindert Sinumerik-Fehler bei dichten Schriftpfaden (sinumerik-pp V2.3, build V6.67)'
+        hash: '29b26ba',
+        date: '2026-06-29 13:37:53 +0200',
+        message: 'fix: Arc-Fitting kollineare Folge zusammenführen — verhindert kurze G01 bei Schriftpfaden (arc-fitting V3.2, build V6.68)'
     },
 
     modules: {
@@ -52,7 +52,7 @@ const CERACUT_BUILD = {
         'quality-zones':      { version: '1.1', build: '20260315-bugfix35' },
         'cam-tools':          { version: '1.4', build: '20260625-analyzefix' },
         'advanced-tools':     { version: '1.8', build: '20260625-filletjoin' },
-        'arc-fitting':        { version: '3.1', build: '20260315-bugfix35' },
+        'arc-fitting':        { version: '3.2', build: '20260629-collinearmerge' },
         'measure-tool':       { version: '1.2', build: '20260325-curvcheck' },
         'dimension-tool':     { version: '2.4', build: '20260326-dimedit' },
         'dxf-browser':        { version: '1.1', build: '20260624-userlogin' },
