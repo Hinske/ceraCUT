@@ -8,10 +8,10 @@
  */
 
 const CERACUT_BUILD = {
-    version: '6.69',
-    build: '20260629-arcradiusfix',
-    date: '2026-06-29',
-    time: '14:00 MEZ',
+    version: '6.70',
+    build: '20260630-consolelog',
+    date: '2026-06-30',
+    time: '12:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
@@ -43,7 +43,7 @@ const CERACUT_BUILD = {
         'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
-        'debug-monitor':      { version: '1.1', build: '20260324-gitcommit' },
+        'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
         'nesting':            { version: '1.1', build: '20260315-bugfix35' },
         'toolpath-simulator': { version: '1.3', build: '20260629-rapidfix' },
         'cost-calculator':    { version: '1.2', build: '20260623-bugfixaudit' },
@@ -63,6 +63,13 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.70: Debug — Console-Interceptor im DebugMonitor (debug-monitor.js V1.2): ' +
+        'Alle console.log/warn/error/debug-Aufrufe werden jetzt gepuffert (max. 600 Einträge). ' +
+        'Neuer Log-Tab (Strg+Shift+D) mit scrollbarem Live-Log, Modul-Filter-Chips ' +
+        '(auto-erkannt aus [Modul V3.x]-Prefixen), Level-Toggle (Alle/WARN+/ERROR), ' +
+        'Freitext-Suche mit Highlight. Fehler-Tab zeigt die 5 Logs vor jedem Error als Kontext. ' +
+        'JSON-Export enthält jetzt vollständigen Console-Log. ceracutDebug.module("Pipeline") ' +
+        'gibt alle Logs eines Moduls in der Console aus. Kein Refactoring anderer Dateien nötig.',
         'V6.69: Fix — Bogenschwelle für G41/G42-sichere Bögen korrigiert (sinumerik-pp V2.4): ' +
         'Schwelle war kerfWidth×0.75 (zu niedrig). Sinumerik Error 10763 tritt auf wenn ' +
         'Bogen-Radius < Kerf — kompensierter Radius = R − Kerf wird negativ. ' +
