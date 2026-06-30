@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.69
- * Version: V6.69
- * Last Modified: 2026-06-29 MEZ
- * Build: 20260629-arcradiusfix
+ * CeraCUT Build Info V6.71
+ * Version: V6.71
+ * Last Modified: 2026-06-30 MEZ
+ * Build: 20260630-intarsiaoffsetfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.70',
-    build: '20260630-consolelog',
+    version: '6.71',
+    build: '20260630-intarsiaoffsetfix',
     date: '2026-06-30',
-    time: '12:00 MEZ',
+    time: '14:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'e592e90',
-        date: '2026-06-29 14:15:41 +0200',
-        message: 'fix: Bogenschwelle für G41/G42 korrigiert — verhindert Sinumerik Error 10763 bei Schriftpfaden (sinumerik-pp V2.4, build V6.69)'
+        hash: 'ce844de',
+        date: '2026-06-30 07:36:39 +0200',
+        message: 'fix: Intarsien-Fugen-Offset-Richtung korrigiert — NEG-Aussparung wuchs nicht (app.js V6.35, build V6.71)'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
         'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.34', build: '20260629-insideoutalways' },
+        'app':                { version: '6.35', build: '20260630-intarsiaoffsetfix' },
         'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
         'project-manager':    { version: '1.0', build: '20260313-workspace' },
         'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
@@ -63,6 +63,12 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.71: Fix — Intarsien-Fugen-Offset-Richtung korrigiert (app.js V6.35): ' +
+        '_applyIntarsiaOffset() nutzte intern getKerfOffsetPolyline(), das bei hole-Konturen ' +
+        '(CCW-Polygon) den Offset nach innen berechnete — NEG-Aussparung wurde kleiner statt größer. ' +
+        'Jetzt direkt Geometry.offsetPolygon() mit Richtungsprüfung (Fläche wächst/schrumpft). ' +
+        'Hatch-Konturen (cuttingMode=none) werden in regenerateIntarsiaContours() und ' +
+        '_buildIntarsiaExportContours() korrekt übersprungen. Toter Code _createIntarsiaContours() entfernt.',
         'V6.70: Debug — Console-Interceptor im DebugMonitor (debug-monitor.js V1.2): ' +
         'Alle console.log/warn/error/debug-Aufrufe werden jetzt gepuffert (max. 600 Einträge). ' +
         'Neuer Log-Tab (Strg+Shift+D) mit scrollbarem Live-Log, Modul-Filter-Chips ' +

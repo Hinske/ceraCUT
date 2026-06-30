@@ -1,7 +1,13 @@
 /**
- * CeraCUT V6.34 - Main Application
- * Last Modified: 2026-06-29
- * Build: 20260629-insideoutalways
+ * CeraCUT V6.35 - Main Application
+ * Last Modified: 2026-06-30
+ * Build: 20260630-intarsiaoffsetfix
+ * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
+ *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
+ *        NEG-Aussparung wurde kleiner statt größer — bei gap ≠ 2×kerf passte der Einleger nicht.
+ *        Jetzt: Geometry.offsetPolygon() direkt mit Flächencheck zur Richtungsvalidierung.
+ *        Hatch-Konturen werden in regenerateIntarsiaContours()/_buildIntarsiaExportContours()
+ *        korrekt gefiltert. Toter Code _createIntarsiaContours() (V5.2) entfernt.
  * V6.34: Fix — rebuildCutOrder() baute immer natürliche Reihenfolge (Scheibe zuerst) und
  *        wurde bei Delete/Duplikat aufgerufen — Inside-Out-Sortierung ging verloren.
  *        Jetzt: _applyInsideOutSort() als eigene Methode extrahiert; rebuildCutOrder() und
@@ -4607,6 +4613,7 @@ class CeraCutApp {
 
         for (const c of this.contours) {
             if (c.isReference) continue;
+            if (c.isHatchContour || c.cuttingMode === 'none') continue;
             if (!c.isClosed && c.cuttingMode !== 'slit') continue;
 
             // ─── NEG-Clone: Aussparung — cuttingMode beibehalten, Offset nach außen ───
@@ -4767,114 +4774,39 @@ class CeraCutApp {
         let intIdx = 0;
         return this.contours.map(c => {
             if (c.isReference) return c;
+            if (c.isHatchContour || c.cuttingMode === 'none') return c;
             if (!c.isClosed && c.cuttingMode !== 'slit') return c;
             return intarsiaContours[intIdx++] || c;
         });
     }
 
     /**
-     * Erzeugt Kontur-Klone mit invertiertem cuttingMode für POS-Export.
-     *
-     * Normal (NEG/Aussparung): disc→G42 (Kerf außen, Loch größer)
-     * Invertiert (POS/Einleger): disc→hole→G41 (Kerf innen, Teil kleiner)
-     *
-     * Nesting-Level-Alternation bei A/O/B etc.:
-     *   NEG (normal):     Level 1=disc(G42), Level 2=hole(G41)  [Standard-Pipeline]
-     *   POS (invertiert):  Level 1=hole(G41), Level 2=disc(G42)  [Alles umgedreht]
-     *
-     * Lead-Seite folgt automatisch aus dem neuen cuttingMode:
-     *   hole → Innen-Lead-Parameter (Pierce außen)
-     *   disc → Außen-Lead-Parameter (Pierce innen)
-     */
-    _createIntarsiaContours(fileType) {
-        console.log(`[Intarsia V5.2] _createIntarsiaContours('${fileType}')`);
-
-        const extVals = this._getLeadValuesFromUI();
-        const intVals = this._getInternalLeadValuesFromUI();
-        const altVals = this._getAlternativeLeadValuesFromUI();
-
-        // Fugen-Offset berechnen: additionalOffset = (gap - 2*kerf) / 2
-        const kerf = this.settings.kerfWidth || 0.8;
-        const gap = parseFloat(document.getElementById('intarsia-gap')?.value) || (kerf * 2);
-        const additionalOffset = (gap - 2 * kerf) / 2;
-
-        return this.contours.map((c, idx) => {
-            // Referenz unverändert durchreichen
-            if (c.isReference) return c;
-
-            // Nicht-schneidbare Konturen unverändert
-            if (!c.isClosed && c.cuttingMode !== 'slit') return c;
-
-            // Clone erstellen
-            const clone = c.clone();
-
-            if (fileType === 'pos') {
-                // POS = Einleger: cuttingMode invertieren
-                // disc→hole (G42→G41), hole→disc (G41→G42)
-                if (clone.cuttingMode === 'disc') {
-                    clone.cuttingMode = 'hole';
-                    clone.type = 'INNER';
-                } else if (clone.cuttingMode === 'hole') {
-                    clone.cuttingMode = 'disc';
-                    clone.type = 'OUTER';
-                }
-                // slit bleibt slit
-            }
-
-            // Fugen-Offset anwenden: NEG nach außen (+), POS nach innen (-)
-            if (Math.abs(additionalOffset) >= 0.01 && clone.isClosed && clone.cuttingMode !== 'slit') {
-                const sign = (fileType === 'pos') ? -1 : +1;
-                this._applyIntarsiaOffset(clone, sign * additionalOffset);
-            }
-
-            // Leads neu berechnen passend zum (ggf. invertierten) cuttingMode
-            // hole → Innen-Lead (Pierce außen), disc → Außen-Lead (Pierce innen)
-            const leadVals = Object.assign({},
-                (clone.cuttingMode === 'hole') ? intVals : extVals,
-                altVals
-            );
-            this._applyLeadToContour(clone, leadVals);
-
-            console.log(`[Intarsia V5.2] Kontur ${idx}: ${c.cuttingMode}→${clone.cuttingMode} offset=${additionalOffset.toFixed(2)}mm`);
-            return clone;
-        });
-    }
-
-    /**
      * Wendet den Intarsien-Fugen-Offset auf eine geklonte Kontur an.
-     * Nutzt getKerfOffsetPolyline() mit temporär modifiziertem kerfWidth.
-     *
-     * Positiver Offset = Konturen weiter vom Teil-Zentrum (größere Fuge)
-     * Negativer Offset = Konturen näher zum Teil-Zentrum (engere Fuge)
+     * additionalOffset > 0 → Kontur wächst (NEG: Aussparung größer)
+     * additionalOffset < 0 → Kontur schrumpft (POS: Einleger kleiner)
      */
     _applyIntarsiaOffset(clone, additionalOffset) {
-        const origKerfWidth = clone.kerfWidth;
-        const origKerfFlipped = clone.kerfFlipped;
+        if (Math.abs(additionalOffset) < 0.001) return;
 
-        // getKerfOffsetPolyline() nutzt kerfWidth/2 als Distanz,
-        // also kerfWidth = |additionalOffset| * 2
-        clone.kerfWidth = Math.abs(additionalOffset) * 2;
+        const areaOrig = Math.abs(Geometry.getSignedArea(clone.points));
+        if (areaOrig < 0.01) return;
 
-        // Bei negativem Offset: Richtung umkehren (näher zum Zentrum)
-        if (additionalOffset < 0) {
-            clone.kerfFlipped = !clone.kerfFlipped;
+        // additionalOffset > 0 → Kontur nach außen (wächst), < 0 → nach innen (schrumpft).
+        // offsetPolygon nutzt rechtsseitige Normalen:
+        //   CW-Polygon (disc) + d → wächst  ✓
+        //   CCW-Polygon (hole) + d → schrumpft → muss negiert werden
+        let pts = Geometry.offsetPolygon(clone.points, additionalOffset, true);
+        if (pts && pts.length > 2) {
+            const areaNew = Math.abs(Geometry.getSignedArea(pts));
+            if ((areaNew > areaOrig) !== (additionalOffset > 0)) {
+                pts = Geometry.offsetPolygon(clone.points, -additionalOffset, true);
+            }
         }
 
-        // Cache invalidieren damit neu berechnet wird
-        clone._cachedKerfPolyline = null;
-        clone._cacheKey = null;
-
-        const offsetResult = clone.getKerfOffsetPolyline();
-        if (offsetResult?.points?.length > 2 && !clone.compensationSkipped) {
-            clone.points = offsetResult.points.map(p => ({ x: p.x, y: p.y }));
+        if (pts && pts.length > 2) {
+            clone.points = pts.map(p => ({ x: p.x, y: p.y }));
         }
 
-        // Originale Werte wiederherstellen
-        clone.kerfWidth = origKerfWidth;
-        clone.kerfFlipped = origKerfFlipped;
-        clone.compensationSkipped = false;
-
-        // Cache invalidieren nach Punkt-Änderung
         clone._cachedKerfPolyline = null;
         clone._cacheKey = null;
         clone._cachedLeadInPath = null;
@@ -4899,10 +4831,10 @@ class CeraCutApp {
                 const w = await fh.createWritable();
                 await w.write(code);
                 await w.close();
-                console.log(`[Intarsia V5.2] FSAPI: ${filename} → ${window._cncDirHandle.name}/`);
+                console.log(`[Intarsia V2.0] FSAPI: ${filename} → ${window._cncDirHandle.name}/`);
                 return;
             } catch (err) {
-                console.warn(`[Intarsia V5.2] FSAPI fehlgeschlagen, Fallback auf Download:`, err);
+                console.warn(`[Intarsia V2.0] FSAPI fehlgeschlagen, Fallback auf Download:`, err);
             } finally {
                 this._savingFiles.delete(filename);
             }
@@ -4920,7 +4852,7 @@ class CeraCutApp {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            console.log(`[Intarsia V5.2] Download: ${filename} (${code.length} bytes)`);
+            console.log(`[Intarsia V2.0] Download: ${filename} (${code.length} bytes)`);
         } finally {
             this._savingFiles?.delete(filename);
         }
