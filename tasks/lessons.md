@@ -19,6 +19,12 @@
 
 ## Eintraege
 
+### [2026-07-01] DXF-Export ohne Zeilenumbruch nach EOF → AutoCAD verweigert Öffnen
+- **Fehler:** `DXFWriter.generate()` erzeugte den Datei-Inhalt mit `this.lines.join('\r\n')`. `join()` fügt Trenner NUR zwischen Elementen ein, nicht nach dem letzten — die Datei endete also mit `...0\r\nEOF` ohne abschließenden Zeilenterminator. AutoCAD (R11/R12-Reader) wertete die Datei dadurch als abgeschnitten und verweigerte das Öffnen.
+- **Root Cause:** Byte-Vergleich zweier Dateien (unser fehlerhafter Export vs. eine extern reparierte, funktionierende Version) zeigte den Unterschied direkt am Datei-Ende: fehlende `\r\n` nach dem letzten `EOF`. Alle anderen Strukturen (HEADER, TABLES, BLOCKS, ENTITIES, Layer-Referenzen) waren identisch/korrekt — reine Diagnose per `od -c`/`xxd` am Dateiende hätte das sofort gezeigt, keine Notwendigkeit für komplexe Parser-Analyse.
+- **Regel:** Bei "Datei X öffnet nicht, Datei Y schon"-Bugreports IMMER zuerst Datei-Enden byteweise vergleichen (`od -c file | tail`) — fehlende Terminatoren/Trailing-Newlines sind ein häufiger, leicht übersehener Fehler bei `Array.join()`-basierten File-Generatoren. Nach `join(sep)` für Dateiformate mit Pflicht-Endzeile: `+ sep` ergänzen, nicht nur die letzte Zeile schreiben und hoffen.
+- **Betroffene Module:** `dxf-writer.js` (V1.13→V1.14)
+
 ### [2026-06-25] Animation-Loop auf Haupt-Canvas: O(n²) Trail-Rendering → UI-Freeze + Canvas-Abstürz
 - **Fehler:** `ToolpathSimulator.startAnimation()` zeichnete direkt auf den Haupt-Canvas (`#canvas`) und akkumulierte alle Trail-Punkte in einem Array. Jeder Frame zeichnete ALLE bisherigen Punkte neu → O(n²) Canvas-Operationen → Browser-Freeze nach wenigen Sekunden. Nach Ende: Canvas blank, kein Re-render, UI tot.
 - **Root Cause:** Drei Design-Fehler gleichzeitig: (1) Trail-Array unbegrenzt wachsend + O(n) Draw-Loop. (2) Kein Overlay — Haupt-Canvas übernommen. (3) Kein Restore-Callback.

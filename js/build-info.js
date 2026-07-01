@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.73
- * Version: V6.73
+ * CeraCUT Build Info V6.74
+ * Version: V6.74
  * Last Modified: 2026-07-01 MEZ
- * Build: 20260701-r12downgrade
+ * Build: 20260701-eoftrailingnewline
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.73',
-    build: '20260701-r12downgrade',
+    version: '6.74',
+    build: '20260701-eoftrailingnewline',
     date: '2026-07-01',
-    time: '11:00 MEZ',
+    time: '12:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'ebe6d15',
-        date: '2026-07-01 09:52:53 +0200',
-        message: 'fix: DXF-Writer Downgrade AC1015→AC1009 — AutoCAD 2017 Crash-Fix strukturell (dxf-writer V1.13, build V6.73)'
+        hash: '1a8bc12',
+        date: '2026-07-01 10:41:01 +0200',
+        message: 'fix: DXF-Export ohne Zeilenumbruch nach EOF — AutoCAD verweigerte Oeffnen strukturell (dxf-writer V1.14, build V6.74)'
     },
 
     modules: {
@@ -37,7 +37,7 @@ const CERACUT_BUILD = {
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
-        'dxf-writer':         { version: '1.13', build: '20260701-r12downgrade' },
+        'dxf-writer':         { version: '1.14', build: '20260701-eoftrailingnewline' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
         'app':                { version: '6.35', build: '20260630-intarsiaoffsetfix' },
         'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
@@ -63,6 +63,13 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.74: Fix — DXF-Export: Fehlender Zeilenumbruch nach EOF-Marker (dxf-writer V1.14). ' +
+        'Analyse von FliesenMeyer_Logo_Entwurf5.dxf (unser Export, in AutoCAD nicht öffenbar) vs. ' +
+        'FliesenMeyer_Logo_Entwurf5neu.dxf (öffnet korrekt) zeigte: unser Export endet mit ' +
+        '"...0\\r\\nEOF" ohne abschließenden Zeilenterminator, die funktionierende Datei mit ' +
+        '"...0\\nEOF\\n". this.lines.join("\\r\\n") liefert keinen Trailing-Terminator nach der ' +
+        'letzten Zeile — AutoCAD (R11/R12) wertet die Datei dadurch als abgeschnitten und ' +
+        'verweigert das Öffnen. Fix: join("\\r\\n") + "\\r\\n".',
         'V6.73: Fix — DXF-Export Downgrade AC1015 → AC1009 (R12): Eliminiert Handles (5), ' +
         'Owner-Referenzen (330) und SubclassMarker (100) strukturell — wiederholt patchende ' +
         'Fixes (V1.8–V1.12) hatten AutoCAD 2017 Crash nicht behoben. R12-Format kennt ' +

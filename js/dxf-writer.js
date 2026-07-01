@@ -1,5 +1,8 @@
 /**
- * CeraCUT DXF Writer V1.13
+ * CeraCUT DXF Writer V1.14
+ * V1.14: Fehlender Zeilenumbruch nach EOF-Marker behoben — AutoCAD (R11/R12) wertete
+ *        Datei sonst als abgeschnitten und verweigerte das Oeffnen. join('\r\n') liefert
+ *        keinen Trailing-Terminator nach der letzten Zeile (EOF) → jetzt ergaenzt.
  * V1.13: Downgrade AC1015 → AC1009 (R12) — eliminiert Handle/Owner/SubclassMarker-
  *        Komplexität, die trotz mehrerer Patches (V1.6–V1.12) immer wieder zu AutoCAD 2017
  *        Crashes geführt hat. R12 kennt keine Handles (5), Owner-Refs (330) oder
@@ -25,7 +28,7 @@
  *
  * Created: 2026-02-15 MEZ
  * Last Modified: 2026-07-01 MEZ
- * Build: 20260701-r12downgrade
+ * Build: 20260701-eoftrailingnewline
  */
 
 class DXFWriter {
@@ -97,7 +100,10 @@ class DXFWriter {
         // ── EOF ──
         this._write(0, 'EOF');
 
-        const content = this.lines.join('\r\n');
+        // Trailing \r\n nach EOF ist Pflicht — ohne diesen Zeilenterminator
+        // interpretieren AutoCAD-Reader (R11/R12) die Datei als abgeschnitten
+        // und verweigern das Oeffnen (siehe FliesenMeyer_Logo_Entwurf5.dxf).
+        const content = this.lines.join('\r\n') + '\r\n';
         return {
             content,
             filename: options.filename || 'export.dxf',
@@ -266,7 +272,7 @@ class DXFWriter {
             const fit = this._fitCircle(contour.points);
             if (fit) { cx = fit.cx; cy = fit.cy; radius = fit.radius; }
             else {
-                console.warn('[DXF-Writer V1.13] Kreis-Validierung fehlgeschlagen → Polyline');
+                console.warn('[DXF-Writer V1.14] Kreis-Validierung fehlgeschlagen → Polyline');
                 stats.circleFallbacks = (stats.circleFallbacks || 0) + 1;
                 this._writePolyline(contour, stats);
                 return;
