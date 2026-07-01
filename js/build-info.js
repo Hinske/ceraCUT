@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.71
- * Version: V6.71
- * Last Modified: 2026-06-30 MEZ
- * Build: 20260630-intarsiaoffsetfix
+ * CeraCUT Build Info V6.72
+ * Version: V6.72
+ * Last Modified: 2026-07-01 MEZ
+ * Build: 20260701-vertexownerfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.71',
-    build: '20260630-intarsiaoffsetfix',
-    date: '2026-06-30',
-    time: '14:00 MEZ',
+    version: '6.72',
+    build: '20260701-vertexownerfix',
+    date: '2026-07-01',
+    time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'ce844de',
-        date: '2026-06-30 07:36:39 +0200',
-        message: 'fix: Intarsien-Fugen-Offset-Richtung korrigiert — NEG-Aussparung wuchs nicht (app.js V6.35, build V6.71)'
+        hash: 'bddbc79',
+        date: '2026-07-01 09:18:50 +0200',
+        message: 'fix: VERTEX/SEQEND Owner-Handle fix — verhindert AutoCAD 2017 Absturz bei DXF-Import (dxf-writer V1.12, build V6.72)'
     },
 
     modules: {
@@ -37,7 +37,7 @@ const CERACUT_BUILD = {
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
-        'dxf-writer':         { version: '1.11', build: '20260625-splineclosedguard' },
+        'dxf-writer':         { version: '1.12', build: '20260701-vertexownerfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
         'app':                { version: '6.35', build: '20260630-intarsiaoffsetfix' },
         'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
@@ -63,6 +63,11 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.72: Fix — DXF-Export: VERTEX/SEQEND hatten Owner-Handle 330=1 (*MODEL_SPACE) statt ' +
+        'den Handle ihrer übergeordneten POLYLINE — AutoCAD 2017 crashte beim Import aller ' +
+        'POLYLINE-basierten Exports (dxf-writer V1.12). ' +
+        'HANDSEED-Berechnung korrigiert: handleCounter ist nach Post-Increment bereits der ' +
+        'nächste freie Handle, +1 war überflüssig.',
         'V6.71: Fix — Intarsien-Fugen-Offset-Richtung korrigiert (app.js V6.35): ' +
         '_applyIntarsiaOffset() nutzte intern getKerfOffsetPolyline(), das bei hole-Konturen ' +
         '(CCW-Polygon) den Offset nach innen berechnete — NEG-Aussparung wurde kleiner statt größer. ' +

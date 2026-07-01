@@ -1,5 +1,10 @@
 /**
- * CeraCUT DXF Writer V1.11
+ * CeraCUT DXF Writer V1.12
+ * V1.12: VERTEX/SEQEND Owner-Handle fix — Group 330 zeigt jetzt auf die übergeordnete
+ *        POLYLINE statt immer auf *MODEL_SPACE. Verhindert AutoCAD 2017 Absturz beim Import.
+ *        _writeEntityHeader() gibt Handle zurück und nimmt optionalen ownerHandle-Parameter.
+ *        HANDSEED-Berechnung korrigiert (kein +1 mehr — handleCounter ist nach Post-Increment
+ *        bereits der nächste freie Handle).
  * V1.11: Defense-in-Depth — Closed-Flag (70/Bit1) bei SPLINE wird vor dem Export gegen die
  *        tatsaechlichen Roh-Punkte (Fit/Control) validiert, nicht mehr blind aus contour.isClosed
  *        uebernommen. Verhindert, dass ein inkonsistent geschlossen markierter Spline (Quelle
@@ -43,8 +48,8 @@
  * V1.4: AC1015 ohne Handles (crashte AutoCAD)
  *
  * Created: 2026-02-15 MEZ
- * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-splineclosedguard
+ * Last Modified: 2026-07-01 MEZ
+ * Build: 20260701-vertexownerfix
  */
 
 class DXFWriter {
@@ -135,7 +140,7 @@ class DXFWriter {
 
         // $HANDSEED nachträglich patchen
         const content = this.lines.join('\r\n')
-            .replace('$HANDSEED_PLACEHOLDER', (this._handleCounter + 1).toString(16).toUpperCase());
+            .replace('$HANDSEED_PLACEHOLDER', this._handleCounter.toString(16).toUpperCase());
 
         return {
             content,
@@ -376,12 +381,14 @@ class DXFWriter {
     // ═══ ENTITIES ═══
 
     /** Entity-Header: Handle + AcDbEntity + Layer */
-    _writeEntityHeader(type, layer) {
+    _writeEntityHeader(type, layer, ownerHandle) {
         this._write(0, type);
-        this._write(5, this._nextHandle());
-        this._write(330, this._modelSpaceHandle);
+        const handle = this._nextHandle();
+        this._write(5, handle);
+        this._write(330, ownerHandle || this._modelSpaceHandle);
         this._write(100, 'AcDbEntity');
         this._write(8, layer || '0');
+        return handle;
     }
 
     _writeLine(p1, p2, layer, stats) {
@@ -402,7 +409,7 @@ class DXFWriter {
         const isClosed = contour.isClosed;
         const points = contour.points;
 
-        this._writeEntityHeader('POLYLINE', layer);
+        const polylineHandle = this._writeEntityHeader('POLYLINE', layer);
         this._write(100, 'AcDb2dPolyline');
         this._write(66, '1');
         this._write(70, isClosed ? '1' : '0');
@@ -415,7 +422,7 @@ class DXFWriter {
             }
         }
         for (let i = 0; i < count; i++) {
-            this._writeEntityHeader('VERTEX', layer);
+            this._writeEntityHeader('VERTEX', layer, polylineHandle);
             this._write(100, 'AcDb2dVertex');
             this._write(10, this._fmt(points[i].x));
             this._write(20, this._fmt(points[i].y));
@@ -425,7 +432,7 @@ class DXFWriter {
             }
         }
 
-        this._writeEntityHeader('SEQEND', layer);
+        this._writeEntityHeader('SEQEND', layer, polylineHandle);
         stats.polylines++;
         stats.entities++;
     }
