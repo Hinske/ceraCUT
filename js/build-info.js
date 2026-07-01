@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.72
- * Version: V6.72
+ * CeraCUT Build Info V6.73
+ * Version: V6.73
  * Last Modified: 2026-07-01 MEZ
- * Build: 20260701-vertexownerfix
+ * Build: 20260701-r12downgrade
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.72',
-    build: '20260701-vertexownerfix',
+    version: '6.73',
+    build: '20260701-r12downgrade',
     date: '2026-07-01',
-    time: '10:00 MEZ',
+    time: '11:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'bddbc79',
-        date: '2026-07-01 09:18:50 +0200',
-        message: 'fix: VERTEX/SEQEND Owner-Handle fix — verhindert AutoCAD 2017 Absturz bei DXF-Import (dxf-writer V1.12, build V6.72)'
+        hash: 'ebe6d15',
+        date: '2026-07-01 09:52:53 +0200',
+        message: 'fix: DXF-Writer Downgrade AC1015→AC1009 — AutoCAD 2017 Crash-Fix strukturell (dxf-writer V1.13, build V6.73)'
     },
 
     modules: {
@@ -37,7 +37,7 @@ const CERACUT_BUILD = {
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
-        'dxf-writer':         { version: '1.12', build: '20260701-vertexownerfix' },
+        'dxf-writer':         { version: '1.13', build: '20260701-r12downgrade' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
         'app':                { version: '6.35', build: '20260630-intarsiaoffsetfix' },
         'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
@@ -63,6 +63,11 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.73: Fix — DXF-Export Downgrade AC1015 → AC1009 (R12): Eliminiert Handles (5), ' +
+        'Owner-Referenzen (330) und SubclassMarker (100) strukturell — wiederholt patchende ' +
+        'Fixes (V1.8–V1.12) hatten AutoCAD 2017 Crash nicht behoben. R12-Format kennt ' +
+        'diese Konzepte nicht → kein Owner-Chain-Problem möglich (dxf-writer V1.13). ' +
+        'SPLINE-Entities → Polyline-Fallback. EXTMIN/EXTMAX aus tatsächlichen Konturen.',
         'V6.72: Fix — DXF-Export: VERTEX/SEQEND hatten Owner-Handle 330=1 (*MODEL_SPACE) statt ' +
         'den Handle ihrer übergeordneten POLYLINE — AutoCAD 2017 crashte beim Import aller ' +
         'POLYLINE-basierten Exports (dxf-writer V1.12). ' +

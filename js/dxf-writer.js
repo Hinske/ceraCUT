@@ -1,55 +1,31 @@
 /**
- * CeraCUT DXF Writer V1.12
- * V1.12: VERTEX/SEQEND Owner-Handle fix — Group 330 zeigt jetzt auf die übergeordnete
- *        POLYLINE statt immer auf *MODEL_SPACE. Verhindert AutoCAD 2017 Absturz beim Import.
- *        _writeEntityHeader() gibt Handle zurück und nimmt optionalen ownerHandle-Parameter.
- *        HANDSEED-Berechnung korrigiert (kein +1 mehr — handleCounter ist nach Post-Increment
- *        bereits der nächste freie Handle).
- * V1.11: Defense-in-Depth — Closed-Flag (70/Bit1) bei SPLINE wird vor dem Export gegen die
- *        tatsaechlichen Roh-Punkte (Fit/Control) validiert, nicht mehr blind aus contour.isClosed
- *        uebernommen. Verhindert, dass ein inkonsistent geschlossen markierter Spline (Quelle
- *        siehe dxf-parser V3.17) beim Re-Export erneut als widersprüchliches SPLINE-Entity
- *        geschrieben wird (Closed-Bit gesetzt, aber Roh-Punkte bilden keine Schleife).
- * V1.10: Cache-Staleness-Check vor SPLINE/CIRCLE-Export (_isCacheStale). _splineData/_fitPoints/
- *        _center stammen vom Import und werden von Move/Rotate/Mirror/Scale (drawing-tools.js)
- *        NIE mitverschoben — diese Tools transformieren ausschliesslich contour.points. Bisher
- *        bevorzugte _writeSpline/_writeCircle diese Rohdaten IMMER vor .points, ein nachtraeglich
- *        verschobenes Objekt (oder ein Import, dessen Normalisierung nur .points traf) wurde
- *        also wieder an der ALTEN Position re-exportiert. Neue Pruefung vergleicht die
- *        Bounding-Box-Zentren von .points und Rohdaten (Toleranz = eigene Diagonale der Kontur);
- *        bei Drift faellt der Export auf Polyline aus den aktuellen .points zurueck statt eine
- *        falsche Position zu schreiben (verlustbehaftet bei Spline-Form, aber korrekt positioniert).
- * V1.9: _writeLayerTable trägt jetzt jeden von einer Kontur referenzierten Layer-Namen
- *       (Code 8) automatisch nach, falls er nicht im LayerManager registriert ist.
- *       Ursache: Fallback-Layer 'DRAW' (drawing-tools.js/advanced-tools.js, z.B.
- *       BoundaryTool) wird nie via layerManager.addLayer() angelegt — Entities landeten
- *       so auf einem im LAYER-Table undefinierten Layer, was AutoCAD 2017 als defekte
- *       Datei zurückwies.
- * V1.8: BLOCK/ENDBLK in BLOCKS-Sektion bekommen Owner-Handle (330) zum BLOCK_RECORD —
- *       AC1015 verlangt eine lückenlose Owner-Kette, AutoCAD 2017 wies Dateien ohne
- *       diesen Pointer als beschädigt zurück. OBJECTS-Root-Dictionary erhält 330=0.
- * V1.7: stats.circleFallbacks zählt fehlgeschlagene Kreis-Validierungen, Nutzer-Warnung beim Speichern
- * Export von Konturen als AutoCAD DXF R2000 (AC1015) — vollständig konform
+ * CeraCUT DXF Writer V1.13
+ * V1.13: Downgrade AC1015 → AC1009 (R12) — eliminiert Handle/Owner/SubclassMarker-
+ *        Komplexität, die trotz mehrerer Patches (V1.6–V1.12) immer wieder zu AutoCAD 2017
+ *        Crashes geführt hat. R12 kennt keine Handles (5), Owner-Refs (330) oder
+ *        SubclassMarker (100) — diese Probleme sind strukturell ausgeschlossen.
+ *        SPLINE-Entity existiert in R12 nicht → Splines werden immer als Polyline exportiert.
+ *        EXTMIN/EXTMAX werden aus den tatsächlichen Konturen berechnet.
+ * V1.12: VERTEX/SEQEND Owner-Handle fix (half nicht — root cause ist AC1015-Komplexität)
+ * V1.11: Defense-in-Depth SPLINE Closed-Flag Validierung
+ * V1.10: Cache-Staleness-Check vor SPLINE/CIRCLE-Export
+ * V1.9: _writeLayerTable defensiv: fehlende Layer-Namen automatisch eintragen
+ * V1.8: BLOCK/ENDBLK Owner-Handle fix (half nicht dauerhaft)
+ * V1.7: stats.circleFallbacks
+ * V1.6: AC1015 mit Handles (erste R2000-Implementierung)
+ * V1.5: Downgrade AC1015→AC1009 (damals zu simpel für Splines — jetzt Polyline-Fallback)
+ * V1.4: AC1015 ohne Handles (crashte AutoCAD)
  *
- * Unterstützte Entity-Typen:
- * - LINE, POLYLINE/VERTEX/SEQEND, CIRCLE, ARC, SPLINE
- *
- * AC1015-Konformität:
- * - Hex-Handles (Code 5) für alle Table-Entries und Entities
- * - Alle Pflicht-Tables: VPORT, LTYPE, LAYER, STYLE, VIEW, UCS, APPID, DIMSTYLE, BLOCK_RECORD
- * - *MODEL_SPACE / *PAPER_SPACE Blocks mit Owner-Handle (330) zum BLOCK_RECORD
- * - Root-Dictionary in OBJECTS (Owner 330=0)
- * - $HANDSEED im Header
+ * Unterstützte Entity-Typen (R12):
+ * - LINE, POLYLINE/VERTEX/SEQEND, CIRCLE
+ * - SPLINE → Polyline-Fallback
+ * - ARC → Polyline-Fallback (contour.points ist bereits tesselliert)
  *
  * Encoding: ANSI_1252 (Windows Western) — korrekte Umlaute in Layer-Namen
  *
- * V1.6: AC1015 mit Handles, Pflicht-Tables, MODEL_SPACE, Root-Dict (AutoCAD-konform)
- * V1.5: Downgrade AC1015→AC1009 (zu simpel für Splines)
- * V1.4: AC1015 ohne Handles (crashte AutoCAD)
- *
  * Created: 2026-02-15 MEZ
  * Last Modified: 2026-07-01 MEZ
- * Build: 20260701-vertexownerfix
+ * Build: 20260701-r12downgrade
  */
 
 class DXFWriter {
@@ -57,50 +33,37 @@ class DXFWriter {
     constructor() {
         this.lines = [];
         this.precision = 6;
-        this._handleCounter = 1; // Handle-Zähler (hex)
-        this._modelSpaceHandle = null;
-        this._paperSpaceHandle = null;
-    }
-
-    /** Nächsten Handle als Hex-String vergeben */
-    _nextHandle() {
-        return (this._handleCounter++).toString(16).toUpperCase();
     }
 
     // ═══ ÖFFENTLICHE API ═══
 
     generate(contours, layerManager, options = {}) {
         this.lines = [];
-        this._handleCounter = 1;
-
         const stats = { entities: 0, layers: 0, lines: 0, polylines: 0, circles: 0, arcs: 0, splines: 0, images: 0 };
 
-        // Handles für feste Objekte vorab vergeben
-        this._modelSpaceHandle = this._nextHandle();  // 1
-        this._paperSpaceHandle = this._nextHandle();   // 2
+        // Bounding Box aus tatsächlichen Konturen berechnen
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const c of contours) {
+            if (!c.points) continue;
+            for (const p of c.points) {
+                if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
+                if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
+            }
+        }
+        if (!isFinite(minX)) { minX = 0; minY = 0; maxX = 1000; maxY = 1000; }
 
         // ── HEADER ──
-        this._writeHeader();
+        this._writeHeader(minX, minY, maxX, maxY);
 
-        // ── CLASSES (leer, aber vorhanden) ──
-        this._writeSectionStart('CLASSES');
-        this._writeSectionEnd();
-
-        // ── TABLES ──
+        // ── TABLES (R12: nur LTYPE + LAYER) ──
         this._writeSectionStart('TABLES');
-        this._writeVportTable();
         this._writeLineTypeTable();
         this._writeLayerTable(layerManager, stats, contours);
-        this._writeStyleTable();
-        this._writeViewTable();
-        this._writeUcsTable();
-        this._writeAppIdTable();
-        this._writeDimStyleTable();
-        this._writeBlockRecordTable();
         this._writeSectionEnd();
 
-        // ── BLOCKS ──
-        this._writeBlocks();
+        // ── BLOCKS (leer, aber Pflicht-Sektion in R12) ──
+        this._writeSectionStart('BLOCKS');
+        this._writeSectionEnd();
 
         // ── ENTITIES ──
         this._writeSectionStart('ENTITIES');
@@ -114,11 +77,10 @@ class DXFWriter {
 
             if (sourceType === 'CIRCLE' && contour.isClosed) {
                 this._writeCircle(contour, stats);
-            } else if (sourceType === 'SPLINE' && (contour._fitPoints || contour._splineData)) {
-                this._writeSpline(contour, stats);
             } else if (contour.points.length === 2 && !contour.isClosed) {
                 this._writeLine(contour.points[0], contour.points[1], layerName, stats);
             } else {
+                // SPLINE, ARC, POLYLINE, etc. → alle als Polyline (R12 hat kein SPLINE-Entity)
                 this._writePolyline(contour, stats);
             }
         }
@@ -132,16 +94,10 @@ class DXFWriter {
 
         this._writeSectionEnd();
 
-        // ── OBJECTS ──
-        this._writeObjects();
-
         // ── EOF ──
         this._write(0, 'EOF');
 
-        // $HANDSEED nachträglich patchen
-        const content = this.lines.join('\r\n')
-            .replace('$HANDSEED_PLACEHOLDER', this._handleCounter.toString(16).toUpperCase());
-
+        const content = this.lines.join('\r\n');
         return {
             content,
             filename: options.filename || 'export.dxf',
@@ -179,80 +135,33 @@ class DXFWriter {
 
     // ═══ HEADER ═══
 
-    _writeHeader() {
+    _writeHeader(minX, minY, maxX, maxY) {
         this._writeSectionStart('HEADER');
         this._write(9, '$ACADVER');
-        this._write(1, 'AC1015');
-        this._write(9, '$DWGCODEPAGE');
-        this._write(3, 'ANSI_1252');
-        this._write(9, '$HANDSEED');
-        this._write(5, '$HANDSEED_PLACEHOLDER');
+        this._write(1, 'AC1009');
+        this._write(9, '$EXTMIN');
+        this._write(10, this._fmt(minX)); this._write(20, this._fmt(minY)); this._write(30, '0.0');
+        this._write(9, '$EXTMAX');
+        this._write(10, this._fmt(maxX)); this._write(20, this._fmt(maxY)); this._write(30, '0.0');
         this._write(9, '$INSBASE');
         this._write(10, '0.0'); this._write(20, '0.0'); this._write(30, '0.0');
-        this._write(9, '$EXTMIN');
-        this._write(10, '0.0'); this._write(20, '0.0'); this._write(30, '0.0');
-        this._write(9, '$EXTMAX');
-        this._write(10, '1000.0'); this._write(20, '1000.0'); this._write(30, '0.0');
-        this._write(9, '$INSUNITS');
-        this._write(70, '4');
         this._writeSectionEnd();
     }
 
     // ═══ TABLES ═══
 
-    _writeEmptyTable(name) {
-        this._write(0, 'TABLE');
-        this._write(2, name);
-        this._write(5, this._nextHandle());
-        this._write(100, 'AcDbSymbolTable');
-        this._write(70, '0');
-        this._write(0, 'ENDTAB');
-    }
-
-    _writeVportTable()    { this._writeEmptyTable('VPORT'); }
-    _writeStyleTable()    { this._writeEmptyTable('STYLE'); }
-    _writeViewTable()     { this._writeEmptyTable('VIEW'); }
-    _writeUcsTable()      { this._writeEmptyTable('UCS'); }
-    _writeDimStyleTable() { this._writeEmptyTable('DIMSTYLE'); }
-
-    _writeAppIdTable() {
-        const tableH = this._nextHandle();
-        this._write(0, 'TABLE');
-        this._write(2, 'APPID');
-        this._write(5, tableH);
-        this._write(100, 'AcDbSymbolTable');
-        this._write(70, '1');
-        // ACAD AppId
-        this._write(0, 'APPID');
-        this._write(5, this._nextHandle());
-        this._write(330, tableH);
-        this._write(100, 'AcDbSymbolTableRecord');
-        this._write(100, 'AcDbRegAppTableRecord');
-        this._write(2, 'ACAD');
-        this._write(70, '0');
-        this._write(0, 'ENDTAB');
-    }
-
     _writeLineTypeTable() {
-        const tableH = this._nextHandle();
+        const ltypes = [
+            { name: 'CONTINUOUS', desc: 'Solid line',        count: 0, len: 0,   dashes: [] },
+            { name: 'DASHED',     desc: 'Dashed __ __ __',   count: 2, len: 6,   dashes: [4, -2] },
+            { name: 'DASHDOT',    desc: 'Dash dot __.__.__', count: 4, len: 8,   dashes: [4, -1, 0, -1] },
+            { name: 'DOT',        desc: 'Dot . . . .',       count: 2, len: 2,   dashes: [0, -2] }
+        ];
         this._write(0, 'TABLE');
         this._write(2, 'LTYPE');
-        this._write(5, tableH);
-        this._write(100, 'AcDbSymbolTable');
-        this._write(70, '4');
-
-        const ltypes = [
-            { name: 'CONTINUOUS', desc: 'Solid line', count: 0, len: 0, dashes: [] },
-            { name: 'DASHED', desc: 'Dashed __ __ __', count: 2, len: 6, dashes: [4, -2] },
-            { name: 'DASHDOT', desc: 'Dash dot __.__.__', count: 4, len: 8, dashes: [4, -1, 0, -1] },
-            { name: 'DOT', desc: 'Dot . . . .', count: 2, len: 2, dashes: [0, -2] }
-        ];
+        this._write(70, ltypes.length.toString());
         for (const lt of ltypes) {
             this._write(0, 'LTYPE');
-            this._write(5, this._nextHandle());
-            this._write(330, tableH);
-            this._write(100, 'AcDbSymbolTableRecord');
-            this._write(100, 'AcDbLinetypeTableRecord');
             this._write(2, lt.name);
             this._write(70, '0');
             this._write(3, lt.desc);
@@ -267,11 +176,7 @@ class DXFWriter {
     _writeLayerTable(layerManager, stats, contours) {
         const layers = layerManager ? layerManager.getAllLayers() : [{ name: '0', color: '#ffffff', lineType: 'Continuous' }];
 
-        // Jede von einer Kontur referenzierte Layer MUSS einen Table-Eintrag haben —
-        // AutoCAD weist Dateien mit Entities auf undefinierten Layern zurück (Code 8
-        // ohne passenden LAYER-Record). Fallback-Layer-Namen (z.B. 'DRAW' aus
-        // drawing-tools.js/advanced-tools.js) werden nie im LayerManager registriert,
-        // also hier defensiv nachgetragen.
+        // Defensiv: Layer die in Konturen referenziert werden aber im Manager fehlen, eintragen
         const knownNames = new Set(layers.map(l => l.name));
         if (contours) {
             for (const contour of contours) {
@@ -283,20 +188,12 @@ class DXFWriter {
             }
         }
 
-        const tableH = this._nextHandle();
-
         this._write(0, 'TABLE');
         this._write(2, 'LAYER');
-        this._write(5, tableH);
-        this._write(100, 'AcDbSymbolTable');
         this._write(70, layers.length.toString());
 
         for (const layer of layers) {
             this._write(0, 'LAYER');
-            this._write(5, this._nextHandle());
-            this._write(330, tableH);
-            this._write(100, 'AcDbSymbolTableRecord');
-            this._write(100, 'AcDbLayerTableRecord');
             this._write(2, layer.name);
             this._write(70, layer.locked ? '4' : '0');
             const aci = (typeof hexToACI === 'function') ? hexToACI(layer.color) : 7;
@@ -307,93 +204,11 @@ class DXFWriter {
         this._write(0, 'ENDTAB');
     }
 
-    _writeBlockRecordTable() {
-        const tableH = this._nextHandle();
-        this._write(0, 'TABLE');
-        this._write(2, 'BLOCK_RECORD');
-        this._write(5, tableH);
-        this._write(100, 'AcDbSymbolTable');
-        this._write(70, '2');
-
-        // *MODEL_SPACE
-        this._write(0, 'BLOCK_RECORD');
-        this._write(5, this._modelSpaceHandle);
-        this._write(330, tableH);
-        this._write(100, 'AcDbSymbolTableRecord');
-        this._write(100, 'AcDbBlockTableRecord');
-        this._write(2, '*MODEL_SPACE');
-
-        // *PAPER_SPACE
-        this._write(0, 'BLOCK_RECORD');
-        this._write(5, this._paperSpaceHandle);
-        this._write(330, tableH);
-        this._write(100, 'AcDbSymbolTableRecord');
-        this._write(100, 'AcDbBlockTableRecord');
-        this._write(2, '*PAPER_SPACE');
-
-        this._write(0, 'ENDTAB');
-    }
-
-    // ═══ BLOCKS ═══
-
-    _writeBlocks() {
-        this._writeSectionStart('BLOCKS');
-
-        const blocks = [
-            { name: '*MODEL_SPACE', recordHandle: this._modelSpaceHandle },
-            { name: '*PAPER_SPACE', recordHandle: this._paperSpaceHandle }
-        ];
-
-        for (const { name, recordHandle } of blocks) {
-            this._write(0, 'BLOCK');
-            this._write(5, this._nextHandle());
-            this._write(330, recordHandle);
-            this._write(100, 'AcDbEntity');
-            this._write(8, '0');
-            this._write(100, 'AcDbBlockBegin');
-            this._write(2, name);
-            this._write(70, '0');
-            this._write(10, '0.0'); this._write(20, '0.0'); this._write(30, '0.0');
-            this._write(3, name);
-            this._write(1, '');
-            this._write(0, 'ENDBLK');
-            this._write(5, this._nextHandle());
-            this._write(330, recordHandle);
-            this._write(100, 'AcDbEntity');
-            this._write(8, '0');
-            this._write(100, 'AcDbBlockEnd');
-        }
-
-        this._writeSectionEnd();
-    }
-
-    // ═══ OBJECTS ═══
-
-    _writeObjects() {
-        this._writeSectionStart('OBJECTS');
-        this._write(0, 'DICTIONARY');
-        this._write(5, this._nextHandle());
-        this._write(330, '0');
-        this._write(100, 'AcDbDictionary');
-        this._writeSectionEnd();
-    }
-
     // ═══ ENTITIES ═══
 
-    /** Entity-Header: Handle + AcDbEntity + Layer */
-    _writeEntityHeader(type, layer, ownerHandle) {
-        this._write(0, type);
-        const handle = this._nextHandle();
-        this._write(5, handle);
-        this._write(330, ownerHandle || this._modelSpaceHandle);
-        this._write(100, 'AcDbEntity');
-        this._write(8, layer || '0');
-        return handle;
-    }
-
     _writeLine(p1, p2, layer, stats) {
-        this._writeEntityHeader('LINE', layer);
-        this._write(100, 'AcDbLine');
+        this._write(0, 'LINE');
+        this._write(8, layer || '0');
         this._write(10, this._fmt(p1.x));
         this._write(20, this._fmt(p1.y));
         this._write(30, '0.0');
@@ -409,11 +224,6 @@ class DXFWriter {
         const isClosed = contour.isClosed;
         const points = contour.points;
 
-        const polylineHandle = this._writeEntityHeader('POLYLINE', layer);
-        this._write(100, 'AcDb2dPolyline');
-        this._write(66, '1');
-        this._write(70, isClosed ? '1' : '0');
-
         let count = points.length;
         if (isClosed && points.length > 1) {
             const first = points[0], last = points[points.length - 1];
@@ -421,9 +231,15 @@ class DXFWriter {
                 count = points.length - 1;
             }
         }
+
+        this._write(0, 'POLYLINE');
+        this._write(8, layer);
+        this._write(66, '1');
+        this._write(70, isClosed ? '1' : '0');
+
         for (let i = 0; i < count; i++) {
-            this._writeEntityHeader('VERTEX', layer, polylineHandle);
-            this._write(100, 'AcDb2dVertex');
+            this._write(0, 'VERTEX');
+            this._write(8, layer);
             this._write(10, this._fmt(points[i].x));
             this._write(20, this._fmt(points[i].y));
             this._write(30, '0.0');
@@ -432,7 +248,8 @@ class DXFWriter {
             }
         }
 
-        this._writeEntityHeader('SEQEND', layer, polylineHandle);
+        this._write(0, 'SEQEND');
+        this._write(8, layer);
         stats.polylines++;
         stats.entities++;
     }
@@ -449,15 +266,15 @@ class DXFWriter {
             const fit = this._fitCircle(contour.points);
             if (fit) { cx = fit.cx; cy = fit.cy; radius = fit.radius; }
             else {
-                console.warn('[DXF-Writer V1.8] Kreis-Validierung fehlgeschlagen → Polyline');
+                console.warn('[DXF-Writer V1.13] Kreis-Validierung fehlgeschlagen → Polyline');
                 stats.circleFallbacks = (stats.circleFallbacks || 0) + 1;
                 this._writePolyline(contour, stats);
                 return;
             }
         }
 
-        this._writeEntityHeader('CIRCLE', layer);
-        this._write(100, 'AcDbCircle');
+        this._write(0, 'CIRCLE');
+        this._write(8, layer);
         this._write(10, this._fmt(cx));
         this._write(20, this._fmt(cy));
         this._write(30, '0.0');
@@ -466,95 +283,8 @@ class DXFWriter {
         stats.entities++;
     }
 
-    _writeSpline(contour, stats) {
-        const layer = contour.layer || '0';
-        const sd = contour._splineData;
-        const fp = contour._fitPoints;
-
-        const hasCP = sd && sd.controlPoints && sd.controlPoints.length >= 2;
-        const hasFP = (sd && sd.fitPoints && sd.fitPoints.length >= 2) || (fp && fp.length >= 2);
-
-        if (!hasCP && !hasFP) {
-            this._writePolyline(contour, stats);
-            return;
-        }
-
-        // V1.10: Cache-Validierung — _splineData/_fitPoints stammen vom Import und werden von
-        // Move/Rotate/Mirror/Scale NIE mitverschoben (diese Tools transformieren nur contour.points).
-        // Driftet der Cache weit von der aktuellen Kontur weg (z.B. nach Verschieben, oder weil die
-        // Import-Normalisierung nur .points traf), wuerde der Re-Export die ALTE, falsche Position
-        // schreiben. Lieber verlustbehaftet aber korrekt: Fallback auf Polyline aus contour.points.
-        const cacheRawPoints = [
-            ...(hasCP ? sd.controlPoints : []),
-            ...(sd && sd.fitPoints ? sd.fitPoints : []),
-            ...(fp || [])
-        ];
-        if (this._isCacheStale(contour.points, cacheRawPoints)) {
-            console.warn('[DXF-Writer V1.10] SPLINE-Rohdaten stimmen nicht mit aktueller Kontur-Position ueberein (Cache veraltet) → Polyline-Fallback');
-            stats.splineStaleCacheFallbacks = (stats.splineStaleCacheFallbacks || 0) + 1;
-            this._writePolyline(contour, stats);
-            return;
-        }
-
-        const degree = (sd && sd.degree) ? sd.degree : 3;
-
-        const controlPoints = hasCP ? sd.controlPoints : [];
-        const knots = (sd && sd.knots && sd.knots.length > 0) ? sd.knots : [];
-        const weights = (sd && sd.weights && sd.weights.length > 0) ? sd.weights : [];
-        const fitPoints = hasFP
-            ? (sd && sd.fitPoints && sd.fitPoints.length >= 2 ? sd.fitPoints : fp)
-            : [];
-
-        // V1.11: Closed-Flag nicht blind aus contour.isClosed übernehmen — wenn die
-        // tatsächlichen Roh-Punkte (Fit/Control) keine Schleife bilden, würde ein gesetztes
-        // Closed-Bit einen widersprüchlichen SPLINE-Entity erzeugen (AutoCAD/CeraCUT zeichnen
-        // dann eine falsche Schluss-Sehne quer durchs Bauteil — "verstreute" Geometrie).
-        const rawClosedRequested = contour.isClosed || contour._splineClosed || false;
-        const splinePoints = fitPoints.length >= 2 ? fitPoints : controlPoints;
-        const geometricallyClosed = splinePoints.length > 1 &&
-            this._dist(splinePoints[0], splinePoints[splinePoints.length - 1]) < 1.0;
-        const isClosed = rawClosedRequested && geometricallyClosed;
-        if (rawClosedRequested && !geometricallyClosed) {
-            console.warn('[DXF-Writer V1.11] SPLINE als geschlossen markiert, Rohdaten bilden aber keine Schleife → als offen exportiert');
-        }
-        let flags = 8; // planar
-        if (isClosed) flags |= 1;
-
-        this._writeEntityHeader('SPLINE', layer);
-        this._write(100, 'AcDbSpline');
-        this._write(70, flags.toString());
-        this._write(71, degree.toString());
-        this._write(72, knots.length.toString());
-        this._write(73, controlPoints.length.toString());
-        this._write(74, fitPoints.length.toString());
-
-        for (const k of knots) this._write(40, this._fmt(k));
-        if (weights.length > 0) {
-            for (const w of weights) this._write(41, this._fmt(w));
-        }
-        for (const cp of controlPoints) {
-            this._write(10, this._fmt(cp.x));
-            this._write(20, this._fmt(cp.y));
-            this._write(30, '0.0');
-        }
-        for (const f of fitPoints) {
-            this._write(11, this._fmt(f.x));
-            this._write(21, this._fmt(f.y));
-            this._write(31, '0.0');
-        }
-
-        stats.splines++;
-        stats.entities++;
-    }
-
     // ═══ HELFER ═══
 
-    /**
-     * Prüft ob importierte Roh-Geometrie (Spline-Control-/Fit-Points, Kreis-Center) noch zur
-     * aktuellen contour.points-Position passt. Vergleicht die Zentren der jeweiligen Bounding-
-     * Boxen; Toleranz = eigene Diagonale der aktuellen Kontur (grosszuegig genug fuer normale
-     * Kontrollpolygon-Abweichung bei gekruemmten Splines, aber zu klein fuer einen Meter-Versatz).
-     */
     _isCacheStale(points, rawPoints) {
         if (!points || points.length === 0 || !rawPoints || rawPoints.length === 0) return true;
         const pb = this._bbox(points);
@@ -565,8 +295,6 @@ class DXFWriter {
         const tolerance = Math.max(5, diag);
         return Math.hypot(pCenterX - rCenterX, pCenterY - rCenterY) > tolerance;
     }
-
-    _dist(p1, p2) { return Math.hypot(p2.x - p1.x, p2.y - p1.y); }
 
     _bbox(points) {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
