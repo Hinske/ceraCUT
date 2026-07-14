@@ -174,7 +174,7 @@ Es existiert bereits eine Intarsien-Grundfunktion in `app.js` (Zeilen 4067–424
 - [x] Funktionstest (Node): 10/10 Checks PASS
 - [x] Sofort-Testdatei `FliesenMeyer_Logo_Entwurf6_fix.dxf` im Meyer-Ordner abgelegt
 - [x] Pflicht-Regeln: build-info V6.75, index.html `?v=`, sync-versions, lessons.md
-- [ ] **Praxistest ausstehend:** Petra/Markus öffnen `…_fix.dxf` + frischen App-Export in AutoCAD 2017
+- [x] **Praxistest bestanden (2026-07-14):** AutoCAD-Import läuft — Ursache Layername mit Leerzeichen bestätigt
 
 ## Review
 Hauptverdächtiger für den Crash: Layername `Layer 1` (Leerzeichen) — in AC1009 unzulässig,
