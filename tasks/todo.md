@@ -159,3 +159,26 @@ Es existiert bereits eine Intarsien-Grundfunktion in `app.js` (Zeilen 4067–424
 4. **Undo für alle Zuweisungen** — über bestehendes Command-Pattern
 5. **Rückwärtskompatibel** — `materialGroup=0` → Standard-Material (kein spezielles Verhalten)
 6. **POS/NEG/BOTH statt 4 Modi** — einfacher, funktional gleichwertig
+
+---
+
+# Fix: AutoCAD-Crash FliesenMeyer_Logo_Entwurf6.dxf (2026-07-14, V6.75)
+
+## Plan
+- [x] Datei-Forensik `Entwurf6.dxf` (Struktur, Bytes, Sequenzen — alles valide)
+- [x] Code-Review `dxf-writer.js` V1.14 + `image-underlay.js` (R12-Konformität)
+- [x] `_sanitizeName()` — R12-Symbolnamen (Leerzeichen/Sonderzeichen → `_`, max. 31, Kollisions-Dedupe)
+- [x] POLYLINE-Header: Pflicht-Dummy-Point 10/20/30
+- [x] IMAGE-Underlays im R12-Export überspringen (Entity existiert erst ab R14)
+- [x] EXTMIN/EXTMAX nur aus sichtbaren Konturen, NaN-Guard in `_fmt()`
+- [x] Funktionstest (Node): 10/10 Checks PASS
+- [x] Sofort-Testdatei `FliesenMeyer_Logo_Entwurf6_fix.dxf` im Meyer-Ordner abgelegt
+- [x] Pflicht-Regeln: build-info V6.75, index.html `?v=`, sync-versions, lessons.md
+- [ ] **Praxistest ausstehend:** Petra/Markus öffnen `…_fix.dxf` + frischen App-Export in AutoCAD 2017
+
+## Review
+Hauptverdächtiger für den Crash: Layername `Layer 1` (Leerzeichen) — in AC1009 unzulässig,
+funktionierende Referenz `Mercedes Logo.dxf` nutzt `Layer_1`. Die Testdatei `…_fix.dxf` enthält
+NUR die zwei Kandidaten-Fixes (Namens-Umbenennung + Dummy-Point) auf der Bestandsdatei und
+isoliert damit die Ursache empirisch. Writer-Fix (V1.15) deckt zusätzlich die IMAGE-Landmine
+und NaN-Fälle ab. Bug gilt erst nach AutoCAD-Praxistest als behoben.

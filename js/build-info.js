@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.74
- * Version: V6.74
- * Last Modified: 2026-07-01 MEZ
- * Build: 20260701-eoftrailingnewline
+ * CeraCUT Build Info V6.75
+ * Version: V6.75
+ * Last Modified: 2026-07-14 MEZ
+ * Build: 20260714-r12namesanitize
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.74',
-    build: '20260701-eoftrailingnewline',
-    date: '2026-07-01',
-    time: '12:00 MEZ',
+    version: '6.75',
+    build: '20260714-r12namesanitize',
+    date: '2026-07-14',
+    time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '1a8bc12',
-        date: '2026-07-01 10:41:01 +0200',
-        message: 'fix: DXF-Export ohne Zeilenumbruch nach EOF — AutoCAD verweigerte Oeffnen strukturell (dxf-writer V1.14, build V6.74)'
+        hash: '96125f9',
+        date: '2026-07-14 09:36:47 +0200',
+        message: 'fix: R12-Symbolnamen-Sanitisierung — Layername mit Leerzeichen liess AutoCAD beim Import abstuerzen (dxf-writer V1.15, build V6.75)'
     },
 
     modules: {
@@ -37,7 +37,7 @@ const CERACUT_BUILD = {
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.2', build: '20260324-undofix' },
         'text-tool':          { version: '1.2', build: '20260312-textimport' },
-        'dxf-writer':         { version: '1.14', build: '20260701-eoftrailingnewline' },
+        'dxf-writer':         { version: '1.15', build: '20260714-r12namesanitize' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
         'app':                { version: '6.35', build: '20260630-intarsiaoffsetfix' },
         'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
@@ -63,6 +63,19 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.75: Fix — DXF-Export: R12-Symbolnamen-Sanitisierung (dxf-writer V1.15). ' +
+        'FliesenMeyer_Logo_Entwurf6.dxf liess AutoCAD 2017 beim Import weiterhin abstuerzen ' +
+        '(acad.err: Unhandled Access Violation, verwaiste .dwl-Locks). Datei-Forensik zeigte: ' +
+        'Struktur/Zahlen/Sequenzen alle valide — aber Layername "Layer 1" mit Leerzeichen, in ' +
+        'AC1009-Symbolnamen unzulaessig (nur A-Za-z0-9$-_, max. 31 Zeichen; funktionierende ' +
+        'R12-Referenz Mercedes Logo.dxf nutzt "Layer_1"). Fix: _sanitizeName() mit ' +
+        'Original→Sanitisiert-Map, konsistent fuer LAYER-Tabelle und Entity-Gruppe-8, ' +
+        'Kollisionen dedupliziert. Zusaetzlich: POLYLINE-Header schreibt Pflicht-Dummy-Point ' +
+        '(10/20/30), Bild-Underlays im R12-Export uebersprungen (IMAGE-Entity existiert erst ' +
+        'ab R14, XDATA-APPID CERACUT_IMAGE war nie registriert — sicherer Absturzkandidat), ' +
+        'EXTMIN/EXTMAX nur noch aus exportierten sichtbaren Konturen, NaN/Infinity-Guard in ' +
+        '_fmt(). Sofort-Testdatei FliesenMeyer_Logo_Entwurf6_fix.dxf (nur Namens- + ' +
+        'Dummy-Point-Fix auf Bestandsdatei) im Meyer-Ordner fuer AutoCAD-Praxistest abgelegt.',
         'V6.74: Fix — DXF-Export: Fehlender Zeilenumbruch nach EOF-Marker (dxf-writer V1.14). ' +
         'Analyse von FliesenMeyer_Logo_Entwurf5.dxf (unser Export, in AutoCAD nicht öffenbar) vs. ' +
         'FliesenMeyer_Logo_Entwurf5neu.dxf (öffnet korrekt) zeigte: unser Export endet mit ' +

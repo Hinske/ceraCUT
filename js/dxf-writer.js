@@ -1,5 +1,13 @@
 /**
- * CeraCUT DXF Writer V1.14
+ * CeraCUT DXF Writer V1.15
+ * V1.15: R12-Symbolnamen-Sanitisierung — Layernamen mit Leerzeichen/Sonderzeichen
+ *        (z.B. "Layer 1") sind in AC1009 unzulaessig und liessen AutoCAD 2017 beim
+ *        Import abstuerzen (FliesenMeyer_Logo_Entwurf6.dxf). Namen werden jetzt auf
+ *        [A-Za-z0-9$-_] normalisiert (max. 31 Zeichen, kollisionsfrei) — konsistent
+ *        in LAYER-Tabelle und Entity-Gruppe-8. Zusaetzlich: POLYLINE-Header schreibt
+ *        Pflicht-Dummy-Point (10/20/30), IMAGE-Underlays werden uebersprungen
+ *        (IMAGE-Entity existiert erst ab R14, XDATA-APPID war nie registriert),
+ *        EXTMIN/EXTMAX nur aus exportierten (sichtbaren) Konturen, NaN-Guard in _fmt().
  * V1.14: Fehlender Zeilenumbruch nach EOF-Marker behoben — AutoCAD (R11/R12) wertete
  *        Datei sonst als abgeschnitten und verweigerte das Oeffnen. join('\r\n') liefert
  *        keinen Trailing-Terminator nach der letzten Zeile (EOF) → jetzt ergaenzt.
@@ -27,8 +35,8 @@
  * Encoding: ANSI_1252 (Windows Western) — korrekte Umlaute in Layer-Namen
  *
  * Created: 2026-02-15 MEZ
- * Last Modified: 2026-07-01 MEZ
- * Build: 20260701-eoftrailingnewline
+ * Last Modified: 2026-07-14 MEZ
+ * Build: 20260714-r12namesanitize
  */
 
 class DXFWriter {
@@ -36,18 +44,23 @@ class DXFWriter {
     constructor() {
         this.lines = [];
         this.precision = 6;
+        this._nameMap = new Map();
+        this._nonFiniteCount = 0;
     }
 
     // ═══ ÖFFENTLICHE API ═══
 
     generate(contours, layerManager, options = {}) {
         this.lines = [];
+        this._nameMap = new Map();
+        this._nonFiniteCount = 0;
         const stats = { entities: 0, layers: 0, lines: 0, polylines: 0, circles: 0, arcs: 0, splines: 0, images: 0 };
 
-        // Bounding Box aus tatsächlichen Konturen berechnen
+        // Bounding Box nur aus tatsächlich exportierten (sichtbaren) Konturen berechnen
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const c of contours) {
-            if (!c.points) continue;
+            if (!c.points || c.points.length < 2) continue;
+            if (layerManager && !layerManager.isVisible(c.layer || '0')) continue;
             for (const p of c.points) {
                 if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
                 if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
@@ -88,11 +101,11 @@ class DXFWriter {
             }
         }
 
+        // IMAGE-Entity existiert erst ab R14 (und XDATA braeuchte eine APPID-Tabelle) —
+        // in einer AC1009-Datei wuerde das AutoCAD zum Absturz bringen → ueberspringen
         if (options.imageUnderlayManager?.underlays?.length > 0) {
-            const imgLines = options.imageUnderlayManager.getDXFEntities();
-            for (const line of imgLines) this.lines.push(line.trim());
-            stats.images = options.imageUnderlayManager.underlays.length;
-            stats.entities += stats.images;
+            stats.imagesSkipped = options.imageUnderlayManager.underlays.length;
+            console.warn(`[DXF-Writer V1.15] ${stats.imagesSkipped} Bild-Underlay(s) uebersprungen — IMAGE-Entity in R12 (AC1009) nicht darstellbar`);
         }
 
         this._writeSectionEnd();
@@ -200,7 +213,7 @@ class DXFWriter {
 
         for (const layer of layers) {
             this._write(0, 'LAYER');
-            this._write(2, layer.name);
+            this._write(2, this._sanitizeName(layer.name));
             this._write(70, layer.locked ? '4' : '0');
             const aci = (typeof hexToACI === 'function') ? hexToACI(layer.color) : 7;
             this._write(62, aci.toString());
@@ -214,7 +227,7 @@ class DXFWriter {
 
     _writeLine(p1, p2, layer, stats) {
         this._write(0, 'LINE');
-        this._write(8, layer || '0');
+        this._write(8, this._sanitizeName(layer || '0'));
         this._write(10, this._fmt(p1.x));
         this._write(20, this._fmt(p1.y));
         this._write(30, '0.0');
@@ -226,7 +239,7 @@ class DXFWriter {
     }
 
     _writePolyline(contour, stats) {
-        const layer = contour.layer || '0';
+        const layer = this._sanitizeName(contour.layer || '0');
         const isClosed = contour.isClosed;
         const points = contour.points;
 
@@ -241,6 +254,10 @@ class DXFWriter {
         this._write(0, 'POLYLINE');
         this._write(8, layer);
         this._write(66, '1');
+        // Pflicht-Dummy-Point (R12): 10/20 immer 0, 30 = Elevation
+        this._write(10, '0.0');
+        this._write(20, '0.0');
+        this._write(30, '0.0');
         this._write(70, isClosed ? '1' : '0');
 
         for (let i = 0; i < count; i++) {
@@ -261,7 +278,7 @@ class DXFWriter {
     }
 
     _writeCircle(contour, stats) {
-        const layer = contour.layer || '0';
+        const layer = this._sanitizeName(contour.layer || '0');
         let cx, cy, radius;
 
         if (contour._center && contour._radius && !this._isCacheStale(contour.points, [contour._center])) {
@@ -272,7 +289,7 @@ class DXFWriter {
             const fit = this._fitCircle(contour.points);
             if (fit) { cx = fit.cx; cy = fit.cy; radius = fit.radius; }
             else {
-                console.warn('[DXF-Writer V1.14] Kreis-Validierung fehlgeschlagen → Polyline');
+                console.warn('[DXF-Writer V1.15] Kreis-Validierung fehlgeschlagen → Polyline');
                 stats.circleFallbacks = (stats.circleFallbacks || 0) + 1;
                 this._writePolyline(contour, stats);
                 return;
@@ -290,6 +307,33 @@ class DXFWriter {
     }
 
     // ═══ HELFER ═══
+
+    /**
+     * R12-Symbolnamen (Layer): nur A-Z a-z 0-9 $ - _ erlaubt, max. 31 Zeichen.
+     * Leerzeichen/Umlaute/Sonderzeichen ("Layer 1") liessen AutoCAD 2017 beim
+     * Import abstuerzen. Map haelt Original→Sanitisiert konsistent fuer
+     * LAYER-Tabelle und Entity-Gruppe-8, Kollisionen werden dedupliziert.
+     */
+    _sanitizeName(name) {
+        const raw = (name === undefined || name === null || name === '') ? '0' : name.toString();
+        if (this._nameMap.has(raw)) return this._nameMap.get(raw);
+
+        let clean = raw.replace(/[^A-Za-z0-9$\-_]/g, '_').substring(0, 31);
+        if (!clean) clean = '0';
+
+        const used = new Set(this._nameMap.values());
+        let candidate = clean, n = 2;
+        while (used.has(candidate)) {
+            const suffix = '_' + (n++);
+            candidate = clean.substring(0, 31 - suffix.length) + suffix;
+        }
+
+        if (candidate !== raw) {
+            console.warn(`[DXF-Writer V1.15] Layer "${raw}" → "${candidate}" (R12-Namensregel)`);
+        }
+        this._nameMap.set(raw, candidate);
+        return candidate;
+    }
 
     _isCacheStale(points, rawPoints) {
         if (!points || points.length === 0 || !rawPoints || rawPoints.length === 0) return true;
@@ -332,7 +376,17 @@ class DXFWriter {
     _writeSectionStart(name) { this._write(0, 'SECTION'); this._write(2, name); }
     _writeSectionEnd() { this._write(0, 'ENDSEC'); }
     _write(gc, val) { this.lines.push(gc.toString()); this.lines.push(val.toString()); }
-    _fmt(num) { return Number(num).toFixed(this.precision); }
+    _fmt(num) {
+        const n = Number(num);
+        if (!Number.isFinite(n)) {
+            this._nonFiniteCount = (this._nonFiniteCount || 0) + 1;
+            if (this._nonFiniteCount <= 5) {
+                console.error(`[DXF-Writer V1.15] Nicht-finiter Koordinatenwert (${num}) → 0.0 geschrieben`);
+            }
+            return (0).toFixed(this.precision);
+        }
+        return n.toFixed(this.precision);
+    }
 
     _mapLineType(lineType) {
         switch ((lineType || '').toLowerCase()) {
