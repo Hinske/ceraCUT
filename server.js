@@ -1,5 +1,5 @@
 /**
- * CeraCUT Server V1.7
+ * CeraCUT Server V1.8
  * V1.6: Fix — Slowloris-DoS im Dual-Protocol Gateway: socket.setTimeout(3000) +
  *       socket.on('timeout', destroy) schützt vor Angreifern die TCP-Verbindungen öffnen
  *       aber kein erstes Byte senden. Ohne Guard blieben Sockets unbegrenzt offen und
@@ -17,7 +17,7 @@
  * V1.3: Fix — safePath() prüft Symlink-Ziel via fs.realpathSync gegen DXF_ROOT,
  *       Content-Disposition-Header filtert CR/LF (Header-Injection)
  * Last Modified: 2026-11-04
- * Build: 20261104-reviewfix
+ * Build: 20261104-pushexecuted
  * V1.7: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * Statischer Dateiserver + DXF-Browse-API für Netzlaufwerk-Zugriff.
@@ -450,7 +450,11 @@ function handleLogout(req, res, isSecure) {
 /** API: /api/admin/users* — nur für Rolle 'admin' (Gate erfolgt im Aufrufer) */
 async function handleAdminUsers(req, res, pathname) {
     if (pathname === '/api/admin/users' && req.method === 'GET') {
-        return sendJSON(res, 200, { users: userStore.listUsers() });
+        try {
+            return sendJSON(res, 200, { users: userStore.listUsers() });
+        } catch (err) {
+            return sendJSON(res, 500, { error: 'Benutzerliste nicht lesbar' });
+        }
     }
 
     if (pathname === '/api/admin/users' && req.method === 'POST') {

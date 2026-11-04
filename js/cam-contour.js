@@ -1,5 +1,5 @@
 /**
- * CeraCUT CamContour V5.22 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.23 - IGEMS-konformes Lead-In/Out System
  * V5.21: Fix — getPiercingR923(): 'auto' mapped jetzt auf R923=9 (Rotationsanschuss)
  *        statt R923=1 (Linearer Anschuss). L201-Subroutine dieser Maschine kennt R923=1
  *        nicht (oder braucht undokumentierte R918/R919-Parameter) → "fehlende Anschuss-
@@ -2464,7 +2464,7 @@ class CamContour {
     getLeadSetInfo() {
         return {
             cuttingMode: this.cuttingMode,
-            isInternal: this.cuttingMode === 'hole',
+            isInternal: this._isEffectivelyHole(),
             leadInType: this.leadInType,
             leadInLength: this.leadInLength,
             leadInRadius: this.leadInRadius,

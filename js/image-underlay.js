@@ -1,5 +1,5 @@
 /**
- * CeraCUT Image Underlay V1.1
+ * CeraCUT Image Underlay V1.2
  * Bild-Hintergrund für Nachzeichnen (AutoCAD IMAGE/IMAGEATTACH)
  * 
  * Features:
@@ -170,7 +170,7 @@ class ImageUnderlayManager {
                     () => { if (!self.underlays.includes(placed)) self.underlays.push(placed); },
                     () => { const idx = self.underlays.indexOf(placed); if (idx >= 0) self.underlays.splice(idx, 1); }
                 );
-                this.app.undoManager.undoStack.push(cmd);
+                this.app.undoManager.pushExecuted(cmd);
                 if (this.app.undoManager.redoStack) this.app.undoManager.redoStack.length = 0;
             }
 
@@ -285,7 +285,7 @@ class ImageUnderlayManager {
                 () => { ul.scale = newScale; },
                 () => { ul.scale = oldScale; }
             );
-            this.app.undoManager.undoStack.push(cmd);
+            this.app.undoManager.pushExecuted(cmd);
             if (this.app.undoManager.redoStack) this.app.undoManager.redoStack.length = 0;
         }
 
@@ -439,7 +439,7 @@ class ImageUnderlayManager {
                 () => { underlay.opacity = value; },
                 () => { underlay.opacity = old; }
             );
-            this.app.undoManager.undoStack.push(cmd);
+            this.app.undoManager.pushExecuted(cmd);
             if (this.app.undoManager.redoStack) this.app.undoManager.redoStack.length = 0;
         }
         this.app?.renderer?.render();
@@ -461,7 +461,7 @@ class ImageUnderlayManager {
                 () => { const i = self.underlays.indexOf(underlay); if (i >= 0) self.underlays.splice(i, 1); },
                 () => { self.underlays.splice(idx, 0, underlay); self._storeBlob(underlay.id, underlay._blob); }
             );
-            this.app.undoManager.undoStack.push(cmd);
+            this.app.undoManager.pushExecuted(cmd);
             if (this.app.undoManager.redoStack) this.app.undoManager.redoStack.length = 0;
         }
 

@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.19
+ * CeraCUT Drawing & Modification Tools V2.20
  * AutoCAD-style CAD Tools für CeraCUT
  *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
@@ -1556,7 +1556,7 @@ class MoveTool extends ModificationTool {
         );
 
         // Bereits ausgeführt → direkt auf Stack
-        app?.undoManager?.undoStack.push(cmd);
+        app?.undoManager?.pushExecuted(cmd);
         app?.undoManager?.redoStack && (app.undoManager.redoStack.length = 0);
         app?.undoManager?._notifyStateChange?.();
 
@@ -2002,7 +2002,7 @@ class RotateTool extends ModificationTool {
             }
         );
 
-        app?.undoManager?.undoStack.push(cmd);
+        app?.undoManager?.pushExecuted(cmd);
         app?.undoManager?.redoStack && (app.undoManager.redoStack.length = 0);
         app?.undoManager?._notifyStateChange?.();
 
@@ -2471,7 +2471,7 @@ class ScaleTool extends ModificationTool {
             }
         );
 
-        app?.undoManager?.undoStack.push(cmd);
+        app?.undoManager?.pushExecuted(cmd);
         app?.undoManager?.redoStack && (app.undoManager.redoStack.length = 0);
         app?.undoManager?._notifyStateChange?.();
 

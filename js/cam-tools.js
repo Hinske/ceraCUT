@@ -1,5 +1,5 @@
 /**
- * CeraCUT CAM-Tools V1.5 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
+ * CeraCUT CAM-Tools V1.6 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
  * 7 Tools für Analyse, Optimierung und Vorbereitung der Schnittgeometrie
  *
  * Tools:
@@ -21,7 +21,7 @@
  * V1.1: Hit-Test Scaling — Klick-Threshold skaliert mit Zoom-Level
  * Created: 2026-02-17 MEZ
  * Last Modified: 2026-11-04
- * Build: 20261104-reviewfix
+ * Build: 20261104-pushexecuted
  * V1.5: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
@@ -151,7 +151,7 @@ class EdgefixTool extends BaseTool {
                 }
             };
             cmd.execute();
-            undoMgr.undoStack.push(cmd);
+            undoMgr.pushExecuted(cmd);
             undoMgr.redoStack.length = 0;
             undoMgr._notifyStateChange();
             this.cmd?.log('✅ Edgefix: Abschnitt ersetzt (' + (arc ? 'Arc' : 'Linie') + ')', 'info');
@@ -313,7 +313,7 @@ class ReplaceTool extends ModificationTool {
             }
         };
         cmd.execute();
-        undoMgr.undoStack.push(cmd);
+        undoMgr.pushExecuted(cmd);
         undoMgr.redoStack.length = 0;
         undoMgr._notifyStateChange();
 
@@ -511,7 +511,7 @@ class AnalyzeTool extends ModificationTool {
                 undoMgr.undoStack[undoMgr.undoStack.length - 1]._isAnalyzeCmd) {
                 undoMgr.undoStack.pop();
             }
-            undoMgr.undoStack.push(cmd);
+            undoMgr.pushExecuted(cmd);
             undoMgr.redoStack.length = 0;
             undoMgr._notifyStateChange();
         }
@@ -632,7 +632,7 @@ class BoundaryTrimTool extends BaseTool {
                 }
             };
             cmd.execute();
-            undoMgr.undoStack.push(cmd);
+            undoMgr.pushExecuted(cmd);
             undoMgr.redoStack.length = 0;
             undoMgr._notifyStateChange();
         }
@@ -818,7 +818,7 @@ class PolyJointTool extends BaseTool {
                 }
             };
             cmd.execute();
-            undoMgr.undoStack.push(cmd);
+            undoMgr.pushExecuted(cmd);
             undoMgr.redoStack.length = 0;
             undoMgr._notifyStateChange();
         }
@@ -893,7 +893,7 @@ class PolyJointTool extends BaseTool {
                 }
             };
             cmd.execute();
-            undoMgr.undoStack.push(cmd);
+            undoMgr.pushExecuted(cmd);
             undoMgr.redoStack.length = 0;
             undoMgr._notifyStateChange();
         }
@@ -1028,7 +1028,7 @@ class VectorizeTool extends ModificationTool {
                 }
             };
             cmd.execute();
-            undoMgr.undoStack.push(cmd);
+            undoMgr.pushExecuted(cmd);
             undoMgr.redoStack.length = 0;
             undoMgr._notifyStateChange();
         }
@@ -1161,7 +1161,7 @@ class ConvexHullTool extends ModificationTool {
                 }
             };
             cmd.execute();
-            undoMgr.undoStack.push(cmd);
+            undoMgr.pushExecuted(cmd);
             undoMgr.redoStack.length = 0;
             undoMgr._notifyStateChange();
         }

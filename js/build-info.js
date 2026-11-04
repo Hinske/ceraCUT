@@ -1,37 +1,37 @@
 /**
- * CeraCUT Build Info V6.76
- * Version: V6.76
+ * CeraCUT Build Info V6.77
+ * Version: V6.77
  * Last Modified: 2026-11-04 MEZ
- * Build: 20261104-reviewfix
+ * Build: 20261104-pushexecuted
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.76',
-    build: '20261104-reviewfix',
+    version: '6.77',
+    build: '20261104-pushexecuted',
     date: '2026-11-04',
     time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'f25c4c8',
-        date: '2026-11-04 20:09:30 +0100',
-        message: 'fix: Komplett-Code-Review 2026-11-04 — Server-Haertung, Datenverlust-, Export-, Import- und Tool-Fixes (V6.76)'
+        hash: 'a7872e7',
+        date: '2026-11-04 20:11:39 +0100',
+        message: 'fix: Review-Rest — pushExecuted statt undoStack.push, Auto-Save aller ungesicherten Tabs, listUsers-Fehlerpfad (V6.77)'
     },
 
     modules: {
         'dxf-parser':         { version: '3.19', build: '20261104-reviewfix' },
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.10', build: '20261104-reviewfix' },
-        'cam-contour':        { version: '5.22', build: '20261104-reviewfix' },
+        'cam-contour':        { version: '5.23', build: '20261104-pushexecuted' },
         'canvas-renderer':    { version: '3.43', build: '20261104-reviewfix' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.5', build: '20261104-reviewfix' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
         'snap-manager':       { version: '1.6', build: '20261104-reviewfix' },
         'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },
-        'drawing-tools':      { version: '2.19', build: '20261104-reviewfix' },
+        'drawing-tools':      { version: '2.20', build: '20261104-pushexecuted' },
         'drawing-tools-ext':  { version: '1.11', build: '20261104-reviewfix' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
@@ -39,9 +39,9 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.36', build: '20261104-reviewfix' },
+        'app':                { version: '6.37', build: '20261104-pushexecuted' },
         'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
-        'project-manager':    { version: '1.1', build: '20261104-reviewfix' },
+        'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
         'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
         'nesting':            { version: '1.2', build: '20261104-reviewfix' },
@@ -50,17 +50,17 @@ const CERACUT_BUILD = {
         'machine-profiles':   { version: '1.2', build: '20261104-reviewfix' },
         'bridge-cutting':     { version: '1.1', build: '20261104-reviewfix' },
         'quality-zones':      { version: '1.2', build: '20261104-reviewfix' },
-        'cam-tools':          { version: '1.5', build: '20261104-reviewfix' },
+        'cam-tools':          { version: '1.6', build: '20261104-pushexecuted' },
         'advanced-tools':     { version: '1.9', build: '20261104-reviewfix' },
         'arc-fitting':        { version: '3.3', build: '20261104-reviewfix' },
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
-        'dimension-tool':     { version: '2.5', build: '20261104-reviewfix' },
+        'dimension-tool':     { version: '2.6', build: '20261104-pushexecuted' },
         'dxf-browser':        { version: '1.2', build: '20261104-reviewfix' },
-        'server':             { version: '1.7', build: '20261104-reviewfix' },
+        'server':             { version: '1.8', build: '20261104-pushexecuted' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
         'constants': { version: '2.11', build: '20261104-reviewfix' },
-        'image-underlay': { version: '1.1', build: '20261104-reviewfix' },
+        'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },
         'session-store':      { version: '1.1', build: '20261104-reviewfix' },
@@ -68,7 +68,8 @@ const CERACUT_BUILD = {
     },
 
     changes: [
-        'V6.76: Fix — Komplett-Code-Review 2026-11-04 (91 Funde): Server-Haertung (Static-Blockliste, Cookie/Login/Pfad-Crashes, atomares users.json, Session-Sweep), Strg+S-Handle-Swap, cut()-Tracking, Multi-Material-cutOrder, WRK-Anwahl im Linearsatz, Nesting-Mindestabstand, Qualitaets-Feed-Index, Geometrie/Boolean/Arc-Fitting, Import (SVG/DXF/CNC), Zeichen-/Mess-/Undo-/Snap-Tools. Offen: Multi-Head, kerfFlipped, NEG/POS. Details: tasks/code-review-2026-11-04.md',
+        'V6.77: Fix — Review-Rest: Undo-Pushes ueber pushExecuted (Gruppen/Trim/Redo-Reset), Auto-Save fuer alle ungesicherten Tabs, listUsers-Fehlerpfad, getLeadSetInfo nutzt _isEffectivelyHole',
+        'V6.77: Fix — Komplett-Code-Review 2026-11-04 (91 Funde): Server-Haertung (Static-Blockliste, Cookie/Login/Pfad-Crashes, atomares users.json, Session-Sweep), Strg+S-Handle-Swap, cut()-Tracking, Multi-Material-cutOrder, WRK-Anwahl im Linearsatz, Nesting-Mindestabstand, Qualitaets-Feed-Index, Geometrie/Boolean/Arc-Fitting, Import (SVG/DXF/CNC), Zeichen-/Mess-/Undo-/Snap-Tools. Offen: Multi-Head, kerfFlipped, NEG/POS. Details: tasks/code-review-2026-11-04.md',
         'V6.75: Fix — DXF-Export: R12-Symbolnamen-Sanitisierung (dxf-writer V1.15). ' +
         'FliesenMeyer_Logo_Entwurf6.dxf liess AutoCAD 2017 beim Import weiterhin abstuerzen ' +
         '(acad.err: Unhandled Access Violation, verwaiste .dwl-Locks). Datei-Forensik zeigte: ' +

@@ -1,5 +1,5 @@
 /**
- * CeraCUT Dimension Tool V2.5
+ * CeraCUT Dimension Tool V2.6
  * AutoCAD-style dimensioning: Linear, Aligned, Angular, Radius, Diameter
  *
  * V2.4: Dimension Editing — Selektion, Grip-Editing, Text-Override (Doppelklick),
@@ -12,7 +12,7 @@
  * V2.0: Select Object mode, debug logging
  *
  * Last Modified: 2026-11-04
- * Build: 20261104-reviewfix
+ * Build: 20261104-pushexecuted
  * V2.5: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
@@ -1123,7 +1123,7 @@ class DimensionManager {
                 () => { mgr._restoreDim(dim, newSnap); mgr.app.renderer?.render(); },
                 () => { mgr._restoreDim(dim, oldSnap); mgr.app.renderer?.render(); }
             );
-            this.app.undoManager?.undoStack.push(cmd);
+            this.app.undoManager?.pushExecuted(cmd);
             this.app.undoManager?.redoStack?.splice(0);
             console.log(`[DIM V2.4] Drag-Undo erstellt: ${dim.id}`);
         }
@@ -1199,7 +1199,7 @@ class DimensionManager {
             () => { dim.textOverride = newOverride; mgr.app.renderer?.render(); },
             () => { dim.textOverride = oldOverride; mgr.app.renderer?.render(); }
         );
-        this.app.undoManager?.undoStack.push(cmd);
+        this.app.undoManager?.pushExecuted(cmd);
         this.app.undoManager?.redoStack?.splice(0);
         this.app.renderer?.render();
         console.log(`[DIM V2.4] Text-Override: "${newOverride}" (${dim.id})`);
@@ -1222,7 +1222,7 @@ class DimensionManager {
             () => { const i = mgr.dimensions.indexOf(dim); if (i >= 0) mgr.dimensions.splice(i, 1); mgr.app.renderer?.render(); },
             () => { mgr.dimensions.splice(idx, 0, dim); mgr.app.renderer?.render(); }
         );
-        this.app.undoManager?.undoStack.push(cmd);
+        this.app.undoManager?.pushExecuted(cmd);
         this.app.undoManager?.redoStack?.splice(0);
         this.app.renderer?.render();
         this.app.commandLine?.log('Bemaßung gelöscht', 'info');

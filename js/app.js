@@ -1,7 +1,7 @@
 /**
- * CeraCUT V6.36 - Main Application
+ * CeraCUT V6.37 - Main Application
  * Last Modified: 2026-11-04
- * Build: 20261104-reviewfix
+ * Build: 20261104-pushexecuted
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -986,7 +986,7 @@ class CeraCutApp {
             contour.points = newPoints;
             contour.invalidate?.();
             contour._rotationCount = (contour._rotationCount || 0) + 1;
-            this.undoManager.undoStack.push(cmd);
+            this.undoManager.pushExecuted(cmd);
             this.undoManager.redoStack = [];
             this.undoManager._notifyStateChange();
 
@@ -1542,7 +1542,7 @@ class CeraCutApp {
             () => { contour.microjoints = newJoints.map(j => ({...j})); this.renderer?.render(); this.updateContourPanel(); },
             () => { contour.microjoints = oldJoints.map(j => ({...j})); this.renderer?.render(); this.updateContourPanel(); }
         );
-        this.undoManager.undoStack.push(cmd);
+        this.undoManager.pushExecuted(cmd);
         this.undoManager.redoStack.length = 0;
         this.undoManager._notifyStateChange();
         
@@ -1615,7 +1615,7 @@ class CeraCutApp {
             () => { newState.forEach(s => { s.contour.microjoints = s.joints.map(j => ({...j})); }); app.renderer?.render(); app.updateContourPanel(); },
             () => { snapshot.forEach(s => { s.contour.microjoints = s.old.map(j => ({...j})); }); app.renderer?.render(); app.updateContourPanel(); }
         );
-        this.undoManager.undoStack.push(cmd);
+        this.undoManager.pushExecuted(cmd);
         this.undoManager.redoStack.length = 0;
         this.undoManager._notifyStateChange();
         
@@ -1649,7 +1649,7 @@ class CeraCutApp {
             () => { snapshot.forEach(s => { s.contour.microjoints = []; }); app.renderer?.render(); app.updateContourPanel(); },
             () => { snapshot.forEach(s => { s.contour.microjoints = s.old.map(j => ({...j})); }); app.renderer?.render(); app.updateContourPanel(); }
         );
-        this.undoManager.undoStack.push(cmd);
+        this.undoManager.pushExecuted(cmd);
         this.undoManager.redoStack.length = 0;
         this.undoManager._notifyStateChange();
         
@@ -1787,7 +1787,7 @@ class CeraCutApp {
                 app.updateCutOrderList(); app.updateOrderStats(); app.renderer?.render();
             }
         );
-        this.undoManager.undoStack.push(cmd);
+        this.undoManager.pushExecuted(cmd);
         this.undoManager.redoStack.length = 0;
         this.undoManager._notifyStateChange();
         
@@ -1972,7 +1972,7 @@ class CeraCutApp {
                     () => { app.cutOrder = [...newOrder]; app.updateCutOrderList(); app.updateOrderStats(); app.renderer?.render(); },
                     () => { app.cutOrder = [...oldOrder]; app.updateCutOrderList(); app.updateOrderStats(); app.renderer?.render(); }
                 );
-                this.undoManager.undoStack.push(cmd);
+                this.undoManager.pushExecuted(cmd);
                 this.undoManager.redoStack.length = 0;
                 this.undoManager._notifyStateChange();
                 
@@ -2048,7 +2048,7 @@ class CeraCutApp {
                     () => { app.cutOrder = [...newOrder]; app.updateCutOrderList(); app.updateOrderStats(); app.renderer?.render(); },
                     () => { app.cutOrder = [...oldOrder]; app.updateCutOrderList(); app.updateOrderStats(); app.renderer?.render(); }
                 );
-                this.undoManager.undoStack.push(cmd);
+                this.undoManager.pushExecuted(cmd);
                 this.undoManager.redoStack.length = 0;
                 this.undoManager._notifyStateChange();
                 
@@ -3453,7 +3453,7 @@ class CeraCutApp {
                 () => { snapshot.forEach(s => { s.contour.isReference = false; }); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); },
                 () => { snapshot.forEach(s => { s.contour.isReference = true; }); app.setOriginToReferenceUL(); app.renderer?.render(); app.updateContourPanel(); app.updateStepUI(); }
             );
-            this.undoManager.undoStack.push(cmd);
+            this.undoManager.pushExecuted(cmd);
             this.undoManager.redoStack.length = 0;
             this.undoManager._notifyStateChange();
             this.showToast('Referenz gelöscht (STRG+Z = Rückgängig)', 'success');
@@ -3487,7 +3487,7 @@ class CeraCutApp {
                     () => { app.contours.forEach(c => { c.isReference = false; }); app._recalcTopologyAfterReferenceChange(); },
                     () => { oldRefs.forEach(c => { c.isReference = true; }); app.setOriginToReferenceUL(); app._recalcTopologyAfterReferenceChange(); }
                 );
-                this.undoManager.undoStack.push(cmd);
+                this.undoManager.pushExecuted(cmd);
                 this.undoManager.redoStack.length = 0;
                 this.undoManager._notifyStateChange();
                 this.updateStepUI();
@@ -3526,7 +3526,7 @@ class CeraCutApp {
                 () => { app.contours.forEach(c => { c.isReference = false; }); newRef.isReference = true; app.setOriginToReferenceUL(); app._recalcTopologyAfterReferenceChange(); },
                 () => { app.contours.forEach(c => { c.isReference = false; }); oldRefs.forEach(c => { c.isReference = true; }); if (oldRefs.length > 0) app.setOriginToReferenceUL(); app._recalcTopologyAfterReferenceChange(); }
             );
-            this.undoManager.undoStack.push(cmd);
+            this.undoManager.pushExecuted(cmd);
             this.undoManager.redoStack.length = 0;
             this.undoManager._notifyStateChange();
 
@@ -4078,7 +4078,7 @@ class CeraCutApp {
             }
         );
         // Bereits ausgeführt, nur auf Stack legen
-        this.undoManager.undoStack.push(cmd);
+        this.undoManager.pushExecuted(cmd);
         this.undoManager.redoStack.length = 0;
         this.undoManager._notifyStateChange();
         console.log(`[UndoManager V4.5] Lead-Parameter registriert (${snapshot.length} Konturen, Außen/Innen/Alt differenziert)`);
@@ -4360,7 +4360,7 @@ class CeraCutApp {
             }
         );
         // Bereits ausgeführt, nur auf Stack legen
-        this.undoManager.undoStack.push(cmd);
+        this.undoManager.pushExecuted(cmd);
         this.undoManager.redoStack.length = 0;
         this.undoManager._notifyStateChange();
 
@@ -5249,7 +5249,7 @@ class CeraCutApp {
             () => { snapshot.forEach(s => { s.contour.layer = newLayer; }); app.layerManager.updateEntityCounts(app.contours); app.renderer?.render(); app.updateContourPanel(); },
             () => { snapshot.forEach(s => { s.contour.layer = s.oldLayer; }); app.layerManager.updateEntityCounts(app.contours); app.renderer?.render(); app.updateContourPanel(); }
         );
-        this.undoManager.undoStack.push(cmd);
+        this.undoManager.pushExecuted(cmd);
         this.undoManager.redoStack.length = 0;
         this.undoManager._notifyStateChange();
 

@@ -1,5 +1,5 @@
 /**
- * ProjectManager V1.1
+ * ProjectManager V1.2
  * Workspace-Verwaltung mit FSAPI
  *
  * Verwaltet einen lokalen Arbeitsordner als "Workspace":
@@ -271,29 +271,41 @@ class ProjectManager {
 
     async _doAutoSave() {
         if (!this.directoryHandle) return;
-        if (!this.app.contours || this.app.contours.length === 0) return;
-        if (!this.app.isDirty) return;
 
-        // Unbenannte Tabs: eigene Sicherungsdatei pro Dokument, kein gegenseitiges Überschreiben
-        const docId = this.app.documentManager?.activeId;
-        const baseName = this.app.loadedFileName || (docId ? `zeichnung_${String(docId).replace(/[^\w-]/g, '')}` : 'zeichnung');
-        const bakName = baseName.replace(/\.dxf$/i, '') + '.bak.dxf';
+        const dm = this.app.documentManager;
+        const activeId = dm?.activeId;
+        // Aktives Dokument (Zustand liegt in app.*) + alle inaktiven, ungesicherten Dokumente
+        const jobs = [{
+            id: activeId, contours: this.app.contours, layerManager: this.app.layerManager,
+            name: this.app.loadedFileName, dirty: this.app.isDirty
+        }];
+        if (dm?.documents) {
+            for (const doc of dm.documents.values()) {
+                if (doc.id === activeId) continue;
+                jobs.push({ id: doc.id, contours: doc.contours, layerManager: doc.layerManager,
+                            name: doc.loadedFileName, dirty: doc.isDirty });
+            }
+        }
 
-        try {
-            const result = this.app.dxfWriter.generate(
-                this.app.contours,
-                this.app.layerManager,
-                { filename: bakName }
-            );
-
-            const fileHandle = await this.directoryHandle.getFileHandle(bakName, { create: true });
-            const writable = await fileHandle.createWritable();
-            await writable.write(result.content);
-            await writable.close();
-
-            console.log(`[ProjectManager V1.0] Auto-Save: ${bakName} (${(result.content.length / 1024).toFixed(1)} KB)`);
-        } catch (err) {
-            console.warn('[ProjectManager V1.0] Auto-Save fehlgeschlagen:', err.message);
+        for (const job of jobs) {
+            if (!job.dirty || !job.contours || job.contours.length === 0) continue;
+            // Unbenannte Tabs: eigene Sicherungsdatei pro Dokument, kein gegenseitiges Überschreiben
+            const baseName = job.name || (job.id ? `zeichnung_${String(job.id).replace(/[^\w-]/g, '')}` : 'zeichnung');
+            const bakName = baseName.replace(/\.dxf$/i, '') + '.bak.dxf';
+            try {
+                const result = this.app.dxfWriter.generate(
+                    job.contours,
+                    job.layerManager || this.app.layerManager,
+                    { filename: bakName }
+                );
+                const fileHandle = await this.directoryHandle.getFileHandle(bakName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(result.content);
+                await writable.close();
+                console.log(`[ProjectManager V1.0] Auto-Save: ${bakName} (${(result.content.length / 1024).toFixed(1)} KB)`);
+            } catch (err) {
+                console.warn('[ProjectManager V1.0] Auto-Save fehlgeschlagen:', bakName, err.message);
+            }
         }
     }
 
