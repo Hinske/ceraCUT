@@ -312,3 +312,5 @@ CeraCUT hat 45+ Tools mit AutoCAD-konformem Workflow (Noun-Verb/Verb-Noun, Conti
 ### 7.8 Niedrige Priorität / bewusste Abweichung
 - [x] BreakTool (`drawing-tools.js`) macht nur Zero-Gap-Splits, kein echter 2-Punkt-Gap wie AutoCAD-Default — für CAM bewusst sinnvoll (Wasserstrahl-Konturen sollen exakt geschlossen bleiben), keine Änderung vorgenommen
 - [x] CircleTool `TTT` ist seit V6.31 vollständig implementiert (Newton-Raphson-Solver) — kein Action Item mehr
+
+> **Update 2026-11-04:** Das Code-Review V6.75 hat Fehler in Fillet/Chamfer, Offset, Polar-Array, Lengthen, Snap (Tangent, Layer-Filter, Bogenrichtung) und Undo-Gruppen behoben — Roadmap-Punkte oben unverändert (`tasks/code-review-2026-11-04.md` §8/§9).

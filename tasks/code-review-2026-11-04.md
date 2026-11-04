@@ -177,3 +177,5 @@
 > Hinweis: §5.4 (Multi-Head) und §6.4 (NEG/POS-Invertierung) brauchen eine fachliche Entscheidung, was gewollt ist, bevor gefixt wird.
 
 > **Entscheidung 2026-11-04 (T6/§5.4 Multi-Head):** Die Maschine hat 2 Köpfe; Kopf-Betrieb wird am Terminal eingestellt, ob per Software steuerbar ist unbekannt. `generateMultiHead()` wird von keinem Aufrufer genutzt (tot). Bewusst NICHT umgesetzt: das Programm bleibt einköpfig (PART1), der zweite Kopf läuft über die Terminal-Einstellung. Erst wieder aufgreifen, wenn geklärt ist, ob die Steuerung KOPF_ANZAHL/ABSTAND aus dem Programm annimmt.
+
+> **Status 2026-11-04 (V6.77):** Bis auf die oben genannten Entscheidungspunkte (§5.4 bewusst nicht, §5.8, §6.4), Offset-Konvention §1.5, Selbstschnitt in `offsetPolygon` und Anstichzeit-Tabelle §5.7 sind alle Funde behoben, aber nur syntaktisch geprüft. Offene Punkte und Testliste: `tasks/todo.md`.

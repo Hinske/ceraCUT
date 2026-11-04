@@ -182,3 +182,27 @@ funktionierende Referenz `Mercedes Logo.dxf` nutzt `Layer_1`. Die Testdatei `…
 NUR die zwei Kandidaten-Fixes (Namens-Umbenennung + Dummy-Point) auf der Bestandsdatei und
 isoliert damit die Ursache empirisch. Writer-Fix (V1.15) deckt zusätzlich die IMAGE-Landmine
 und NaN-Fälle ab. Bug gilt erst nach AutoCAD-Praxistest als behoben.
+
+---
+
+# Komplett-Code-Review 2026-11-04 (V6.75 → V6.77)
+
+> Details und Einzelfunde: `tasks/code-review-2026-11-04.md`
+
+- [x] Top-10 (T1–T5, T7–T10) und ~80 weitere der 91 Funde behoben (V6.76, V6.77)
+- [x] Server-Härtung: Static-Blockliste, Cookie-/Login-/Pfad-Crashes, atomares users.json, Session-Sweep
+- [x] Undo-Pushes über `pushExecuted`, Auto-Save aller ungesicherten Tabs
+- [x] T6 Multi-Head: bewusst nicht umgesetzt (Terminal-Betrieb, 2 Köpfe) — siehe Review-Datei
+- [ ] §5.8 Umlaufrichtung/kerfFlipped — Entscheidung offen (G41/G42 aus Umlaufrichtung ableiten?)
+- [ ] §6.4 NEG/POS-Inversion — Entscheidung offen (welches Teil darf angestochen werden?)
+- [ ] §5.7 Anstichzeit: Kalibriertabelle pro Material fehlt (Formel ~15 % Abweichung, Stahl 3,7 s statt 4,3 s)
+- [ ] §1.5 Offset-Konvention angleichen (erst Tests schreiben), `offsetPolygon` Selbstschnitt-Bereinigung
+- [ ] **Praxistest an der Maschine**: T5 (Tangentensatz bei G41/G42/G40 auf Bogen, Anstich 1 mm verlegt), Slit-Bögen, Multi-Material-Export, Nesting-Abstand
+- [ ] **Browser-Test**: Strg+S mit mehreren Tabs, Strg+X, Text-Tool (Optionen, Stencil, Versalhöhe +30 %), Fillet/Chamfer an der Naht, SVG-Import minifiziert
+- [ ] Ops: TLS-Key (`certs/server.key`) rotieren und Passwörter zurücksetzen, falls über Tunnel erreichbar war
+
+## Review
+Fixes wurden von 9 parallelen Agenten pro Dateigruppe umgesetzt, nur Syntaxprüfung (`node --check`)
+und vereinzelte Node-Tests — kein Browser-/Maschinentest. Bekannte Verhaltensänderungen:
+Nesting hält echten Mindestabstand ein, Angebote/Simulation nutzen korrigierten Vorschub-Index,
+Schrifthöhe = Versalhöhe (bestehende DXF-Texte ~30 % größer), Hatch-Shortcut jetzt `HT`, Zoll-DXF werden auf mm skaliert.

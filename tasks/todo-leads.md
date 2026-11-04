@@ -82,3 +82,5 @@
 - [ ] `node scripts/sync-versions.js` + Projekt-Tabelle in CLAUDE.md manuell prüfen
 - [ ] `tasks/lessons.md` ergänzen (Radius-0-Bug, Lead-In/Out-Asymmetrie als Lessons)
 - [ ] git commit + push
+
+> **Update 2026-11-04:** Das Code-Review V6.75 hat weitere Lead-Fehler behoben (Lead-Basis bei Flip der Waste-Normalen, Center-Pierce bei kerfFlipped, Arc-Radius bei Engstellen-Kappung, negativer Overcut, G41/G42-Anwahl im Linearsatz mit 1-mm-Tangentensatz). Praxistest steht aus — siehe `tasks/todo.md`.

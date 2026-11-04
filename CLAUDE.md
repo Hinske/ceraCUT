@@ -194,7 +194,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | Feld | Wert |
 |------|------|
 | Name | CeraCUT / CeraCUT |
-| Version | **V6.74** — Build 20260701-eoftrailingnewline (2026-07-01, 12:00 MEZ) |
+| Version | **V6.77** — Build 20261104-pushexecuted (2026-11-04) |
 | Typ | Wasserstrahl-CAM Software |
 | Zweck | DXF → Sinumerik 840D CNC-Code für Wasserstrahlschneiden |
 | Firma | Cerasell GmbH |

@@ -142,3 +142,5 @@ Massnahme 4 (Visualisierung) → unabhaengig, kann parallel
 - [ ] Alle Aenderungen sind undo-bar
 - [ ] Bestehende DXF-Projekte bleiben kompatibel (keine Breaking Changes)
 - [ ] Postprozessor-Ausgabe bleibt identisch (Leads aendern sich nur in Position/Typ, nicht im PP-Format)
+
+> **Update 2026-11-04:** Teile der Lead-Logik wurden im Code-Review V6.75 korrigiert (siehe `tasks/todo-leads.md`, `tasks/code-review-2026-11-04.md` §2/§5). Statuslage der Phasen oben unverändert.
