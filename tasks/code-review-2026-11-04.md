@@ -175,3 +175,5 @@
 4. **Rest nach Priorität** (UI/Undo/Snap/Bemaßung).
 
 > Hinweis: §5.4 (Multi-Head) und §6.4 (NEG/POS-Invertierung) brauchen eine fachliche Entscheidung, was gewollt ist, bevor gefixt wird.
+
+> **Entscheidung 2026-11-04 (T6/§5.4 Multi-Head):** Die Maschine hat 2 Köpfe; Kopf-Betrieb wird am Terminal eingestellt, ob per Software steuerbar ist unbekannt. `generateMultiHead()` wird von keinem Aufrufer genutzt (tot). Bewusst NICHT umgesetzt: das Programm bleibt einköpfig (PART1), der zweite Kopf läuft über die Terminal-Einstellung. Erst wieder aufgreifen, wenn geklärt ist, ob die Steuerung KOPF_ANZAHL/ABSTAND aus dem Programm annimmt.
