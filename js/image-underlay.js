@@ -1,5 +1,5 @@
 /**
- * CeraCUT Image Underlay V1.0
+ * CeraCUT Image Underlay V1.1
  * Bild-Hintergrund für Nachzeichnen (AutoCAD IMAGE/IMAGEATTACH)
  * 
  * Features:
@@ -323,12 +323,15 @@ class ImageUnderlayManager {
 
             // Y-Achse ist im Canvas invertiert (scale(1, -1)),
             // daher müssen wir das Bild nochmal vertikal spiegeln
+            // Insertion = Unten-Links, Bild waechst nach +X/+Y (wie hitTest/Grips/DXF IMAGE)
             ctx.translate(ip.x, ip.y);
-            ctx.scale(1, -1);  // Bild richtig herum
 
             if (ul.rotation) {
-                ctx.rotate(-ul.rotation * Math.PI / 180);
+                ctx.rotate(ul.rotation * Math.PI / 180);
             }
+
+            ctx.translate(0, h);
+            ctx.scale(1, -1);  // Bild richtig herum
 
             ctx.drawImage(ul.image, 0, 0, w, h);
 

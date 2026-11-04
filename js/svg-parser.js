@@ -1,5 +1,5 @@
 /**
- * SVGParser V1.0 — Importiert SVG-Dateien als geometrische Entities
+ * SVGParser V1.1 — Importiert SVG-Dateien als geometrische Entities
  *
  * Unterstützte Elemente:
  *   <line> <polyline> <polygon> <rect> <circle> <ellipse>
@@ -97,7 +97,7 @@ class SVGParser {
 
         // Y-Achse: SVG hat Y↓, CeraCUT hat Y↑ → Flip (Spiegelung um Mitte)
         // Wir flippen nach dem Sammeln aller Punkte (einfacher)
-        const viewBoxH = vbH ?? (physH ? physH / scale : null);
+        const viewBoxH = vbH != null ? vbY + vbH : (physH ? physH / scale : null);
 
         return {
             scale,
@@ -314,24 +314,39 @@ class SVGParser {
         let cpx = 0, cpy = 0; // letzter Kontrollpunkt (für S/T)
 
         // Tokenize: Buchstaben trennen + Zahlen
-        const tokens = d.trim()
-            .replace(/([MmLlHhVvCcSsQqTtAaZz])/g, ' $1 ')
-            .split(/[\s,]+/)
-            .filter(t => t.length > 0);
-
-        let i = 0;
+        // Zeichenbasierter Scanner (kompakte Zahlen "10-5", ".5.5", Arc-Flags "011-1")
+        const src = String(d);
+        let pos = 0;
         let lastCmd = '';
-
-        const _num = () => parseFloat(tokens[i++]);
+        let prevCmd = ''; // vorheriger Befehl (Großbuchstabe) für S/T-Reflexion
+        const NUM_RE = /[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/y;
+        const _skipSep = () => { while (pos < src.length && /[\s,]/.test(src[pos])) pos++; };
+        const _num = () => {
+            _skipSep();
+            NUM_RE.lastIndex = pos;
+            const m = NUM_RE.exec(src);
+            if (!m) { pos = src.length; return NaN; }
+            pos = NUM_RE.lastIndex;
+            return parseFloat(m[0]);
+        };
+        const _flag = () => {
+            _skipSep();
+            const c = src[pos];
+            if (c === '0' || c === '1') { pos++; return +c; }
+            return _num();
+        };
         const _pt  = () => { const x = _num(); const y = _num(); return { x, y }; };
 
-        while (i < tokens.length) {
-            const tok = tokens[i];
+        while (true) {
+            _skipSep();
+            if (pos >= src.length) break;
+            const tok = src[pos];
             const isCmd = /^[MmLlHhVvCcSsQqTtAaZz]$/.test(tok);
 
-            if (!isCmd && !lastCmd) { i++; continue; }
+            if (!isCmd && !lastCmd) { pos++; continue; }
 
-            const cmd = isCmd ? (i++, tok) : lastCmd;
+            const cmd = isCmd ? (pos++, tok) : lastCmd;
+            if (!isCmd && !/[\d.+-]/.test(tok)) { pos++; continue; }
             lastCmd = cmd;
             const upper = cmd.toUpperCase();
             const rel   = cmd === cmd.toLowerCase() && upper !== 'Z';
@@ -339,6 +354,8 @@ class SVGParser {
             const _abs = (x, y) => rel ? { x: cx + x, y: cy + y } : { x, y };
             const _absX = (x)   => rel ? cx + x : x;
             const _absY = (y)   => rel ? cy + y : y;
+            const _prev = prevCmd;
+            prevCmd = upper;
 
             if (upper === 'M') {
                 if (current && current.points.length >= 2) subpaths.push(current);
@@ -387,7 +404,7 @@ class SVGParser {
                 cx = p3.x; cy = p3.y;
 
             } else if (upper === 'S') {
-                const p1 = { x: 2*cx - cpx, y: 2*cy - cpy }; // Spiegelung letzter CP
+                const p1 = (_prev === 'C' || _prev === 'S') ? { x: 2*cx - cpx, y: 2*cy - cpy } : { x: cx, y: cy }; // Spiegelung nur nach C/S
                 const p2 = _abs(_num(), _num());
                 const p3 = _abs(_num(), _num());
                 const tessPoints = this._tessellateCubic(
@@ -410,7 +427,7 @@ class SVGParser {
                 cx = p2.x; cy = p2.y;
 
             } else if (upper === 'T') {
-                const p1 = { x: 2*cx - cpx, y: 2*cy - cpy };
+                const p1 = (_prev === 'Q' || _prev === 'T') ? { x: 2*cx - cpx, y: 2*cy - cpy } : { x: cx, y: cy };
                 const p2 = _abs(_num(), _num());
                 const tessPoints = this._tessellateQuadratic(
                     { x: cx, y: cy }, p1, p2, 12
@@ -424,8 +441,8 @@ class SVGParser {
                 const rx   = Math.abs(_num());
                 const ry   = Math.abs(_num());
                 const xRot = _num() * Math.PI / 180;
-                const laf  = _num(); // large-arc-flag
-                const sf   = _num(); // sweep-flag
+                const laf  = _flag(); // large-arc-flag
+                const sf   = _flag(); // sweep-flag
                 const to   = _abs(_num(), _num());
                 const tessPoints = this._tessellateArcSVG(
                     { x: cx, y: cy }, rx, ry, xRot, laf, sf, to, 36
@@ -437,7 +454,7 @@ class SVGParser {
 
             } else {
                 warnings.push(`Unbekannter Path-Befehl: "${cmd}"`);
-                i++;
+                pos++;
                 lastCmd = '';
             }
         }
@@ -562,13 +579,27 @@ class SVGParser {
     _combineTransform(parent, local) {
         if (local.isLocalMatrix) {
             // Lokale SVG-Matrix × Parent-Scale
+            let lm = local;
+            const p = parent.localMatrix;
+            if (p) {
+                // total = parent × local (local wird zuerst angewendet)
+                lm = {
+                    a: p.a*local.a + p.c*local.b,
+                    b: p.b*local.a + p.d*local.b,
+                    c: p.a*local.c + p.c*local.d,
+                    d: p.b*local.c + p.d*local.d,
+                    e: p.a*local.e + p.c*local.f + p.e,
+                    f: p.b*local.e + p.d*local.f + p.f,
+                    isLocalMatrix: true
+                };
+            }
             return {
                 scale: parent.scale,
                 ox: parent.ox,
                 oy: parent.oy,
                 viewBoxH: parent.viewBoxH,
                 yFlip: parent.yFlip,
-                localMatrix: local
+                localMatrix: lm
             };
         }
         return parent;

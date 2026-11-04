@@ -1,5 +1,11 @@
+// Punkt kopieren inkl. bulge (Bogen-Information), optional verschoben
+function _cpPt(p, dx, dy) {
+    var q = {x: p.x + (dx || 0), y: p.y + (dy || 0)};
+    if (p.bulge) q.bulge = p.bulge;
+    return q;
+}
 /**
- * CeraCUT Advanced Tools V1.8 — Tier 5 CAD Tools
+ * CeraCUT Advanced Tools V1.9 — Tier 5 CAD Tools
  * 14 CAD-Werkzeuge + Ribbon-Alias-Fix
  *
  * V1.8: Fillet Cross-Contour JOIN — zwei offene Linien per Fillet zu einer Kontur verbinden
@@ -103,6 +109,7 @@ class FilletTool extends BaseTool {
         if (this.state === 'pick1') {
             this.seg1Contour = clicked;
             this.seg1Index = hit.segmentIndex;
+            this._ptA = {x: point.x, y: point.y};
             this.state = 'pick2';
             this.cmd?.setPrompt('FILLET R=' + this.radius + ' — Zweites Segment anklicken (auch andere Kontur):');
             // V3.10: Erstes Segment als Cyan Highlight zeigen
@@ -111,6 +118,7 @@ class FilletTool extends BaseTool {
         }
 
         if (this.state === 'pick2') {
+            this._ptB = {x: point.x, y: point.y};
             if (clicked !== this.seg1Contour) {
                 // Cross-Contour: R=0 → spitze Ecke, R>0 → Bogen (beide JOIN zu einer Kontur)
                 if (this.radius === 0) {
@@ -136,6 +144,7 @@ class FilletTool extends BaseTool {
             if (hovered) {
                 var hitB = GeometryOps.findNearestSegment(hovered.points, point.x, point.y, tolerance);
                 if (hitB) {
+                    this._ptB = {x: point.x, y: point.y};
                     if (this.radius === 0) {
                         this._updateCrossContourPreview(this.seg1Contour, this.seg1Index, hovered, hitB.segmentIndex);
                     } else {
@@ -244,11 +253,18 @@ class FilletTool extends BaseTool {
     }
 
     _applyVertexChange(contour, cornerIdx, replacementPoints, app) {
-        var oldPoints = contour.points.map(function(p) { return {x: p.x, y: p.y}; });
+        var oldPoints = contour.points.map(function(p) { return _cpPt(p); });
         var newPoints = [];
-        for (var i = 0; i < cornerIdx; i++) newPoints.push({x: contour.points[i].x, y: contour.points[i].y});
-        for (var j = 0; j < replacementPoints.length; j++) newPoints.push({x: replacementPoints[j].x, y: replacementPoints[j].y});
-        for (var k = cornerIdx + 1; k < contour.points.length; k++) newPoints.push({x: contour.points[k].x, y: contour.points[k].y});
+        for (var i = 0; i < cornerIdx; i++) newPoints.push(_cpPt(contour.points[i]));
+        for (var j = 0; j < replacementPoints.length; j++) newPoints.push(_cpPt(replacementPoints[j]));
+        for (var k = cornerIdx + 1; k < contour.points.length; k++) newPoints.push(_cpPt(contour.points[k]));
+        if (contour.isClosed && cornerIdx === 0 && contour.points.length > 2) {
+            // Wrap-Ecke: Start/Schlusspunkt (Duplikat) ersetzen, Kontur neu schließen
+            newPoints = [];
+            for (var m = 1; m < contour.points.length - 1; m++) newPoints.push(_cpPt(contour.points[m]));
+            for (var j2 = 0; j2 < replacementPoints.length; j2++) newPoints.push(_cpPt(replacementPoints[j2]));
+            newPoints.push(_cpPt(newPoints[0]));
+        }
 
         var rerender = function() {
             ModificationTool.invalidateCache(contour);
@@ -261,8 +277,8 @@ class FilletTool extends BaseTool {
         var radius = this.radius;
         var cmd = new FunctionCommand(
             'Fillet R=' + radius + ' auf ' + contour.name,
-            function() { contour.points = newPoints.map(function(p){return {x:p.x,y:p.y};}); rerender(); },
-            function() { contour.points = oldPoints.map(function(p){return {x:p.x,y:p.y};}); rerender(); }
+            function() { contour.points = newPoints.map(function(p){return _cpPt(p);}); rerender(); },
+            function() { contour.points = oldPoints.map(function(p){return _cpPt(p);}); rerender(); }
         );
         app.undoManager?.execute(cmd);
         this.cmd?.log('✔ Fillet R=' + radius + ' angewendet (Strg+Z = Rückgängig)', 'success');
@@ -283,8 +299,8 @@ class FilletTool extends BaseTool {
             this.cmd?.log('Verbinden nur für offene Konturen', 'error'); this._resetToPick1(); return;
         }
 
-        var endA = this._nearerEnd(ptsA, segIdxA);
-        var endB = this._nearerEnd(ptsB, segIdxB);
+        var endA = this._nearerEnd(ptsA, segIdxA, this._ptA);
+        var endB = this._nearerEnd(ptsB, segIdxB, this._ptB);
 
         var segA1, segB1;
         if (endA === 'start') { segA1 = ptsA[1]; } else { segA1 = ptsA[ptsA.length - 2]; }
@@ -298,8 +314,8 @@ class FilletTool extends BaseTool {
         }
 
         var ip = {x: isect.point.x, y: isect.point.y};
-        var newPtsA = ptsA.map(function(p) { return {x: p.x, y: p.y}; });
-        var newPtsB = ptsB.map(function(p) { return {x: p.x, y: p.y}; });
+        var newPtsA = ptsA.map(function(p) { return _cpPt(p); });
+        var newPtsB = ptsB.map(function(p) { return _cpPt(p); });
         if (endA === 'start') newPtsA[0] = ip; else newPtsA[newPtsA.length - 1] = ip;
         if (endB === 'start') newPtsB[0] = ip; else newPtsB[newPtsB.length - 1] = ip;
 
@@ -308,8 +324,8 @@ class FilletTool extends BaseTool {
         var orientedB = (endB === 'start') ? newPtsB : newPtsB.slice().reverse();
         var merged = orientedA.concat(orientedB.slice(1));
 
-        var oldPtsA = ptsA.map(function(p) { return {x: p.x, y: p.y}; });
-        var oldPtsB = ptsB.map(function(p) { return {x: p.x, y: p.y}; });
+        var oldPtsA = ptsA.map(function(p) { return _cpPt(p); });
+        var oldPtsB = ptsB.map(function(p) { return _cpPt(p); });
         var bIndex = app.contours.indexOf(contourB);
 
         var rerender = function() {
@@ -321,15 +337,15 @@ class FilletTool extends BaseTool {
         };
         var cmd = new FunctionCommand('Fillet R=0 Verbinden',
             function() {
-                contourA.points = merged.map(function(p) { return {x: p.x, y: p.y}; });
+                contourA.points = merged.map(function(p) { return _cpPt(p); });
                 var idx = app.contours.indexOf(contourB);
                 if (idx !== -1) app.contours.splice(idx, 1);
                 rerender();
             },
             function() {
-                contourA.points = oldPtsA.map(function(p) { return {x: p.x, y: p.y}; });
+                contourA.points = oldPtsA.map(function(p) { return _cpPt(p); });
                 if (app.contours.indexOf(contourB) === -1) app.contours.splice(bIndex, 0, contourB);
-                contourB.points = oldPtsB.map(function(p) { return {x: p.x, y: p.y}; });
+                contourB.points = oldPtsB.map(function(p) { return _cpPt(p); });
                 ModificationTool.invalidateCache(contourB);
                 rerender();
             }
@@ -351,8 +367,8 @@ class FilletTool extends BaseTool {
             this.cmd?.log('Verbinden nur für offene Konturen', 'error'); this._resetToPick1(); return;
         }
 
-        var endA = this._nearerEnd(ptsA, segIdxA);
-        var endB = this._nearerEnd(ptsB, segIdxB);
+        var endA = this._nearerEnd(ptsA, segIdxA, this._ptA);
+        var endB = this._nearerEnd(ptsB, segIdxB, this._ptB);
 
         var segA1 = (endA === 'start') ? ptsA[1] : ptsA[ptsA.length - 2];
         var segA2 = (endA === 'start') ? ptsA[0] : ptsA[ptsA.length - 1];
@@ -382,18 +398,18 @@ class FilletTool extends BaseTool {
         // fillet.tangent1 liegt auf A's Linie, tangent2 auf B's Linie
         var t1 = fillet.tangent1, t2 = fillet.tangent2;
 
-        var newPtsA = ptsA.map(function(p) { return {x: p.x, y: p.y}; });
-        var newPtsB = ptsB.map(function(p) { return {x: p.x, y: p.y}; });
-        if (endA === 'start') newPtsA[0] = {x: t1.x, y: t1.y}; else newPtsA[newPtsA.length - 1] = {x: t1.x, y: t1.y};
-        if (endB === 'start') newPtsB[0] = {x: t2.x, y: t2.y}; else newPtsB[newPtsB.length - 1] = {x: t2.x, y: t2.y};
+        var newPtsA = ptsA.map(function(p) { return _cpPt(p); });
+        var newPtsB = ptsB.map(function(p) { return _cpPt(p); });
+        if (endA === 'start') newPtsA[0] = _cpPt(t1); else newPtsA[newPtsA.length - 1] = _cpPt(t1);
+        if (endB === 'start') newPtsB[0] = _cpPt(t2); else newPtsB[newPtsB.length - 1] = _cpPt(t2);
 
         var orientedA = (endA === 'end') ? newPtsA : newPtsA.slice().reverse();
         var orientedB = (endB === 'start') ? newPtsB : newPtsB.slice().reverse();
         // arcPoints: [t1, ..., t2] — t1 ist bereits letzter Punkt von orientedA, t2 erster von orientedB
         var merged = orientedA.concat(fillet.arcPoints.slice(1)).concat(orientedB.slice(1));
 
-        var oldPtsA = ptsA.map(function(p) { return {x: p.x, y: p.y}; });
-        var oldPtsB = ptsB.map(function(p) { return {x: p.x, y: p.y}; });
+        var oldPtsA = ptsA.map(function(p) { return _cpPt(p); });
+        var oldPtsB = ptsB.map(function(p) { return _cpPt(p); });
         var bIndex = app.contours.indexOf(contourB);
         var radius = this.radius;
 
@@ -406,15 +422,15 @@ class FilletTool extends BaseTool {
         };
         var cmd = new FunctionCommand('Fillet R=' + radius + ' Verbinden',
             function() {
-                contourA.points = merged.map(function(p) { return {x: p.x, y: p.y}; });
+                contourA.points = merged.map(function(p) { return _cpPt(p); });
                 var idx = app.contours.indexOf(contourB);
                 if (idx !== -1) app.contours.splice(idx, 1);
                 rerender();
             },
             function() {
-                contourA.points = oldPtsA.map(function(p) { return {x: p.x, y: p.y}; });
+                contourA.points = oldPtsA.map(function(p) { return _cpPt(p); });
                 if (app.contours.indexOf(contourB) === -1) app.contours.splice(bIndex, 0, contourB);
-                contourB.points = oldPtsB.map(function(p) { return {x: p.x, y: p.y}; });
+                contourB.points = oldPtsB.map(function(p) { return _cpPt(p); });
                 ModificationTool.invalidateCache(contourB);
                 rerender();
             }
@@ -425,7 +441,12 @@ class FilletTool extends BaseTool {
     }
 
     // Bestimmt welches Ende einer Kontur näher am Segment-Index liegt
-    _nearerEnd(points, segIdx) {
+    _nearerEnd(points, segIdx, clickPt) {
+        if (clickPt && points.length >= 2) {
+            var dS = Math.hypot(clickPt.x - points[0].x, clickPt.y - points[0].y);
+            var dE = Math.hypot(clickPt.x - points[points.length-1].x, clickPt.y - points[points.length-1].y);
+            return dS < dE ? 'start' : 'end';
+        }
         var lastSegIdx = points.length - 2;
         if (lastSegIdx <= 0) return 'end';
         return (segIdx <= lastSegIdx / 2) ? 'start' : 'end';
@@ -437,8 +458,8 @@ class FilletTool extends BaseTool {
         if (!ptsA || ptsA.length < 2 || !ptsB || ptsB.length < 2) {
             this._updatePreview(null); return;
         }
-        var endA = this._nearerEnd(ptsA, segIdxA);
-        var endB = this._nearerEnd(ptsB, segIdxB);
+        var endA = this._nearerEnd(ptsA, segIdxA, this._ptA);
+        var endB = this._nearerEnd(ptsB, segIdxB, this._ptB);
 
         var segA1, segA2, segB1, segB2;
         if (endA === 'start') { segA1 = ptsA[1]; segA2 = ptsA[0]; }
@@ -465,9 +486,9 @@ class FilletTool extends BaseTool {
             data: {
                 segments: segments,
                 arcPoints: [
-                    {x: segA2.x, y: segA2.y},
+                    _cpPt(segA2),
                     {x: isect.point.x, y: isect.point.y},
-                    {x: segB2.x, y: segB2.y}
+                    _cpPt(segB2)
                 ]
             }
         };
@@ -480,8 +501,8 @@ class FilletTool extends BaseTool {
         if (!ptsA || ptsA.length < 2 || !ptsB || ptsB.length < 2) { this._updatePreview(null); return; }
         if (contourA.isClosed || contourB.isClosed) { this._updatePreview(null); return; }
 
-        var endA = this._nearerEnd(ptsA, segIdxA);
-        var endB = this._nearerEnd(ptsB, segIdxB);
+        var endA = this._nearerEnd(ptsA, segIdxA, this._ptA);
+        var endB = this._nearerEnd(ptsB, segIdxB, this._ptB);
         var segA1 = (endA === 'start') ? ptsA[1] : ptsA[ptsA.length - 2];
         var segA2 = (endA === 'start') ? ptsA[0] : ptsA[ptsA.length - 1];
         var segB1 = (endB === 'start') ? ptsB[1] : ptsB[ptsB.length - 2];
@@ -524,7 +545,7 @@ class FilletTool extends BaseTool {
         if (!clicked) { this.cmd?.log('Keine Kontur getroffen', 'warning'); return; }
         if (clicked.points.length < 3) { this.cmd?.log('Zu wenige Ecken', 'error'); return; }
 
-        var oldPoints = clicked.points.map(function(p){return {x:p.x,y:p.y};});
+        var oldPoints = clicked.points.map(function(p){return _cpPt(p);});
         var newPoints = GeometryOps.filletPolyline(clicked.points, clicked.isClosed, this.radius);
         if (!newPoints || newPoints.length < 3) { this.cmd?.log('Fillet fehlgeschlagen', 'error'); this._resetToPick1?.(); return; }
 
@@ -539,8 +560,8 @@ class FilletTool extends BaseTool {
         var radius = this.radius;
         var cmd = new FunctionCommand(
             'Fillet Polyline R=' + radius,
-            function() { clicked.points = newPoints.map(function(p){return {x:p.x,y:p.y};}); rerender(); },
-            function() { clicked.points = oldPoints.map(function(p){return {x:p.x,y:p.y};}); rerender(); }
+            function() { clicked.points = newPoints.map(function(p){return _cpPt(p);}); rerender(); },
+            function() { clicked.points = oldPoints.map(function(p){return _cpPt(p);}); rerender(); }
         );
         app.undoManager?.execute(cmd);
         this.cmd?.log('✔ Fillet R=' + radius + ' auf alle Ecken (Strg+Z = Rückgängig)', 'success');
@@ -703,7 +724,7 @@ class ExtendTool extends BaseTool {
         var whichEnd = dStart < dEnd ? 'start' : 'end';
 
         var boundaries = contours.filter(function(c) { return c !== clicked && !c.isReference; });
-        var oldPoints = clicked.points.map(function(p) { return {x:p.x, y:p.y}; });
+        var oldPoints = clicked.points.map(function(p) { return _cpPt(p); });
         var newPoints = GeometryOps.extendContour(clicked.points, whichEnd, boundaries, clicked);
 
         if (newPoints === clicked.points) { this.cmd?.log('Kein Schnittpunkt gefunden', 'warning'); return; }
@@ -718,8 +739,8 @@ class ExtendTool extends BaseTool {
 
         var cmd = new FunctionCommand(
             'Extend ' + clicked.name,
-            function() { clicked.points = newPoints.map(function(p){return {x:p.x,y:p.y};}); rerender(); },
-            function() { clicked.points = oldPoints.map(function(p){return {x:p.x,y:p.y};}); rerender(); }
+            function() { clicked.points = newPoints.map(function(p){return _cpPt(p);}); rerender(); },
+            function() { clicked.points = oldPoints.map(function(p){return _cpPt(p);}); rerender(); }
         );
         app.undoManager?.execute(cmd);
         this.cmd?.log('✔ Verlängert (Strg+Z = Rückgängig)', 'success');
@@ -761,7 +782,12 @@ class OffsetToolAdvanced extends BaseTool {
     // V1.3: Offset-Seite berechnen (Vorzeichen)
     _getOffsetSign(point, target) {
         if (target.isClosed) {
-            return GeometryOps.pointInPolygon(point, target.points) ? -1 : 1;
+            // Umlaufrichtung beachten: Vorzeichen von offsetContour gilt relativ zur Richtung
+            var area2 = 0, tp = target.points;
+            for (var ai = 0; ai < tp.length - 1; ai++) area2 += tp[ai].x * tp[ai+1].y - tp[ai+1].x * tp[ai].y;
+            var inside = GeometryOps.pointInPolygon(point, target.points);
+            var base = inside ? -1 : 1;
+            return area2 < 0 ? base : -base;
         }
         var hit = GeometryOps.findNearestSegment(target.points, point.x, point.y);
         if (hit) {
@@ -909,12 +935,20 @@ class ChamferTool extends BaseTool {
             var chamfer = GeometryOps.computeChamfer(pPrev, pCorner, pNext, this.dist1, this.dist2);
             if (!chamfer) { this.cmd?.log('Fase zu lang', 'error'); this.state = 'pick1'; return; }
 
-            var oldPoints = clicked.points.map(function(p){return {x:p.x,y:p.y};});
+            var oldPoints = clicked.points.map(function(p){return _cpPt(p);});
             var newPoints = [];
-            for (var i = 0; i < cornerIdx; i++) newPoints.push({x:pts[i].x, y:pts[i].y});
+            for (var i = 0; i < cornerIdx; i++) newPoints.push(_cpPt(pts[i]));
             newPoints.push({x:chamfer.cut1.x, y:chamfer.cut1.y});
             newPoints.push({x:chamfer.cut2.x, y:chamfer.cut2.y});
-            for (var k = cornerIdx+1; k < pts.length; k++) newPoints.push({x:pts[k].x, y:pts[k].y});
+            for (var k = cornerIdx+1; k < pts.length; k++) newPoints.push(_cpPt(pts[k]));
+            if (clicked.isClosed && cornerIdx === 0 && pts.length > 2) {
+                // Wrap-Ecke: Duplikat-Schlusspunkt ersetzen, Kontur neu schließen
+                newPoints = [];
+                for (var m = 1; m < pts.length - 1; m++) newPoints.push(_cpPt(pts[m]));
+                newPoints.push({x:chamfer.cut1.x, y:chamfer.cut1.y});
+                newPoints.push({x:chamfer.cut2.x, y:chamfer.cut2.y});
+                newPoints.push(_cpPt(newPoints[0]));
+            }
 
             var rerender = function() {
                 ModificationTool.invalidateCache(clicked);
@@ -923,8 +957,8 @@ class ChamferTool extends BaseTool {
             };
             var d1 = this.dist1;
             var cmd = new FunctionCommand('Chamfer ' + d1,
-                function() { clicked.points = newPoints.map(function(p){return {x:p.x,y:p.y};}); rerender(); },
-                function() { clicked.points = oldPoints.map(function(p){return {x:p.x,y:p.y};}); rerender(); }
+                function() { clicked.points = newPoints.map(function(p){return _cpPt(p);}); rerender(); },
+                function() { clicked.points = oldPoints.map(function(p){return _cpPt(p);}); rerender(); }
             );
             app.undoManager?.execute(cmd);
             this.cmd?.log('✔ Chamfer angewendet (Strg+Z = Rückgängig)', 'success');
@@ -970,12 +1004,14 @@ class ZeroFilletTool extends BaseTool {
 
         if (this.state === 'pick1') {
             this.seg1Contour = clicked; this.seg1Index = hit.segmentIndex;
+            this._ptA = {x: point.x, y: point.y};
             this.state = 'pick2'; this.cmd?.setPrompt('ZERO FILLET — Zweites Segment (gleiche oder andere Kontur):');
             return;
         }
         if (this.state === 'pick2') {
             // V3.13: Cross-Contour Zero Fillet
             if (clicked !== this.seg1Contour) {
+                this._ptB = {x: point.x, y: point.y};
                 this._executeCrossContour(this.seg1Contour, this.seg1Index, clicked, hit.segmentIndex);
                 return;
             }
@@ -989,9 +1025,9 @@ class ZeroFilletTool extends BaseTool {
             var isect = GeometryOps.lineLineIntersection(pPrev, pCorner, pCorner, pNext);
             if (!isect) { this.cmd?.log('Parallel — kein Schnittpunkt', 'error'); return; }
 
-            var oldPoints = pts.map(function(p){return {x:p.x,y:p.y};});
-            var newPoints = pts.map(function(p){return {x:p.x,y:p.y};});
-            newPoints[cornerIdx] = {x: isect.point.x, y: isect.point.y};
+            var oldPoints = pts.map(function(p){return _cpPt(p);});
+            var newPoints = pts.map(function(p){return _cpPt(p);});
+            newPoints[cornerIdx] = {x: isect.point.x, y: isect.point.y, bulge: pts[cornerIdx].bulge};
 
             var rerender = function() {
                 ModificationTool.invalidateCache(clicked);
@@ -999,8 +1035,8 @@ class ZeroFilletTool extends BaseTool {
                 app.updateContourPanel?.(); app.renderer?.render();
             };
             var cmd = new FunctionCommand('Zero Fillet',
-                function() { clicked.points = newPoints.map(function(p){return {x:p.x,y:p.y};}); rerender(); },
-                function() { clicked.points = oldPoints.map(function(p){return {x:p.x,y:p.y};}); rerender(); }
+                function() { clicked.points = newPoints.map(function(p){return _cpPt(p);}); rerender(); },
+                function() { clicked.points = oldPoints.map(function(p){return _cpPt(p);}); rerender(); }
             );
             app.undoManager?.execute(cmd);
             this.cmd?.log('✔ Zero Fillet (Strg+Z = Rückgängig)', 'success');
@@ -1024,8 +1060,8 @@ class ZeroFilletTool extends BaseTool {
         }
         // Welches Ende näher am Klick?
         var lastA = ptsA.length - 2, lastB = ptsB.length - 2;
-        var endA = (segIdxA <= lastA / 2) ? 'start' : 'end';
-        var endB = (segIdxB <= lastB / 2) ? 'start' : 'end';
+        var endA = FilletTool.prototype._nearerEnd.call(this, ptsA, segIdxA, this._ptA);
+        var endB = FilletTool.prototype._nearerEnd.call(this, ptsB, segIdxB, this._ptB);
         var segA1, segA2, segB1, segB2;
         if (endA === 'start') { segA1 = ptsA[1]; segA2 = ptsA[0]; }
         else { segA1 = ptsA[ptsA.length-2]; segA2 = ptsA[ptsA.length-1]; }
@@ -1033,13 +1069,13 @@ class ZeroFilletTool extends BaseTool {
         else { segB1 = ptsB[ptsB.length-2]; segB2 = ptsB[ptsB.length-1]; }
         var isect = GeometryOps.lineLineIntersection(segA1, segA2, segB1, segB2);
         if (!isect) { this.cmd?.log('Parallele Linien', 'error'); this.state = 'pick1'; return; }
-        var oldA = ptsA.map(function(p){return {x:p.x,y:p.y};});
-        var oldB = ptsB.map(function(p){return {x:p.x,y:p.y};});
-        var newA = ptsA.map(function(p){return {x:p.x,y:p.y};});
-        var newB = ptsB.map(function(p){return {x:p.x,y:p.y};});
-        if (endA === 'start') newA[0] = {x:isect.point.x, y:isect.point.y};
+        var oldA = ptsA.map(function(p){return _cpPt(p);});
+        var oldB = ptsB.map(function(p){return _cpPt(p);});
+        var newA = ptsA.map(function(p){return _cpPt(p);});
+        var newB = ptsB.map(function(p){return _cpPt(p);});
+        if (endA === 'start') newA[0] = {x:isect.point.x, y:isect.point.y, bulge:newA[0].bulge};
         else newA[newA.length-1] = {x:isect.point.x, y:isect.point.y};
-        if (endB === 'start') newB[0] = {x:isect.point.x, y:isect.point.y};
+        if (endB === 'start') newB[0] = {x:isect.point.x, y:isect.point.y, bulge:newB[0].bulge};
         else newB[newB.length-1] = {x:isect.point.x, y:isect.point.y};
         var rerender = function() {
             ModificationTool.invalidateCache(contourA); ModificationTool.invalidateCache(contourB);
@@ -1047,8 +1083,8 @@ class ZeroFilletTool extends BaseTool {
             app.updateContourPanel?.(); app.renderer?.render();
         };
         var cmd = new FunctionCommand('Zero Fillet Cross-Contour',
-            function() { contourA.points = newA.map(function(p){return {x:p.x,y:p.y};}); contourB.points = newB.map(function(p){return {x:p.x,y:p.y};}); rerender(); },
-            function() { contourA.points = oldA.map(function(p){return {x:p.x,y:p.y};}); contourB.points = oldB.map(function(p){return {x:p.x,y:p.y};}); rerender(); }
+            function() { contourA.points = newA.map(function(p){return _cpPt(p);}); contourB.points = newB.map(function(p){return _cpPt(p);}); rerender(); },
+            function() { contourA.points = oldA.map(function(p){return _cpPt(p);}); contourB.points = oldB.map(function(p){return _cpPt(p);}); rerender(); }
         );
         app.undoManager?.execute(cmd);
         this.cmd?.log('✔ Zero Fillet Cross-Contour (Strg+Z = Rückgängig)', 'success');
@@ -1306,7 +1342,7 @@ class ArrayTool extends ModificationTool {
             var dx = c * this.dX, dy = r * this.dY;
             for (var s = 0; s < this.selectedContours.length; s++) {
                 var src = this.selectedContours[s];
-                var nc = new CamContour(src.points.map(function(p){return {x:p.x+dx,y:p.y+dy};}), {layer:src.layer||'0', name:src.name+'_R'+r+'C'+c});
+                var nc = new CamContour(src.points.map(function(p){return _cpPt(p,dx,dy);}), {layer:src.layer||'0', name:src.name+'_R'+r+'C'+c});
                 if (src.isClosed) nc.isClosed = true;
                 clones.push(nc);
             }
@@ -1318,13 +1354,15 @@ class ArrayTool extends ModificationTool {
         var clones = [], cx = this.polarCenter.x, cy = this.polarCenter.y;
         var totalRad = this.polarAngle * Math.PI / 180;
         for (var i = 1; i < this.polarCount; i++) {
-            var angle = (i / this.polarCount) * totalRad;
+            var angle = (i / Math.max(1, Math.abs(this.polarAngle) >= 360 ? this.polarCount : this.polarCount - 1)) * totalRad;
             var cos = Math.cos(angle), sin = Math.sin(angle);
             for (var s = 0; s < this.selectedContours.length; s++) {
                 var src = this.selectedContours[s];
                 var nc = new CamContour(src.points.map(function(p){
                     var rx = p.x-cx, ry = p.y-cy;
-                    return {x: cx + rx*cos - ry*sin, y: cy + rx*sin + ry*cos};
+                    var q = {x: cx + rx*cos - ry*sin, y: cy + rx*sin + ry*cos};
+                    if (p.bulge) q.bulge = p.bulge;
+                    return q;
                 }), {layer:src.layer||'0', name:src.name+'_P'+i});
                 if (src.isClosed) nc.isClosed = true;
                 clones.push(nc);
@@ -1456,7 +1494,7 @@ class ArabeskeTool extends BaseTool {
         }
 
         if (this.state === 'center') {
-            this.center = { x: point.x, y: point.y };
+            this.center = _cpPt(point);
             this._create();
         }
     }
@@ -1609,8 +1647,9 @@ class LengthenTool extends BaseTool {
         var dirX = dx / segLen, dirY = dy / segLen;
 
         // Neuen Endpunkt berechnen je nach Modus
-        var newEnd;
+        var newEnd, diffLen;
         if (this.mode === 'delta') {
+            diffLen = this.delta;
             newEnd = { x: s2.x + dirX * this.delta, y: s2.y + dirY * this.delta };
         } else if (this.mode === 'total') {
             // Gesamtlänge der Kontur berechnen
@@ -1619,6 +1658,7 @@ class LengthenTool extends BaseTool {
                 totalLen += Math.hypot(pts[i+1].x - pts[i].x, pts[i+1].y - pts[i].y);
             }
             var diff = this.delta - totalLen;
+            diffLen = diff;
             newEnd = { x: s2.x + dirX * diff, y: s2.y + dirY * diff };
         } else { // percent
             var totalLen = 0;
@@ -1627,18 +1667,38 @@ class LengthenTool extends BaseTool {
             }
             var newTotalLen = totalLen * (this.delta / 100);
             var diff = newTotalLen - totalLen;
+            diffLen = diff;
             newEnd = { x: s2.x + dirX * diff, y: s2.y + dirY * diff };
         }
 
         // Undo-fähig ausführen
-        this._applyLengthen(clicked, whichEnd, newEnd, app);
+        this._applyLengthen(clicked, whichEnd, newEnd, app, diffLen < 0 ? -diffLen : 0);
     }
 
-    _applyLengthen(contour, whichEnd, newEnd, app) {
-        var oldPts = contour.points.map(function(p) { return {x: p.x, y: p.y}; });
-        var newPts = contour.points.map(function(p) { return {x: p.x, y: p.y}; });
-        if (whichEnd === 'end') newPts[newPts.length - 1] = {x: newEnd.x, y: newEnd.y};
-        else newPts[0] = {x: newEnd.x, y: newEnd.y};
+    _applyLengthen(contour, whichEnd, newEnd, app, cut) {
+        var oldPts = contour.points.map(function(p) { return _cpPt(p); });
+        var newPts = contour.points.map(function(p) { return _cpPt(p); });
+        if (cut > 0) {
+            // Verkürzen: Endsegmente entfernen, bis der Rest in ein Segment passt
+            var atEnd = whichEnd === 'end';
+            while (newPts.length > 2) {
+                var a = atEnd ? newPts[newPts.length - 2] : newPts[1];
+                var b = atEnd ? newPts[newPts.length - 1] : newPts[0];
+                var l = Math.hypot(b.x - a.x, b.y - a.y);
+                if (cut < l - 1e-9) break;
+                cut -= l;
+                if (atEnd) newPts.pop(); else newPts.shift();
+            }
+            var a2 = atEnd ? newPts[newPts.length - 2] : newPts[1];
+            var b2 = atEnd ? newPts[newPts.length - 1] : newPts[0];
+            var l2 = Math.hypot(b2.x - a2.x, b2.y - a2.y);
+            if (cut >= l2 - 1e-9) { this.cmd?.log('Verkürzung länger als Kontur', 'error'); return; }
+            var f = (l2 - cut) / l2;
+            newEnd = { x: a2.x + (b2.x - a2.x) * f, y: a2.y + (b2.y - a2.y) * f };
+            if (atEnd) newPts[newPts.length - 2].bulge = 0;
+        }
+        if (whichEnd === 'end') newPts[newPts.length - 1] = _cpPt(newEnd);
+        else { var b0 = newPts[0].bulge; newPts[0] = _cpPt(newEnd); if (b0) newPts[0].bulge = b0; }
 
         var rerender = function() {
             ModificationTool.invalidateCache(contour);
@@ -1649,8 +1709,8 @@ class LengthenTool extends BaseTool {
         };
 
         var cmd = new FunctionCommand('Lengthen',
-            function() { contour.points = newPts.map(function(p) { return {x: p.x, y: p.y}; }); rerender(); },
-            function() { contour.points = oldPts.map(function(p) { return {x: p.x, y: p.y}; }); rerender(); }
+            function() { contour.points = newPts.map(function(p) { return _cpPt(p); }); rerender(); },
+            function() { contour.points = oldPts.map(function(p) { return _cpPt(p); }); rerender(); }
         );
         app.undoManager?.execute(cmd);
 

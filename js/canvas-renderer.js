@@ -1,5 +1,5 @@
 /**
- * CeraCUT V3.42 - Canvas Renderer
+ * CeraCUT V3.43 - Canvas Renderer
  * Features: Selection, Lead-In/Out, Overcut, Micro-Joints, Travel Paths, Order Numbers,
  *           Startpunkt-Drag im Anschuss-Modus, SLIT Support
  * V3.41: Fix — Geometry.interiorPoint() im Disc-Fill-Hole-Cutout ohne Existenz-Check
@@ -314,6 +314,7 @@ class CanvasRenderer {
         let isDraggingGrip = false;
         let dragGrip = null;
         let dragOldPoints = null;  // Snapshot für Undo
+        let dragOldFit = null;     // Snapshot _fitPoints (Spline) für Undo
         let dragContourRef = null; // Referenz auf Kontur
         let gripDragJustEnded = false; // Guard gegen Click nach Drag
 
@@ -341,6 +342,8 @@ class CanvasRenderer {
                         this._draggedGrip = hitGrip; // V3.37: Hot-State für Rendering
                         dragContourRef = hitGrip.contour;
                         dragOldPoints = dragContourRef.points.map(p => ({x: p.x, y: p.y}));
+                        dragOldFit = Array.isArray(dragContourRef._fitPoints)
+                            ? dragContourRef._fitPoints.map(p => ({x: p.x, y: p.y})) : null;
                         this.canvas.style.cursor = 'crosshair';
                         return;
                     }
@@ -521,6 +524,9 @@ class CanvasRenderer {
                 const contour = dragContourRef;
                 const oldPts = dragOldPoints;
                 const newPts = contour.points.map(p => ({x: p.x, y: p.y}));
+                const oldFit = dragOldFit;
+                const newFit = Array.isArray(contour._fitPoints)
+                    ? contour._fitPoints.map(p => ({x: p.x, y: p.y})) : null;
                 // Cache invalidieren
                 if (typeof ModificationTool !== 'undefined') ModificationTool.invalidateCache(contour);
                 contour._cachedKerfPolyline = null;
@@ -541,22 +547,30 @@ class CanvasRenderer {
                 };
                 const cmd = new FunctionCommand(
                     'Grip Move ' + contour.name,
-                    () => { contour.points = newPts.map(p => ({x:p.x, y:p.y})); rerender(); },
-                    () => { contour.points = oldPts.map(p => ({x:p.x, y:p.y})); rerender(); }
+                    () => {
+                        contour.points = newPts.map(p => ({x:p.x, y:p.y}));
+                        if (newFit) contour._fitPoints = newFit.map(p => ({x:p.x, y:p.y}));
+                        rerender();
+                    },
+                    () => {
+                        contour.points = oldPts.map(p => ({x:p.x, y:p.y}));
+                        if (oldFit) contour._fitPoints = oldFit.map(p => ({x:p.x, y:p.y}));
+                        rerender();
+                    }
                 );
-                app?.undoManager?.undoStack?.push(cmd);
-                if (app?.undoManager?.redoStack) app.undoManager.redoStack.length = 0;
-                // BUG 15 Fix: Stack nach maxHistory kürzen
-                if (app?.undoManager) {
-                    const max = app.undoManager.maxHistory || 100;
-                    if (app.undoManager.undoStack.length > max) app.undoManager.undoStack.shift();
-                    app.undoManager._notifyStateChange();
+                // Bereits ausgeführt → über UndoManager registrieren (Gruppen, Trim, Redo-Reset)
+                if (app?.undoManager?.pushExecuted) app.undoManager.pushExecuted(cmd);
+                else if (app?.undoManager) {
+                    app.undoManager.undoStack.push(cmd);
+                    app.undoManager.redoStack.length = 0;
+                    app.undoManager._notifyStateChange?.();
                 }
                 this._gripDirty = true;
                 isDraggingGrip = false;
                 dragGrip = null;
                 this._draggedGrip = null;
                 dragOldPoints = null;
+                dragOldFit = null;
                 dragContourRef = null;
                 this.canvas.style.cursor = 'default';
                 gripDragJustEnded = true;
@@ -599,6 +613,7 @@ class CanvasRenderer {
             // V3.10: Grip-Drag abbrechen (ohne Commit)
             if (isDraggingGrip && dragContourRef && dragOldPoints) {
                 dragContourRef.points = dragOldPoints.map(p => ({x: p.x, y: p.y}));
+                if (dragOldFit) dragContourRef._fitPoints = dragOldFit.map(p => ({x: p.x, y: p.y}));
                 // BUG 21 Fix: Cache nach Rollback invalidieren
                 if (typeof ModificationTool !== 'undefined') ModificationTool.invalidateCache?.(dragContourRef);
                 this._gripDirty = true;
@@ -607,6 +622,7 @@ class CanvasRenderer {
             dragGrip = null;
             this._draggedGrip = null;
             dragOldPoints = null;
+            dragOldFit = null;
             dragContourRef = null;
             // Window-Selection abbrechen
             const toolMgr = this.app?.drawingTools || this.app?.toolManager;

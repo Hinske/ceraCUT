@@ -1,7 +1,8 @@
 /**
- * CeraCUT DXF Parser V3.18
- * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-chainsplinedataloss
+ * CeraCUT DXF Parser V3.19
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V3.19: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * V3.18: Fix — chainContours() verkettete mehrere Original-Entities (z.B. SPLINE + mehrere
  *        LINEs) korrekt zu EINER durchgehenden Kontur (chain.points enthielt alle Punkte),
@@ -155,6 +156,8 @@ const DXFParser = {
     _ignoredEntities: [],
     _entityStats: {},
     _nanCoordCount: 0,
+    _insUnits: 0,
+    _removedLeadTabs: 0,
 
     parse(dxfContent, options = {}) {
         console.log('[DXF Parser V3.11] Starting parse...');
@@ -166,6 +169,8 @@ const DXFParser = {
             this._ignoredEntities = [];
             this._entityStats = {};
             this._nanCoordCount = 0;
+            this._removedLeadTabs = 0;
+            this._insUnits = this._parseInsUnits(dxfContent);
             
             this._parseBlocksSection(dxfContent);
 
@@ -188,6 +193,12 @@ const DXFParser = {
             // Größen-Warnung
             if (entities.length > 5000) {
                 console.warn(`[DXF Parser] ⚠️ LARGE FILE: ${entities.length} entities`);
+            }
+
+            // $INSUNITS: optional auf mm umrechnen (options.applyInsUnits), sonst nur warnen
+            const unitFactor = this._insUnitsToMm(this._insUnits);
+            if (options.applyInsUnits && unitFactor && unitFactor !== 1) {
+                this._scaleEntities(entities, unitFactor);
             }
 
             const normResult = this._autoNormalizeEntities(entities);
@@ -250,7 +261,10 @@ const DXFParser = {
                 ignoredTypes: [...new Set(this._ignoredEntities.map(e => e.type))],
                 
                 // NEU: Warnungen
-                warnings: this._generateWarnings(contours, entities)
+                insUnits: this._insUnits,
+                unitFactorToMm: unitFactor,
+                unitsApplied: !!(options.applyInsUnits && unitFactor && unitFactor !== 1),
+                warnings: this._generateWarnings(contours, entities, options)
             };
         } catch (error) {
             console.error('[DXF Parser V3.11] Error:', error);
@@ -267,8 +281,53 @@ const DXFParser = {
         }
     },
     
-    _generateWarnings(contours, entities) {
+    /** Liest $INSUNITS aus der HEADER-Sektion (0 = nicht angegeben) */
+    _parseInsUnits(dxfContent) {
+        const idx = dxfContent.indexOf('$INSUNITS');
+        if (idx < 0) return 0;
+        const m = dxfContent.slice(idx, idx + 80).match(/\$INSUNITS\s*\r?\n\s*70\s*\r?\n\s*(-?\d+)/);
+        return m ? parseInt(m[1], 10) : 0;
+    },
+
+    /** Faktor Zeichnungseinheit → mm (null = unbekannt) */
+    _insUnitsToMm(u) {
+        const map = { 0: 1, 1: 25.4, 2: 304.8, 4: 1, 5: 10, 6: 1000, 3: 1609344, 7: 1e6, 8: 0.0000254, 9: 0.0254, 10: 914.4, 13: 0.001, 14: 100, 15: 1e4 };
+        return map[u] ?? null;
+    },
+
+    _scaleEntities(entities, f) {
+        const sp = (p) => { if (p && typeof p.x === 'number') { p.x *= f; p.y *= f; } };
+        for (const e of entities) {
+            if (e.points) e.points.forEach(sp);
+            sp(e.center); sp(e.arcCenter);
+            for (const k of ['radius', 'majorRadius', 'minorRadius']) {
+                if (typeof e[k] === 'number') e[k] *= f;
+            }
+        }
+    },
+
+    _generateWarnings(contours, entities, options = {}) {
         const warnings = [];
+
+        // Zeichnungseinheiten
+        const uf = this._insUnitsToMm(this._insUnits);
+        if (this._insUnits && uf !== 1 && !options.applyInsUnits) {
+            warnings.push({
+                type: 'UNITS',
+                message: uf
+                    ? `DXF-Einheit ($INSUNITS=${this._insUnits}) ist nicht mm — Maße ×${uf} wären mm; Import erfolgte 1:1 (ggf. skalieren)`
+                    : `DXF-Einheit ($INSUNITS=${this._insUnits}) unbekannt — Import 1:1`,
+                insUnits: this._insUnits,
+                factor: uf
+            });
+        }
+        if (this._removedLeadTabs > 0) {
+            warnings.push({
+                type: 'LEAD_TABS_REMOVED',
+                message: `${this._removedLeadTabs} kurze freihängende Segment(e) als Anschussfahne entfernt — bei Gravurstrichen prüfen`,
+                count: this._removedLeadTabs
+            });
+        }
         
         // Offene Konturen
         const openCount = contours.filter(c => !c.isClosed).length;
@@ -381,6 +440,14 @@ const DXFParser = {
                     case 'ARC': entity = this._parseArc(lines, i); break;
                     case 'SPLINE': entity = this._parseSpline(lines, i); break;
                     case 'ELLIPSE': entity = this._parseEllipse(lines, i); break;
+                    case 'INSERT': {
+                        // Verschachtelte Blockreferenz: beim Expandieren rekursiv aufloesen
+                        const ip = this._readInsertParams(lines, i, currentLayer);
+                        if (ip.blockName) currentBlockEntities.push({ _insertRef: true, params: ip });
+                        break;
+                    }
+                    case 'BLOCK': case 'ENDBLK': case 'SEQEND': case 'VERTEX': case 'ATTRIB': case 'ATTDEF':
+                        break;
                     case 'TEXT':
                     case 'MTEXT': {
                         const blkTextResult = this._parseText(lines, i);
@@ -398,6 +465,11 @@ const DXFParser = {
                         }
                         break;
                     }
+                    default:
+                        // Nicht unterstuetzter Typ im Block: beim Einfuegen als ignoriert melden
+                        if (value && /[A-Z]/i.test(value)) {
+                            currentBlockEntities.push({ _ignoredType: value, layer: currentLayer });
+                        }
                 }
                 if (entity && entity.points && entity.points.length >= 2) {
                     entity.layer = entity._layer || currentLayer;
@@ -537,8 +609,13 @@ const DXFParser = {
         });
 
         const touchCount = new Map();
-        endpoints.forEach(ep => {
+        const layersAt = new Map();
+        endpoints.forEach((ep, idx) => {
             if (!ep) return;
+            for (const k of [ep.startKey, ep.endKey]) {
+                if (!layersAt.has(k)) layersAt.set(k, []);
+                layersAt.get(k).push({ idx, layer: entities[idx].layer });
+            }
             touchCount.set(ep.startKey, (touchCount.get(ep.startKey) || 0) + 1);
             touchCount.set(ep.endKey, (touchCount.get(ep.endKey) || 0) + 1);
         });
@@ -556,10 +633,16 @@ const DXFParser = {
             for (let i = 1; i < e.points.length; i++) {
                 length += Math.hypot(e.points[i].x - e.points[i - 1].x, e.points[i].y - e.points[i - 1].y);
             }
-            if (length <= MAX_TAB_LENGTH) toRemove.add(idx);
+            if (length > MAX_TAB_LENGTH) return;
+            // Nur entfernen, wenn gleiche Layer wie die Hauptkontur an der Verzweigung
+            // (Gravurstriche auf eigenem Layer bleiben erhalten)
+            const jKey = startOthers >= 2 ? ep.startKey : ep.endKey;
+            const sameLayer = layersAt.get(jKey).some(o => o.idx !== idx && o.layer === e.layer);
+            if (sameLayer) toRemove.add(idx);
         });
 
         if (toRemove.size === 0) return entities;
+        this._removedLeadTabs += toRemove.size;
         console.log(`[DXF V3.13] ${toRemove.size} freihaengende Anschussfahnen-Stub(s) entfernt (CAM-Export-Artefakt)`);
         return entities.filter((e, idx) => !toRemove.has(idx));
     },
@@ -686,41 +769,68 @@ const DXFParser = {
         });
     },
 
-    _parseInsert(lines, startIndex, layerOverride) {
-        let blockName = null, insertX = 0, insertY = 0, scaleX = 1, scaleY = 1, rotation = 0, insertLayer = layerOverride;
-        
+    _readInsertParams(lines, startIndex, layerOverride) {
+        const p = { blockName: null, insertX: 0, insertY: 0, scaleX: 1, scaleY: 1, rotation: 0, insertLayer: layerOverride };
         for (let i = startIndex; i < lines.length; i += 2) {
             const code = lines[i]?.trim();
             const value = lines[i + 1]?.trim();
             if (code === '0' && i > startIndex) break;
             switch (code) {
-                case '2': blockName = value; break;
-                case '8': insertLayer = value; break;
-                case '10': insertX = parseFloat(value) || 0; break;
-                case '20': insertY = parseFloat(value) || 0; break;
-                case '41': scaleX = parseFloat(value) || 1; break;
-                case '42': scaleY = parseFloat(value) || 1; break;
-                case '50': rotation = parseFloat(value) || 0; break;
+                case '2': p.blockName = value; break;
+                case '8': p.insertLayer = value; break;
+                case '10': p.insertX = parseFloat(value) || 0; break;
+                case '20': p.insertY = parseFloat(value) || 0; break;
+                case '41': p.scaleX = parseFloat(value) || 1; break;
+                case '42': p.scaleY = parseFloat(value) || 1; break;
+                case '50': p.rotation = parseFloat(value) || 0; break;
             }
         }
-        
+        return p;
+    },
+
+    _parseInsert(lines, startIndex, layerOverride) {
+        return this._instantiateBlock(this._readInsertParams(lines, startIndex, layerOverride), 0, []);
+    },
+
+    _instantiateBlock(p, depth, stack) {
+        const { blockName, insertX, insertY, scaleX, scaleY, rotation, insertLayer } = p;
         if (!blockName || !this._blockDefinitions[blockName]) return [];
-        
+        if (depth > 16 || stack.includes(blockName)) {
+            this._trackIgnoredEntity('INSERT(rekursiv:' + blockName + ')', insertLayer, 0);
+            return [];
+        }
+
         const blockDef = this._blockDefinitions[blockName];
         const transformedEntities = [];
         const rotRad = rotation * Math.PI / 180;
         const cos = Math.cos(rotRad), sin = Math.sin(rotRad);
-        
+        const tf = (pt) => {
+            const x = (pt.x - blockDef.basePoint.x) * scaleX;
+            const y = (pt.y - blockDef.basePoint.y) * scaleY;
+            return { x: x * cos - y * sin + insertX, y: x * sin + y * cos + insertY };
+        };
+
         for (const blockEntity of blockDef.entities) {
+            if (blockEntity._ignoredType) {
+                this._trackIgnoredEntity(blockEntity._ignoredType, blockEntity.layer, 0);
+                continue;
+            }
+            if (blockEntity._insertRef) {
+                const sub = this._instantiateBlock(blockEntity.params, depth + 1, stack.concat(blockName));
+                for (const se of sub) {
+                    transformedEntities.push({
+                        ...se,
+                        layer: insertLayer || se.layer,
+                        points: se.points.map(tf)
+                    });
+                }
+                continue;
+            }
             transformedEntities.push({
                 type: blockEntity.type,
                 layer: insertLayer || blockEntity.layer,
                 isClosed: blockEntity.isClosed,
-                points: blockEntity.points.map(p => {
-                    let x = (p.x - blockDef.basePoint.x) * scaleX;
-                    let y = (p.y - blockDef.basePoint.y) * scaleY;
-                    return { x: x * cos - y * sin + insertX, y: x * sin + y * cos + insertY };
-                })
+                points: blockEntity.points.map(tf)
             });
         }
         return transformedEntities;
@@ -1163,6 +1273,7 @@ const DXFParser = {
         }
         if (cx === undefined || cy === undefined || majorX === undefined || majorY === undefined) return null;
         ratio = ratio || 1; startAngle = startAngle || 0; endAngle = endAngle || 2 * Math.PI;
+        if (endAngle <= startAngle) endAngle += 2 * Math.PI; // wie bei ARC normalisieren
         const majorRadius = Math.hypot(majorX, majorY);
         const minorRadius = majorRadius * ratio;
         const rotation = Math.atan2(majorY, majorX);
@@ -1630,6 +1741,13 @@ const DXFParser = {
     // Volle Glyph-Konvertierung über TextTool wenn opentype.js verfügbar
     // ════════════════════════════════════════════════════════════════
 
+    /** Dekodiert DXF-Unicode-Escapes (\U+00E4) */
+    _decodeDxfUnicode(str) {
+        return String(str).replace(/\\U\+([0-9A-Fa-f]{4,6})/g, (m, h) => {
+            try { return String.fromCodePoint(parseInt(h, 16)); } catch (e) { return m; }
+        });
+    },
+
     _parseText(lines, startIndex) {
         let x = 0, y = 0, height = 10, rotation = 0, text = '', layer = null;
         let halign = 0;          // Group 72: 0=left, 1=center, 2=right
@@ -1647,7 +1765,7 @@ const DXFParser = {
                 case '20': y = parseFloat(value) || 0; break;
                 case '40': height = parseFloat(value) || 10; break;
                 case '50': rotation = parseFloat(value) || 0; break;
-                case '1': text = value || ''; break;
+                case '1': text = this._decodeDxfUnicode(value || ''); break;
                 case '72': halign = parseInt(value) || 0; break;
                 case '11': ax = parseFloat(value); break;
                 case '21': ay = parseFloat(value); break;

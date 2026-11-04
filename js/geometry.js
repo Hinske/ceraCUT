@@ -1,7 +1,8 @@
 /**
- * CeraCUT V2.13 - Geometry Kernel
- * Last Modified: 2026-06-24 UTC
- * Build: 20260624-gapfix
+ * CeraCUT V2.14 - Geometry Kernel
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V2.14: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V2.13: Cleanup — MicroHealing.findInternalGaps() entfernt (toter Code). Wurde nur von
  *        ceracut-pipeline.js:_classifyGaps() aufgerufen, das jetzt c.entitySeams (echte
  *        Naht-Distanzen aus DXFParser.chainContours()) statt blindem Punktlisten-Scan nutzt.
@@ -28,7 +29,7 @@ const Geometry = {
   /**
    * Berechnet die vorzeichenbehaftete Fläche eines Polygons (Shoelace Formula)
    * @param {Array<{x: number, y: number}>} points - Polygon-Punkte
-   * @returns {number} Signed Area (> 0 = CW, < 0 = CCW)
+   * @returns {number} Signed Area (Y-nach-oben: > 0 = CCW, < 0 = CW)
    */
   getSignedArea(points) {
     if (!points || points.length < 3) {
@@ -51,11 +52,22 @@ const Geometry = {
    * Prüft ob Polygon im Uhrzeigersinn ist
    */
   isClockwise(points) {
-    return this.getSignedArea(points) > 0;
+    // Y-nach-oben-Welt: Shoelace < 0 = Uhrzeigersinn (konsistent mit ArcFitting._isClockwise)
+    return this.getSignedArea(points) < 0;
+  },
+
+  /** Miter-Limit-Prüfung: Schnittpunkt nicht weiter als 20 × |distance| von den Segmentenden */
+  _miterOk(isect, seg1, seg2, distance) {
+    const lim = Math.abs(distance) * 20;
+    return Math.hypot(isect.x - seg1.p2.x, isect.y - seg1.p2.y) <= lim &&
+           Math.hypot(isect.x - seg2.p1.x, isect.y - seg2.p1.y) <= lim;
   },
 
   /**
-   * Erzeugt ein Offset-Polygon durch parallele Segmente und deren Intersektionen
+   * Erzeugt ein Offset-Polygon durch parallele Segmente und deren Intersektionen.
+   * ACHTUNG Konvention: positive distance = RECHTS der Fahrtrichtung
+   * (GeometryOps.offsetContour: positiv = LINKS). Aufrufer prüfen die Richtung per Flächenvergleich.
+   * Spitze Ecken werden per Miter-Limit (20 × |distance|) abgeflacht.
    */
   offsetPolygon(points, distance, isClosed) {
     if (!points || points.length < 2) {
@@ -99,7 +111,8 @@ const Geometry = {
         firstSeg.p1, firstSeg.p2
       );
 
-      const closurePoint = startEndPoint || { x: firstSeg.p1.x, y: firstSeg.p1.y };
+      const closurePoint = (startEndPoint && !isNaN(startEndPoint.x) && !isNaN(startEndPoint.y) &&
+        this._miterOk(startEndPoint, lastSeg, firstSeg, distance)) ? startEndPoint : { x: firstSeg.p1.x, y: firstSeg.p1.y };
 
       offsetPoints.push({ x: closurePoint.x, y: closurePoint.y });
 
@@ -113,7 +126,10 @@ const Geometry = {
         );
 
         if (intersection && (isNaN(intersection.x) || isNaN(intersection.y))) intersection = null;
-        if (intersection) {
+        if (intersection && !this._miterOk(intersection, seg1, seg2, distance)) {
+          // Miter-Limit überschritten → Ecke abflachen (beide Offset-Endpunkte)
+          offsetPoints.push(seg1.p2, seg2.p1);
+        } else if (intersection) {
           offsetPoints.push(intersection);
         } else {
           offsetPoints.push(seg1.p2);
@@ -135,7 +151,10 @@ const Geometry = {
         );
 
         if (intersection && (isNaN(intersection.x) || isNaN(intersection.y))) intersection = null;
-        if (intersection) {
+        if (intersection && !this._miterOk(intersection, seg1, seg2, distance)) {
+          // Miter-Limit überschritten → Ecke abflachen (beide Offset-Endpunkte)
+          offsetPoints.push(seg1.p2, seg2.p1);
+        } else if (intersection) {
           offsetPoints.push(intersection);
         } else {
           offsetPoints.push(seg1.p2);
@@ -389,6 +408,8 @@ const Geometry = {
     const isClosed = this.distance(points[0], points[n - 1]) < 0.01;
 
     for (let i = 0; i < n; i++) {
+      // Geschlossen: letzter Punkt == erster Punkt → Naht-Ecke nur einmal (bei i=0) melden
+      if (isClosed && i === n - 1) continue;
       const iPrev = i === 0 ? (isClosed ? n - 2 : 0) : i - 1;
       const iNext = i === n - 1 ? (isClosed ? 1 : n - 1) : i + 1;
       if (iPrev === i || iNext === i) continue;

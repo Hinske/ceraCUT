@@ -1,5 +1,5 @@
 /**
- * CeraCUT Document Manager V1.4
+ * CeraCUT Document Manager V1.5
  * V1.4: Fix — switchTo() bricht jetzt laufende Tools/Modi ab bevor der State gesichert wird:
  *       cancelTool(), toggleMeasureMode(), toggleStartpointMode() — verhindert Cross-Tab-
  *       Korruption wenn ein aktives Zeichenwerkzeug nach dem Tab-Wechsel weiter Klicks
@@ -411,10 +411,18 @@ class DocumentManager {
             }
 
             for (const data of docDataList) {
-                const doc = CeraDocument.fromJSON(data);
-                this.documents.set(doc.id, doc);
+                try {
+                    const doc = CeraDocument.fromJSON(data);
+                    this.documents.set(doc.id, doc);
+                } catch (e) {
+                    console.warn('[DocumentManager] Korrupter Eintrag übersprungen:', e);
+                }
             }
-            this.tabOrder = (meta?.tabOrder || docDataList.map(d => d.id)).filter(id => this.documents.has(id));
+            if (this.documents.size === 0) {
+                this.createDocument();
+                return;
+            }
+            this.tabOrder = (meta?.tabOrder || [...this.documents.keys()]).filter(id => this.documents.has(id));
             for (const id of this.documents.keys()) {
                 if (!this.tabOrder.includes(id)) this.tabOrder.push(id);
             }
@@ -429,6 +437,7 @@ class DocumentManager {
         } catch (err) {
             console.warn('[DocumentManager V1.0] Restore fehlgeschlagen:', err);
             if (this.documents.size === 0) this.createDocument();
+            else if (!this.activeId) { this.tabOrder = [...this.documents.keys()]; this.switchTo(this.tabOrder[0]); }
         }
     }
 

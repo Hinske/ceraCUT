@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing Tools Extension V1.10
+ * CeraCUT Drawing Tools Extension V1.11
  * Zusätzliche Zeichentools: Ellipse, Spline, Donut, XLine, OverlapBreak, Hatch
  * V1.10: Fix SplineTool geschlossener Ringschluss — _tessellate erzwingt exakten
  *         Ringschluss (finalPts[last] = first) → Pipeline erkennt Disc/Hole korrekt.
@@ -314,12 +314,16 @@ class SplineTool extends BaseTool {
             const result = SplineUtils.interpolate(pts);
             if (closed && result.length > 2) {
                 const first = result[0];
+                // Nächstliegenden Punkt in der zweiten Hälfte zum Startpunkt suchen (robust, ohne feste Schwelle)
+                let bestI = -1, bestD = Infinity;
                 for (let i = result.length - 1; i > result.length / 2; i--) {
-                    if (Math.hypot(result[i].x - first.x, result[i].y - first.y) < 0.1) {
-                        const finalPts = result.slice(0, i + 1);
-                        finalPts[finalPts.length - 1] = { x: first.x, y: first.y };
-                        return finalPts;
-                    }
+                    const d = Math.hypot(result[i].x - first.x, result[i].y - first.y);
+                    if (d < bestD) { bestD = d; bestI = i; }
+                }
+                if (bestI > 0) {
+                    const finalPts = result.slice(0, bestI + 1);
+                    finalPts[finalPts.length - 1] = { x: first.x, y: first.y };
+                    return finalPts;
                 }
             }
             return result;
@@ -605,10 +609,8 @@ class XLineTool extends BaseTool {
     }
 
     cancel() {
-        for (const ent of this.createdEntities) {
-            const idx = this.manager.entities.indexOf(ent);
-            if (idx !== -1) this.manager.entities.splice(idx, 1);
-        }
+        // Bestätigte XLines bleiben als pending Entities erhalten (kein stilles Löschen ohne Undo)
+        this.createdEntities = [];
         super.cancel();
     }
 
@@ -1279,7 +1281,7 @@ if (typeof DrawingToolManager !== 'undefined') {
             this.tools['XLINE']    = () => new XLineTool(this);
             this.tools['OBREAK']       = () => new OverlapBreakTool(this);
             this.tools['OVERLAPBREAK'] = () => new OverlapBreakTool(this);
-            this.tools['H']            = () => new HatchTool(this);
+            // 'H' bleibt für Pan reserviert (nur HT/HATCH)
             this.tools['HT']           = () => new HatchTool(this);
             this.tools['HATCH']        = () => new HatchTool(this);
 

@@ -1,5 +1,5 @@
 /**
- * CeraCUT Properties Panel V1.5
+ * CeraCUT Properties Panel V1.6
  * Kontur-Eigenschaften als Kontextmenu-Sektion (Step 4 / CAM)
  * - Generiert editierbare CAM-Felder (Quality, Piercing, Lead-In, Kerf)
  * - Bindet Events mit Undo-Support (PropertyChangeCommand)
@@ -8,8 +8,9 @@
  * - V1.4: Live Preview — Lead-Parameter live auf Canvas während Slider-Drag
  * - V1.3: Hatch-Schraffur im Properties-Panel (Hinzufügen/Entfernen/Bearbeiten)
  * Refactored: 2026-03-13 (Sidebar → Kontextmenu)
- * Last Modified: 2026-03-16 MEZ
- * Build: 20260316-hatchfix
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.6: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
 class PropertiesPanel {
@@ -39,6 +40,8 @@ class PropertiesPanel {
         if (!app) return '';
 
         const contours = app.contours || [];
+        // Index-Bindung (data-idx) auf die Konturen zum Zeitpunkt der HTML-Erzeugung festnageln
+        this._boundContours = contours.slice();
         const selected = contours.filter(c => c.isSelected && !c.isReference);
         if (selected.length === 0) return '';
 
@@ -61,7 +64,7 @@ class PropertiesPanel {
                 e.stopPropagation();
                 const action = e.target.dataset.action;
                 const idx = parseInt(e.target.dataset.idx, 10);
-                const contour = this.app?.contours?.[idx];
+                const contour = this._resolveContour(idx);
                 if (!contour) return;
 
                 if (action === 'applyAreaClass') {
@@ -121,7 +124,7 @@ class PropertiesPanel {
                 if (isNaN(newValue)) return;
 
                 const idx = parseInt(e.target.dataset.idx, 10);
-                const contour = this.app?.contours?.[idx];
+                const contour = this._resolveContour(idx);
                 if (!contour) return;
 
                 // Snapshot beim ersten Input erfassen
@@ -148,7 +151,7 @@ class PropertiesPanel {
                 // V1.4: Preview-Commit — alten Wert wiederherstellen, dann normal via Undo
                 if (this._previewActive && this._previewSnapshot?.property === prop) {
                     const snap = this._previewSnapshot;
-                    const contour = this.app?.contours?.[snap.contourIndex];
+                    const contour = this._resolveContour(snap.contourIndex);
                     if (contour) {
                         // Alten Wert restaurieren, damit PropertyChangeCommand korrekt arbeitet
                         contour[prop] = snap.oldValue;
@@ -176,7 +179,7 @@ class PropertiesPanel {
                 // V1.4: Escape = Preview abbrechen
                 if (e.key === 'Escape' && this._previewActive && this._previewSnapshot) {
                     const snap = this._previewSnapshot;
-                    const contour = this.app?.contours?.[snap.contourIndex];
+                    const contour = this._resolveContour(snap.contourIndex);
                     if (contour) {
                         contour[snap.property] = snap.oldValue;
                         contour.invalidate?.();
@@ -448,8 +451,20 @@ class PropertiesPanel {
         'leadInDynamic', 'leadInLengthMin', 'leadInLengthMax'
     ]);
 
+    /**
+     * data-idx -> Kontur. Nutzt den Snapshot der HTML-Erzeugung und prüft, dass die
+     * Kontur noch im Array existiert (nach Undo/Delete sonst falsche/keine Kontur).
+     */
+    _resolveContour(idx) {
+        const list = this.app?.contours;
+        if (!Array.isArray(list)) return null;
+        const c = this._boundContours ? this._boundContours[idx] : list[idx];
+        if (!c) return null;
+        return list.includes(c) ? c : null;
+    }
+
     _setProperty(contourIndex, property, newValue) {
-        const contour = this.app?.contours?.[contourIndex];
+        const contour = this._resolveContour(contourIndex);
         if (!contour) return;
 
         // Hatch Sub-Properties (hatch.pattern, hatch.opacity, etc.)
@@ -507,7 +522,7 @@ class PropertiesPanel {
     // ════════════════════════════════════════════════════════════════
 
     _setHatchProperty(contourIndex, action) {
-        const contour = this.app?.contours?.[contourIndex];
+        const contour = this._resolveContour(contourIndex);
         if (!contour) return;
         const app = this.app;
         const oldHatch = contour.hatch ? { ...contour.hatch } : null;
@@ -537,7 +552,7 @@ class PropertiesPanel {
     }
 
     _setHatchSubProperty(contourIndex, subProp, newValue) {
-        const contour = this.app?.contours?.[contourIndex];
+        const contour = this._resolveContour(contourIndex);
         if (!contour || !contour.hatch) return;
         const app = this.app;
 

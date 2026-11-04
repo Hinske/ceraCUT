@@ -1,5 +1,5 @@
 /**
- * CeraCUT CamContour V5.21 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.22 - IGEMS-konformes Lead-In/Out System
  * V5.21: Fix — getPiercingR923(): 'auto' mapped jetzt auf R923=9 (Rotationsanschuss)
  *        statt R923=1 (Linearer Anschuss). L201-Subroutine dieser Maschine kennt R923=1
  *        nicht (oder braucht undokumentierte R918/R919-Parameter) → "fehlende Anschuss-
@@ -106,7 +106,8 @@ class CamContour {
         this.kerfWidth = options.kerfWidth ?? 0.8;
         this.kerfSide = 'left';
         this.quality = options.quality ?? 2;
-        this.isClosed = this._detectClosed();
+        // options.isClosed===true (Parser-Chaining mit groeberer Toleranz) hat Vorrang vor Eigenerkennung
+        this.isClosed = (options.isClosed === true && this.points.length >= 3) ? true : this._detectClosed();
         this.layer = options.layer || '';
         this.isReference = options.isReference || false;
         this.type = options.type || null;
@@ -391,7 +392,11 @@ class CamContour {
         const normal = bLen > 0.01 ? { x: bx / bLen, y: by / bLen } : normalOut;
         // Tangente aus Normale rekonstruieren — Umkehrung von _getWasteSideNormal's
         // Links-Normale-Beziehung (-ty,tx): tangent = (ny, -nx)
-        const tangent = { x: normal.y, y: -normal.x };
+        // Flip-Faelle (Disc CCW / Hole CW) beruecksichtigen: s=+1 wenn Normale = Links-Normale,
+        // sonst -1 (Normale wurde in _getWasteSideNormal gespiegelt).
+        const leftDot = normalOut.x * (-tangentOut.y) + normalOut.y * tangentOut.x;
+        const s = leftDot >= 0 ? 1 : -1;
+        const tangent = { x: s * normal.y, y: -s * normal.x };
 
         return { tangent, normal };
     }
@@ -451,7 +456,7 @@ class CamContour {
      * Dünne/längliche Formen (Halbmonde, Blätter) werden NICHT als small-hole behandelt.
      */
     _isSmallHole(pts) {
-        if (this.cuttingMode !== 'hole') return false;
+        if (!this._isEffectivelyHole()) return false;
         if (!pts || pts.length < 3) return false;
 
         // Aspekt-Ratio prüfen: nur annähernd kreisförmige Formen
@@ -579,6 +584,11 @@ class CamContour {
         // dort nicht und der Lead lief ungebremst bis zum Ende des Kanals. Kappt die Laenge
         // jetzt direkt auf die Haelfte des kuerzesten Eigenabstands (= halbe Kanalbreite).
         this.leadInLength = this._capLengthForNarrowChannel(entry, pts, this.leadInLength);
+        // Arc-Radius mitkappen, sonst bleibt der volle 90°-Bogen trotz Laengenkappung bestehen
+        const _origLeadInRadius = this.leadInRadius;
+        if (this.leadInLength < _origLeadInLength - 1e-9 && this.leadInLength * 2 / Math.PI < this.leadInRadius) {
+            this.leadInRadius = Math.max(0, this.leadInLength * 2 / Math.PI);
+        }
 
         // CORNER-LEAD (eigener Slot, siehe Konstruktor): Arc zu cornerLeadType
         // degradieren ab echten Ecken (cornerDegradeThreshold, Default 60°, z.B. 90°-
@@ -647,6 +657,7 @@ class CamContour {
         // konfigurierten Wert unveraendert lassen, sonst "vergisst" die Kontur dauerhaft den
         // eingestellten Wert, sobald sie einmal an einer engen Stelle gekappt wurde).
         this.leadInLength = _origLeadInLength;
+        this.leadInRadius = _origLeadInRadius;
 
         this._cachedLeadInPath = leadPath;
         return leadPath;
@@ -1039,6 +1050,25 @@ class CamContour {
     // LEAD-OUT - Ab Overcut-Ende
     // ════════════════════════════════════════════════════════════════
 
+    /** Punkt + Tangente in Abstand dist (entlang der Kontur) vor dem Konturende. */
+    _pointAtDistanceFromEnd(pts, dist) {
+        let rem = dist;
+        for (let i = pts.length - 1; i > 0; i--) {
+            const a = pts[i - 1], b = pts[i];
+            const len = Math.hypot(b.x - a.x, b.y - a.y);
+            if (len < 1e-9) continue;
+            if (rem <= len) {
+                const t = rem / len;
+                return {
+                    point: { x: b.x + (a.x - b.x) * t, y: b.y + (a.y - b.y) * t },
+                    tangent: { x: (b.x - a.x) / len, y: (b.y - a.y) / len }
+                };
+            }
+            rem -= len;
+        }
+        return null;
+    }
+
     getLeadOutPath() {
         if (this._cachedLeadOutPath) return this._cachedLeadOutPath;
         // Offene Konturen (Slit) brauchen keinen Lead-Out: das Schneiden endet am
@@ -1075,6 +1105,12 @@ class CamContour {
             // Vertex (pts[0]) — die auslaufende Kante fuer einen Eckpunkt-Bisektor ist
             // hier nicht eindeutig bestimmbar, daher Einzelkanten-Normale wie bisher.
             normal = this._getWasteSideNormal(exitPoint, exitTangent);
+        } else if (overcut?.type === 'negative' && overcut.shortenBy > 0 && this._pointAtDistanceFromEnd(pts, overcut.shortenBy)) {
+            // Negativer Overcut: Kontur endet shortenBy frueher -> Lead-Out dort verankern
+            const r = this._pointAtDistanceFromEnd(pts, overcut.shortenBy);
+            exitPoint = r.point;
+            exitTangent = r.tangent;
+            normal = this._getWasteSideNormal(exitPoint, exitTangent);
         } else {
             exitPoint = { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y };
             const prev = pts[pts.length - 2];
@@ -1102,6 +1138,10 @@ class CamContour {
         // bei getLeadInPath — am Ende wieder auf den konfigurierten Wert zurueckgesetzt.
         const _origLeadOutLength = this.leadOutLength;
         this.leadOutLength = this._capLengthForNarrowChannel(exitPoint, pts, this.leadOutLength);
+        const _origLeadOutRadius = this.leadOutRadius;
+        if (this.leadOutLength < _origLeadOutLength - 1e-9 && this.leadOutLength * 2 / Math.PI < this.leadOutRadius) {
+            this.leadOutRadius = Math.max(0, this.leadOutLength * 2 / Math.PI);
+        }
 
         // 3. CORNER-LEAD: Arc zu cornerLeadType degradieren ab echten Ecken — siehe
         // getLeadInPath fuer die Begruendung (Bisektor-Tangente statt Kantentangente).
@@ -1159,6 +1199,7 @@ class CamContour {
 
         // V6.43: konfigurierten Wert wiederherstellen (siehe getLeadInPath)
         this.leadOutLength = _origLeadOutLength;
+        this.leadOutRadius = _origLeadOutRadius;
 
         this._cachedLeadOutPath = leadPath;
         return leadPath;
@@ -2503,6 +2544,14 @@ class CamContour {
         c.gaps = this.gaps.map(g => ({ ...g }));           // V5.7: Gap Detection
         c.healedGaps = this.healedGaps.map(g => ({ ...g })); // V5.7: Gap Detection
         c.entitySeams = (this.entitySeams || []).map(s => ({ ...s })); // V5.11: Gap Detection (echte Naht-Distanzen)
+        // Spline-/Arc-/Sortier-Metadaten (analog toJSON)
+        c._fitPoints = this._fitPoints ? this._fitPoints.map(p => ({ ...p })) : null;
+        c._splineClosed = this._splineClosed;
+        if (this.sourceType !== undefined) c.sourceType = this.sourceType;
+        if (this._splineData !== undefined) c._splineData = this._splineData ? JSON.parse(JSON.stringify(this._splineData)) : this._splineData;
+        c.cutOrder = this.cutOrder;
+        if (this._arcSegments) c._arcSegments = JSON.parse(JSON.stringify(this._arcSegments));
+        if (this._originalPoints) c._originalPoints = this._originalPoints.map(p => ({ ...p }));
         return c;
     }
 

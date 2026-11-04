@@ -1,5 +1,5 @@
 /**
- * CeraCUT GeometryOps V2.6 — Geometry Operations Engine
+ * CeraCUT GeometryOps V2.7 — Geometry Operations Engine
  * Foundation für Tier 3+5 CAD Tools
  *
  * V2.6: chamferPolyline() hinzugefügt (Pendant zu filletPolyline, für RectangleTool
@@ -12,8 +12,9 @@
  * V2.0: Fillet, Chamfer, Trim, Extend, Offset, Boolean, N-gon, Obround Algorithmen
  * V1.0: Segment-Modell, Intersection, Split, Explode, Join
  *
- * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-cadimprovements7
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V2.7: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
 const GeometryOps = {
@@ -547,6 +548,11 @@ const GeometryOps = {
 
         // Kontur teilen
         if (isClosed) {
+            // Zyklisch: Klick über die Naht → letzter Hit links, erster Hit rechts
+            if (allHits.length >= 2) {
+                if (!leftHit) leftHit = allHits[allHits.length - 1];
+                if (!rightHit) rightHit = allHits[0];
+            }
             // Bei geschlossener Kontur: zwischen den beiden Schnittpunkten ausschneiden
             if (!leftHit || !rightHit || leftHit === rightHit) return [points];
             // Teil behalten der NICHT den Klickpunkt enthält
@@ -593,6 +599,15 @@ const GeometryOps = {
         const part = [];
         // Start: Schnittpunkt B
         part.push({ x: hitB.point.x, y: hitB.point.y });
+
+        // Naht-Fall (hitA hinter hitB nur zyklisch erreichbar, hier hitA.globalT > hitB.globalT): direkter Weg
+        if (hitA.globalT > hitB.globalT) {
+            for (let k = hitB.segIdx + 1; k <= hitA.segIdx; k++) {
+                part.push({ x: points[k % n].x, y: points[k % n].y });
+            }
+            part.push({ x: hitA.point.x, y: hitA.point.y });
+            return [part];
+        }
 
         // Von hitB.segIdx+1 vorwärts bis hitA.segIdx (den "langen Weg")
         let idx = (hitB.segIdx + 1) % n;
@@ -655,6 +670,10 @@ const GeometryOps = {
         }
 
         if (isClosed) {
+            if (allHits.length >= 2) {
+                if (!leftHit) leftHit = allHits[allHits.length - 1];
+                if (!rightHit) rightHit = allHits[0];
+            }
             if (!leftHit || !rightHit || leftHit === rightHit) return null;
             // Bei geschlossener Kontur: Teil ZWISCHEN leftHit und rightHit (= der entfernte Teil)
             return this._extractRemovedClosed(points, leftHit, rightHit);
@@ -689,9 +708,11 @@ const GeometryOps = {
     _extractRemovedClosed(points, leftHit, rightHit) {
         // Der entfernte Teil: von leftHit → vorwärts → rightHit (der "kurze Weg" um den Klickpunkt)
         const part = [];
+        const n = points.length - 1;
+        const endSeg = rightHit.globalT < leftHit.globalT ? rightHit.segIdx + n : rightHit.segIdx;
         part.push({ x: leftHit.point.x, y: leftHit.point.y });
-        for (let i = leftHit.segIdx + 1; i <= rightHit.segIdx; i++) {
-            part.push({ x: points[i].x, y: points[i].y });
+        for (let i = leftHit.segIdx + 1; i <= endSeg; i++) {
+            part.push({ x: points[i % n].x, y: points[i % n].y });
         }
         part.push({ x: rightHit.point.x, y: rightHit.point.y });
         return part.length >= 2 ? part : null;
@@ -947,6 +968,13 @@ const GeometryOps = {
      * @returns {Array<Array>} Ergebnis-Konturen
      */
     booleanOp(pointsA, pointsB, mode) {
+        // Orientierung von B an A angleichen (Tracing setzt gleiche Umlaufrichtung voraus)
+        const _area = (pts) => {
+            let a = 0;
+            for (let i = 0; i < pts.length - 1; i++) a += pts[i].x * pts[i + 1].y - pts[i + 1].x * pts[i].y;
+            return a;
+        };
+        if (_area(pointsA) * _area(pointsB) < 0) pointsB = [...pointsB].reverse();
         const intersections = this.findContourContourIntersections(pointsA, pointsB);
 
         if (intersections.length < 2) {
@@ -996,7 +1024,12 @@ const GeometryOps = {
         const partB2 = this._extractBetween(pointsB, ip1.segIdxB, ip1.tB, ip0.segIdxB + pointsB.length - 1, ip0.tB);
 
         // Welche Teile von A sind innerhalb/außerhalb von B?
-        const midA1 = partA1[Math.floor(partA1.length / 2)];
+        const midOf = (part) => {
+            const k = Math.floor((part.length - 1) / 2);
+            const q = part[Math.min(k + 1, part.length - 1)];
+            return { x: (part[k].x + q.x) / 2, y: (part[k].y + q.y) / 2 };
+        };
+        const midA1 = midOf(partA1);
         const a1Inside = this.pointInPolygon(midA1, pointsB);
 
         if (mode === 'union') {
@@ -1011,7 +1044,18 @@ const GeometryOps = {
             result.push(inner);
         } else if (mode === 'subtract') {
             // A ohne B: Außenteil von A + Innenteil von B (umgedreht)
-            const sub = a1Inside ? [...partA2, ...[...partB1].reverse()] : [...partA1, ...[...partB1].reverse()];
+            // B-Teil innerhalb A bestimmen (unabhängig von der Orientierung von B)
+            const b1InsideA = this.pointInPolygon(midOf(partB1), pointsA);
+            // A-Außenteil: A2 (ip1→ip0) bzw. A1 (ip0→ip1); danach B-Innenteil in passender Richtung
+            const innerB = b1InsideA ? partB1 : partB2;   // B1: ip0→ip1, B2: ip1→ip0
+            let sub;
+            if (a1Inside) {
+                // A2 endet bei ip0 → weiter ip0→ip1
+                sub = [...partA2, ...(b1InsideA ? innerB : [...innerB].reverse())];
+            } else {
+                // A1 endet bei ip1 → weiter ip1→ip0
+                sub = [...partA1, ...(b1InsideA ? [...innerB].reverse() : innerB)];
+            }
             sub.push({ x: sub[0].x, y: sub[0].y });
             result.push(sub);
         }
@@ -1031,14 +1075,14 @@ const GeometryOps = {
         };
         result.push(startPt);
 
-        // Punkte zwischen Start und Ende sammeln
-        let idx = (si + 1) % n;
+        // Punkte zwischen Start und Ende sammeln (Wrap erkennen: Endposition vor Startposition)
         const endSeg = segEnd % n;
-        let safety = 0;
-        while (idx !== (endSeg + 1) % n && safety < n + 2) {
-            result.push({ x: points[idx].x, y: points[idx].y });
-            idx = (idx + 1) % n;
-            safety++;
+        let endAbs = endSeg;
+        if (endSeg + tEnd < si + tStart) endAbs += n;
+        const steps = endAbs - si;
+        for (let k = 1; k <= steps && k <= n + 1; k++) {
+            const pt = points[(si + k) % n];
+            result.push({ x: pt.x, y: pt.y });
         }
 
         // Endpunkt interpolieren

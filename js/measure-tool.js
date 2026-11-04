@@ -1,9 +1,10 @@
 /**
- * CeraCUT V1.1 - Measure Tool (IGEMS-Stil)
+ * CeraCUT V1.3 - Measure Tool (IGEMS-Stil)
  * 5 Mess-Modi: Abstand, Radius, Winkel, Fläche, Volumen
  * Version: V1.2
- * Last Modified: 2026-03-25
- * Build: 20260325-circledetect
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.3: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * V1.1: _detectCircle: Rechteck nicht mehr als Kreis erkannt (min 8 Punkte ohne Bulge),
  *        Bogen-Rendering in Area-Highlight, Bounds mit Arc-Extents,
@@ -660,13 +661,29 @@ class MeasureManager {
         }
         if (maxErr / circle.radius > 0.05) return null; // Schlechter Fit (>5% Abweichung)
 
-        // Start- und Endwinkel des lokalen Bogens berechnen
-        const startAngle = Math.atan2(localPts[0].y - circle.cy, localPts[0].x - circle.cx);
-        const endAngle = Math.atan2(localPts[localPts.length - 1].y - circle.cy, localPts[localPts.length - 1].x - circle.cx);
+        // Fenster entlang des Bogens erweitern, solange Punkte auf dem Kreis liegen
+        const errTol = Math.max(maxErr * 2, circle.radius * 0.01);
+        const onCircle = (q) => Math.abs(Math.hypot(q.x - circle.cx, q.y - circle.cy) - circle.radius) <= errTol;
+        let lo = indices[0], hi = indices[indices.length - 1];
+        while (lo > 0 && onCircle(pts[lo - 1])) lo--;
+        while (hi < n - 1 && onCircle(pts[hi + 1])) hi++;
+        const arcPts = pts.slice(lo, hi + 1);
 
-        // Bogenwinkel bestimmen
-        let arcAngle = Math.abs(endAngle - startAngle);
-        if (arcAngle > Math.PI) arcAngle = 2 * Math.PI - arcAngle;
+        // Start- und Endwinkel des Bogens berechnen
+        const startAngle = Math.atan2(arcPts[0].y - circle.cy, arcPts[0].x - circle.cx);
+        const endAngle = Math.atan2(arcPts[arcPts.length - 1].y - circle.cy, arcPts[arcPts.length - 1].x - circle.cx);
+
+        // Bogenwinkel: Summe der Winkelschritte (nicht auf 180° geklemmt)
+        let arcAngle = 0;
+        for (let i = 1; i < arcPts.length; i++) {
+            const a = Math.atan2(arcPts[i - 1].y - circle.cy, arcPts[i - 1].x - circle.cx);
+            const b = Math.atan2(arcPts[i].y - circle.cy, arcPts[i].x - circle.cx);
+            let da = b - a;
+            while (da > Math.PI) da -= 2 * Math.PI;
+            while (da < -Math.PI) da += 2 * Math.PI;
+            arcAngle += da;
+        }
+        arcAngle = Math.min(Math.abs(arcAngle), 2 * Math.PI);
 
         return {
             center: { x: circle.cx, y: circle.cy },
@@ -737,7 +754,8 @@ class MeasureManager {
         const radius = (chord * chord / 4 + sagitta * sagitta) / (2 * sagitta);
         const mx = (p1.x + p2.x) / 2;
         const my = (p1.y + p2.y) / 2;
-        const d = Math.sqrt(radius * radius - (chord / 2) * (chord / 2));
+        // Vorzeichenbehaftet: bei |bulge|>1 liegt das Zentrum auf der anderen Chord-Seite
+        const d = radius - sagitta;
         const nx = -dy / chord;
         const ny = dx / chord;
         const sign = bulge > 0 ? 1 : -1;

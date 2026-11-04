@@ -1,5 +1,5 @@
 /**
- * CeraCUT Machine Profiles V1.1
+ * CeraCUT Machine Profiles V1.2
  *
  * Maschinenpark-Verwaltung fuer Wasserstrahl-CAM Software.
  * Verwaltet CNC-Maschinenprofile mit Arbeitsbereich, Druckparametern,
@@ -9,8 +9,9 @@
  * V1.1: Aktive Profil-Auswahl (ACTIVE_KEY) pro User (_userKey()) — die Profil-
  *       Liste selbst (STORAGE_KEY) bleibt firmenweit geteilt (Login/User-Management V6.32)
  *
- * Last Modified: 2026-06-24
- * Build: 20260624-userlogin
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.2: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
 const MachineProfiles = (() => {
@@ -477,7 +478,9 @@ const MachineProfiles = (() => {
             _profiles.clear();
             let loaded = 0;
             for (const profile of data) {
-                if (profile && profile.id) {
+                if (profile && typeof profile === 'object' && typeof profile.id === 'string' && profile.id) {
+                    // Validierung: fehlende/ungueltige Teilobjekte ergaenzen statt spaeter TypeError
+                    if (!profile.postprocessor || typeof profile.postprocessor !== 'object') profile.postprocessor = {};
                     _profiles.set(profile.id, profile);
                     loaded++;
                 }
@@ -703,7 +706,7 @@ const MachineProfiles = (() => {
             return null;
         }
 
-        const pp = profile.postprocessor;
+        const pp = profile.postprocessor || {};
         return {
             coordDecimals: pp.coordDecimals,
             feedDecimals: pp.feedDecimals,

@@ -1,9 +1,10 @@
 /**
- * CeraCUT Quality Zones V1.1
+ * CeraCUT Quality Zones V1.2
  * Automatische Erkennung von Geschwindigkeitszonen fuer Wasserstrahlschneiden
  * Ecken, enge Radien, Anfahrt/Abfahrt → Geschwindigkeitsanpassung
- * Last Modified: 2026-03-09
- * Build: 20260309
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.2: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
 const QualityZones = {
@@ -238,6 +239,21 @@ const QualityZones = {
                     distance: cumDist[i],
                     angle: angle
                 });
+            }
+        }
+
+        // Naht-Ecke geschlossener Konturen (points[n-2], points[0], points[1])
+        const n = points.length;
+        if (n >= 4 && this._dist(points[0], points[n - 1]) < 0.01) {
+            const l1 = this._dist(points[n - 2], points[0]);
+            const l2 = this._dist(points[0], points[1]);
+            if (l1 >= cfg.minSegmentLength && l2 >= cfg.minSegmentLength) {
+                const angle = this._angleBetween(points[n - 2], points[0], points[1]);
+                if (angle < cfg.cornerAngle) {
+                    // Start (distance 0) und Ende (Gesamtlaenge) der Polyline
+                    corners.push({ index: 0, distance: 0, angle });
+                    corners.push({ index: n - 1, distance: cumDist[n - 1], angle });
+                }
             }
         }
 

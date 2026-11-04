@@ -4,9 +4,9 @@
  * Ermöglicht das Browsen und Laden von DXF-Dateien vom Server-Netzlaufwerk
  * über die /api/dxf/* Endpunkte von server.js.
  *
- * Version: V1.1
+ * Version: V1.2
  * V1.1: Zuletzt-Pfad pro User (_userKey(), Login/User-Management V6.32)
- * Last Modified: 2026-06-24
+ * Last Modified: 2026-11-04
  */
 
 /** Pro-User-Namespacing für localStorage-Keys (V6.32 Login/User-Management). */
@@ -114,7 +114,6 @@ class DXFBrowser {
      */
     async loadDirectory(dirPath) {
         this.currentPath = dirPath;
-        localStorage.setItem(_userKey('ceracut-dxf-browser-path'), dirPath);
         const listEl = this.overlay?.querySelector('.dxf-browser-list');
         const statusEl = this.overlay?.querySelector('.dxf-browser-status');
         if (!listEl) return;
@@ -125,11 +124,14 @@ class DXFBrowser {
             const resp = await fetch(`/api/dxf/list?path=${encodeURIComponent(dirPath)}`);
             if (!resp.ok) {
                 const err = await resp.json().catch(() => ({}));
+                this._renderBreadcrumb(dirPath); // Root-Link bleibt erreichbar (keine Sackgasse)
+                try { localStorage.removeItem(_userKey('ceracut-dxf-browser-path')); } catch (e) {}
                 listEl.innerHTML = `<div style="padding:40px; text-align:center; color:#f44;">Fehler: ${err.error || resp.statusText}</div>`;
                 return;
             }
 
             const data = await resp.json();
+            try { localStorage.setItem(_userKey('ceracut-dxf-browser-path'), dirPath); } catch (e) {}
             this._renderBreadcrumb(data.path);
             this._renderList(data.items, listEl);
 
@@ -139,6 +141,7 @@ class DXFBrowser {
                 statusEl.textContent = `${dirs} Ordner, ${files} DXF-Dateien`;
             }
         } catch (err) {
+            this._renderBreadcrumb(dirPath);
             listEl.innerHTML = `<div style="padding:40px; text-align:center; color:#f44;">Verbindungsfehler: ${err.message}</div>`;
         }
     }
@@ -263,6 +266,8 @@ class DXFBrowser {
             const resp = await fetch(`/api/dxf/file?path=${encodeURIComponent(filePath)}`);
             if (!resp.ok) {
                 const err = await resp.json().catch(() => ({}));
+                this._renderBreadcrumb(dirPath); // Root-Link bleibt erreichbar (keine Sackgasse)
+                try { localStorage.removeItem(_userKey('ceracut-dxf-browser-path')); } catch (e) {}
                 this.app.showToast(`Fehler: ${err.error || resp.statusText}`, 'error');
                 return;
             }

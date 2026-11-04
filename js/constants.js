@@ -1,10 +1,11 @@
 /**
- * CeraCUT V2.10 Constants
+ * CeraCUT V2.11 Constants
  * Blaues Farbschema
  * V2.10: TOOL_ECHO_NAMES — AutoCAD-Style Command-Echo-Tabelle (_LINE, _CIRCLE, ...)
  * V2.9: TOOL_TOOLTIPS — alle 7 CAM-Tools (EF, REP, AN, BT, PJ, VZ, HULL) eingetragen
  * V2.8: INTARSIA_MATERIALS — 5 Materialgruppen mit Farben
- * Build: 20260623-autocadfeel
+ * Build: 20261104-reviewfix
+ * V2.11: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
 const CeraCUT = {
@@ -128,7 +129,7 @@ const TOOL_TOOLTIPS = {
     'SP':    { label: 'Spline',     tip: 'Freiform-Kurve (Spline)',                  shortcut: 'SP',    group: 'draw' },
     'DO':    { label: 'Donut',      tip: 'Ring / Donut',                             shortcut: 'DO',    group: 'draw' },
     'TX':    { label: 'Text',       tip: 'Text als schneidbare Konturen',            shortcut: 'TX',    group: 'draw' },
-    'H':     { label: 'Schraffur',  tip: 'Flaeche fuellen / schraffieren (Solid, Linien, Kreuz, Punkte)', shortcut: 'H', group: 'draw' },
+    'HT':    { label: 'Schraffur',  tip: 'Flaeche fuellen / schraffieren (Solid, Linien, Kreuz, Punkte)', shortcut: 'HT', group: 'draw' },
 
     // ── Bearbeiten ──
     'M':     { label: 'Verschieben', tip: 'Objekte verschieben',                     shortcut: 'M',     group: 'edit' },

@@ -1,5 +1,5 @@
 /**
- * CeraCUT Layer Manager V1.2
+ * CeraCUT Layer Manager V1.3
  * Verwaltung von Zeichnungslayern (AutoCAD-Stil)
  *
  * Features:
@@ -12,8 +12,9 @@
  * - Undo-fähige Layer-Operationen (Visibility, Lock, Color)
  *
  * Version: V1.2
- * Last Modified: 2026-03-24 MEZ
- * Build: 20260324-undofix
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.3: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -131,6 +132,38 @@ class LayerManager {
         return max + 1;
     }
 
+    /** Konturen-Listen (aktiv + DXF-Original), deren layer-Feld umgehängt werden muss. */
+    _entityLists() {
+        const app = (typeof window !== 'undefined') ? window.app : null;
+        const lists = [];
+        if (typeof this.getContours === 'function') {
+            const l = this.getContours();
+            if (Array.isArray(l)) lists.push(l);
+        } else if (app) {
+            if (Array.isArray(app.contours)) lists.push(app.contours);
+            if (Array.isArray(app.dxfResult?.contours)) lists.push(app.dxfResult.contours);
+        }
+        return lists;
+    }
+
+    /** Entities von Layer from nach to umhängen (Rename/Delete). */
+    _relabelEntities(from, to) {
+        for (const list of this._entityLists()) {
+            for (const c of list) {
+                if ((c.layer || '0') === from) c.layer = to;
+            }
+        }
+    }
+
+    /** Nach Undo/Redo der Sichtbarkeit die physisch gefilterten Konturen neu aufbauen. */
+    _rebuildForVisibility() {
+        if (typeof this.onVisibilityRebuild === 'function') {
+            this.onVisibilityRebuild();
+        } else if (typeof window !== 'undefined' && window.app?.applyLayerSelection) {
+            window.app.applyLayerSelection({ visibilityChange: true });
+        }
+    }
+
     _notify() {
         if (typeof this.onChange === 'function') {
             this.onChange(this);
@@ -173,6 +206,8 @@ class LayerManager {
         if (name === '0') return false; // Layer 0 ist geschützt
         if (!this.layers.has(name)) return false;
 
+        // Entities auf Layer 0 umhängen (sonst legt updateEntityCounts den Layer neu an)
+        this._relabelEntities(name, '0');
         this.layers.delete(name);
 
         // Wenn gelöschter Layer aktiv war → auf "0" wechseln
@@ -199,6 +234,7 @@ class LayerManager {
 
         const layerDef = this.layers.get(oldName);
         layerDef.name = newName;
+        this._relabelEntities(oldName, newName);
         this.layers.delete(oldName);
         this.layers.set(newName, layerDef);
 
@@ -240,13 +276,12 @@ class LayerManager {
             const self = this;
             const cmd = new FunctionCommand(
                 `Layer "${name}" ${newVal ? 'einblenden' : 'ausblenden'}`,
-                () => { layer.visible = newVal; self._notify(); },
-                () => { layer.visible = oldVal; self._notify(); }
+                () => { layer.visible = newVal; self._rebuildForVisibility(); self._notify(); },
+                () => { layer.visible = oldVal; self._rebuildForVisibility(); self._notify(); }
             );
             // Aktion bereits ausgeführt → direkt auf Stack
-            this.undoManager.undoStack.push(cmd);
-            this.undoManager.redoStack.length = 0;
-            this.undoManager._notifyStateChange();
+            if (this.undoManager.pushExecuted) this.undoManager.pushExecuted(cmd);
+            else { this.undoManager.undoStack.push(cmd); this.undoManager.redoStack.length = 0; this.undoManager._notifyStateChange?.(); }
         }
         this._notify();
         return layer.visible;
@@ -278,9 +313,8 @@ class LayerManager {
                 () => { layer.locked = newLocked; self.activeLayer = newActive; self._notify(); },
                 () => { layer.locked = oldLocked; self.activeLayer = oldActive; self._notify(); }
             );
-            this.undoManager.undoStack.push(cmd);
-            this.undoManager.redoStack.length = 0;
-            this.undoManager._notifyStateChange();
+            if (this.undoManager.pushExecuted) this.undoManager.pushExecuted(cmd);
+            else { this.undoManager.undoStack.push(cmd); this.undoManager.redoStack.length = 0; this.undoManager._notifyStateChange?.(); }
         }
         this._notify();
         return layer.locked;
@@ -304,9 +338,8 @@ class LayerManager {
                 () => { layer.color = color; self._notify(); },
                 () => { layer.color = oldColor; self._notify(); }
             );
-            this.undoManager.undoStack.push(cmd);
-            this.undoManager.redoStack.length = 0;
-            this.undoManager._notifyStateChange();
+            if (this.undoManager.pushExecuted) this.undoManager.pushExecuted(cmd);
+            else { this.undoManager.undoStack.push(cmd); this.undoManager.redoStack.length = 0; this.undoManager._notifyStateChange?.(); }
         }
         this._notify();
     }

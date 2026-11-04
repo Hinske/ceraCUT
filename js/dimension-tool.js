@@ -1,5 +1,5 @@
 /**
- * CeraCUT Dimension Tool V2.4
+ * CeraCUT Dimension Tool V2.5
  * AutoCAD-style dimensioning: Linear, Aligned, Angular, Radius, Diameter
  *
  * V2.4: Dimension Editing — Selektion, Grip-Editing, Text-Override (Doppelklick),
@@ -11,8 +11,9 @@
  * V2.1: Fix 0.00-Bug (auto-flip axis), AutoCAD visual style, grip editing
  * V2.0: Select Object mode, debug logging
  *
- * Last Modified: 2026-03-26
- * Build: 20260326-dimedit
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V2.5: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
 class DimensionManager {
@@ -460,7 +461,15 @@ class DimensionManager {
                 let rSum = 0;
                 for (const p of pts) rSum += Math.hypot(p.x - cx, p.y - cy);
                 const r = rSum / pts.length;
-                if (Math.abs(Math.hypot(pt.x - cx, pt.y - cy) - r) < tol)
+                // Rundheits-Check (nur für Heuristik, nicht für explizite Kreise)
+                let round = !!c.isCircle;
+                if (!round && r > 1e-9) {
+                    round = true;
+                    for (const p of pts) {
+                        if (Math.abs(Math.hypot(p.x - cx, p.y - cy) - r) > r * 0.02) { round = false; break; }
+                    }
+                }
+                if (round && Math.abs(Math.hypot(pt.x - cx, pt.y - cy) - r) < tol)
                     return { center: { x: cx, y: cy }, radius: r, contour: c };
             }
             for (let i = 0; i < c.points.length - 1; i++) {
@@ -738,11 +747,11 @@ class DimensionManager {
 
         // V2.3-fix: Canvas hat scale(s,-s) → Y gespiegelt
         // Welt-Winkel θ → Canvas-Winkel -θ, CCW in Welt → CW in Canvas
-        // Daher: arc(-sa, -ea, counterclockwise=false) — native CW wird visuell CCW durch Y-Flip
+        // Pfadkoordinaten sind Weltkoordinaten → Winkel unverändert: arc(sa, ea, false) = CCW in Welt
         ctx.strokeStyle = S.lineColor;
         ctx.lineWidth = lw * 0.6;
         ctx.beginPath();
-        ctx.arc(center.x, center.y, arcR, -sa, -ea, false);
+        ctx.arc(center.x, center.y, arcR, sa, ea, false);
         ctx.stroke();
 
         // Hilfslinien (Extension Lines): vom Zentrum zum Bogen-Endpunkt + DIMEXE Überhang

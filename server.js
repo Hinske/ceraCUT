@@ -1,5 +1,5 @@
 /**
- * CeraCUT Server V1.6
+ * CeraCUT Server V1.7
  * V1.6: Fix — Slowloris-DoS im Dual-Protocol Gateway: socket.setTimeout(3000) +
  *       socket.on('timeout', destroy) schützt vor Angreifern die TCP-Verbindungen öffnen
  *       aber kein erstes Byte senden. Ohne Guard blieben Sockets unbegrenzt offen und
@@ -16,8 +16,9 @@
  *       Siehe lib/user-store.js, lib/session-store.js, lib/auth.js.
  * V1.3: Fix — safePath() prüft Symlink-Ziel via fs.realpathSync gegen DXF_ROOT,
  *       Content-Disposition-Header filtert CR/LF (Header-Injection)
- * Last Modified: 2026-06-25
- * Build: 20260625-xssfix
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.7: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * Statischer Dateiserver + DXF-Browse-API für Netzlaufwerk-Zugriff.
  * Ersetzt `npx serve .` und stellt zusätzlich /api/dxf/* Endpunkte bereit.
@@ -60,7 +61,10 @@ const {
 } = require('./lib/auth');
 
 const PORT = parseInt(process.env.PORT, 10) || 5000;
-const DXF_ROOT = path.resolve(process.env.DXF_ROOT || '/mnt/dxf');
+const DXF_ROOT = (() => {
+    const r = path.resolve(process.env.DXF_ROOT || '/mnt/dxf');
+    try { return fs.realpathSync(r); } catch { return r; }
+})();
 const STATIC_ROOT = __dirname;
 const NO_HTTPS = process.env.NO_HTTPS === '1';
 
@@ -356,6 +360,16 @@ function handleStatic(req, res, pathname, currentUser) {
         res.writeHead(403);
         return res.end('Forbidden');
     }
+    // Blockliste: Secrets/Servercode nie ausliefern (users.json, server.key, .git, ...)
+    const rel = path.relative(STATIC_ROOT, resolved).split(path.sep);
+    const top = (rel[0] || '').toLowerCase();
+    if (['data', 'certs', 'lib', 'node_modules', 'scripts', 'tasks', 'docs'].includes(top)
+        || rel.some(p => p.startsWith('.'))
+        || ['server.js', 'package.json', 'package-lock.json'].includes(top)
+        || /\.(key|pem|crt|env)$/i.test(resolved)) {
+        res.writeHead(404);
+        return res.end('Not Found');
+    }
 
     fs.stat(resolved, (err, stats) => {
         if (err || !stats.isFile()) {
@@ -409,7 +423,16 @@ async function handleLogin(req, res, isSecure) {
     } catch {
         return sendJSON(res, 400, { error: 'Ungültige Anfrage' });
     }
-    const user = userStore.verifyCredentials(body.username, body.password);
+    if (!body || typeof body.username !== 'string' || typeof body.password !== 'string') {
+        return sendJSON(res, 400, { error: 'Ungültige Anfrage' });
+    }
+    let user;
+    try {
+        user = userStore.verifyCredentials(body.username, body.password);
+    } catch (err) {
+        console.error('[CeraCUT Server] Login: User-Store-Fehler:', err.message);
+        return sendJSON(res, 500, { error: 'Interner Serverfehler' });
+    }
     if (!user) {
         return sendJSON(res, 401, { error: 'Benutzername oder Passwort falsch' });
     }
@@ -478,6 +501,16 @@ function requestHandler(req, res) {
         return;
     }
 
+    if (pathname.includes('\0')) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        res.end('400 Bad Request');
+        return;
+    }
+    // ?path=a&path=b liefert Array → auf String normalisieren
+    for (const k of Object.keys(parsed.query)) {
+        if (Array.isArray(parsed.query[k])) parsed.query[k] = parsed.query[k][0];
+    }
+
     const isSecure = !!(req.socket && req.socket.encrypted);
     const currentUser = getCurrentUser(req); // null wenn nicht eingeloggt/Session abgelaufen
 
@@ -494,7 +527,9 @@ function requestHandler(req, res) {
 
     // Health-Check (ungated)
     if (pathname === '/api/health') {
-        return sendJSON(res, 200, { status: 'ok', dxfRoot: DXF_ROOT, https: !!tlsCreds });
+        return sendJSON(res, 200, currentUser
+            ? { status: 'ok', dxfRoot: DXF_ROOT, https: !!tlsCreds }
+            : { status: 'ok' });
     }
 
     // ── Admin-Routen: Login + Rolle 'admin' nötig ──

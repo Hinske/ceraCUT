@@ -1,9 +1,10 @@
 /**
- * CeraCUT Text Tool V1.2
+ * CeraCUT Text Tool V1.3
  * Text → schneidbare Vektor-Konturen via opentype.js
  * Created: 2026-02-16 MEZ
- * Last Modified: 2026-03-12 MEZ
- * Build: 20260312-textimport
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.3: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * Features:
  *   - Beliebige TTF/OTF Fonts (per File-Picker)
@@ -110,7 +111,7 @@ class TextTool extends BaseTool {
         }
 
         // ── State: Optionen ─────────────────────────────────────────
-        if (this.state === 'options') {
+        if (this.state === 'options' || this.state.charAt(0) === '_') {
             return this._handleOption(trimmed, upper);
         }
 
@@ -124,20 +125,21 @@ class TextTool extends BaseTool {
     }
 
     _handleOption(trimmed, upper) {
+        var inSub = this.state.charAt(0) === '_';
         // SP = Spacing eingeben
-        if (upper === 'SP') {
+        if (!inSub && upper === 'SP') {
             this.cmd?.setPrompt('TEXT — Zeichenabstand mm <' + this.spacing + '>:');
             this.state = '_spacing';
             return true;
         }
         // AL = Alignment
-        if (upper === 'AL') {
+        if (!inSub && upper === 'AL') {
             this.cmd?.setPrompt('TEXT — Ausrichtung [L=Links / C=Mitte / R=Rechts]:');
             this.state = '_align';
             return true;
         }
         // ST = Stencil Toggle
-        if (upper === 'ST') {
+        if (!inSub && upper === 'ST') {
             this.stencil = !this.stencil;
             this.cmd?.log('Stencil-Modus: ' + (this.stencil ? 'EIN ✅' : 'AUS'), 'info');
             if (this.stencil) {
@@ -149,13 +151,13 @@ class TextTool extends BaseTool {
             return true;
         }
         // BW = Bridge Width direkt
-        if (upper === 'BW') {
+        if (!inSub && upper === 'BW') {
             this.cmd?.setPrompt('TEXT — Brückenbreite mm <' + this.bridgeWidth + '>:');
             this.state = '_bridge';
             return true;
         }
         // LS = Line Spacing
-        if (upper === 'LS') {
+        if (!inSub && upper === 'LS') {
             this.cmd?.setPrompt('TEXT — Zeilenabstand Faktor <' + this.lineSpacing + '>:');
             this.state = '_linespacing';
             return true;
@@ -300,6 +302,7 @@ class TextTool extends BaseTool {
 
         var lines = this.text.split('\n');
         var allContours = [];
+        var fontSize = TextTool._fontSizeForCapHeight(this.font, this.height);
         var lineHeight = this.height * this.lineSpacing;
 
         // Textbreiten pro Zeile berechnen (für Alignment)
@@ -328,17 +331,23 @@ class TextTool extends BaseTool {
 
             // Zeichenweise Pfade generieren (für Spacing-Kontrolle)
             var charX = xOffset;
+            var prevGlyph = null;
             for (var ci = 0; ci < line.length; ci++) {
                 var ch = line[ci];
                 if (ch === ' ') {
                     // Leerzeichen: nur Advance
                     var spaceGlyph = this.font.charToGlyph(' ');
-                    var spaceAdv = (spaceGlyph.advanceWidth || 500) / this.font.unitsPerEm * this.height;
+                    var spaceAdv = (spaceGlyph.advanceWidth || 500) / this.font.unitsPerEm * fontSize;
                     charX += spaceAdv + this.spacing;
+                    prevGlyph = null;
                     continue;
                 }
 
-                var path = this.font.getPath(ch, charX, -yOffset, this.height);
+                var curGlyph = this.font.charToGlyph(ch);
+                if (prevGlyph && this.font.getKerningValue) {
+                    charX += this.font.getKerningValue(prevGlyph, curGlyph) / this.font.unitsPerEm * fontSize;
+                }
+                var path = this.font.getPath(ch, charX, -yOffset, fontSize);
                 var charContours = this._pathToContours(path.commands);
 
                 // Konturen zum Ergebnis hinzufügen
@@ -347,9 +356,9 @@ class TextTool extends BaseTool {
                 }
 
                 // Advance Width + Spacing
-                var glyph = this.font.charToGlyph(ch);
-                var advance = (glyph.advanceWidth || 500) / this.font.unitsPerEm * this.height;
+                var advance = (curGlyph.advanceWidth || 500) / this.font.unitsPerEm * fontSize;
                 charX += advance + this.spacing;
+                prevGlyph = curGlyph;
             }
         }
 
@@ -371,9 +380,15 @@ class TextTool extends BaseTool {
      */
     _measureLineWidth(line) {
         var width = 0;
+        var fontSize = TextTool._fontSizeForCapHeight(this.font, this.height);
+        var prev = null;
         for (var i = 0; i < line.length; i++) {
             var glyph = this.font.charToGlyph(line[i]);
-            var advance = (glyph.advanceWidth || 500) / this.font.unitsPerEm * this.height;
+            if (prev && line[i] !== ' ' && line[i - 1] !== ' ' && this.font.getKerningValue) {
+                width += this.font.getKerningValue(prev, glyph) / this.font.unitsPerEm * fontSize;
+            }
+            prev = glyph;
+            var advance = (glyph.advanceWidth || 500) / this.font.unitsPerEm * fontSize;
             width += advance + (i < line.length - 1 ? this.spacing : 0);
         }
         return width;
@@ -463,8 +478,9 @@ class TextTool extends BaseTool {
                 continue;
             }
 
-            // Punkte filtern: Punkte im Brückenbereich entfernen
-            var filtered = [];
+            // Punkte im Brückenbereich markieren; Rest als OFFENE Teilkonturen (echte Lücke)
+            var flags = [];
+            var anyBridge = false;
             for (var p = 0; p < pts.length; p++) {
                 var inBridge = false;
                 for (var c = 0; c < cuts.length; c++) {
@@ -476,14 +492,28 @@ class TextTool extends BaseTool {
                         break;
                     }
                 }
-                if (!inBridge) {
-                    filtered.push(pts[p]);
-                }
+                flags.push(inBridge);
+                if (inBridge) anyBridge = true;
             }
 
-            if (filtered.length >= 3) {
-                result.push(filtered);
+            if (!anyBridge) { result.push(pts); continue; }
+            var nP = pts.length;
+            var start = -1;
+            for (var p = 0; p < nP; p++) {
+                if (flags[p] && !flags[(p + 1) % nP]) { start = (p + 1) % nP; break; }
             }
+            if (start < 0) continue; // komplett im Brückenbereich
+            var run = [];
+            for (var q = 0; q < nP; q++) {
+                var idx = (start + q) % nP;
+                if (!flags[idx]) {
+                    run.push(pts[idx]);
+                } else if (run.length) {
+                    if (run.length >= 2) { run.open = true; result.push(run); }
+                    run = [];
+                }
+            }
+            if (run.length >= 2) { run.open = true; result.push(run); }
         }
 
         console.log('[TextTool V1.2] Stencil: ' + bridgeCuts.length + ' Brücken bei ' +
@@ -659,7 +689,7 @@ class TextTool extends BaseTool {
             this.manager.addEntity({
                 type: 'POLYLINE',
                 points: shifted,
-                closed: !this.stencil, // Stencil-Konturen sind offen (Brücken)
+                closed: !contour.open, // nur Konturen mit Brückenlücke sind offen
                 sourceText: this.text,
                 sourceFont: TextTool._fontName
             });
@@ -699,6 +729,19 @@ class TextTool extends BaseTool {
      * @param {Object} [options] - { rotation: 0, align: 'left'|'center'|'right' }
      * @returns {Array|null} Array von {type, points, isClosed, sourceText} oder null
      */
+    /** Em-Size so wählen, dass die Versalhöhe der angegebenen Höhe entspricht. */
+    static _fontSizeForCapHeight(font, height) {
+        let cap = font.tables && font.tables.os2 && font.tables.os2.sCapHeight;
+        if (!cap) {
+            try {
+                const bb = font.charToGlyph('H').getBoundingBox();
+                cap = bb.y2 - bb.y1;
+            } catch (e) { cap = 0; }
+        }
+        if (!cap || cap <= 0) return height;
+        return height * font.unitsPerEm / cap;
+    }
+
     static textToContours(text, x, y, height, options = {}) {
         if (!TextTool._loadedFont) return null;
         if (!text || height <= 0) return null;
@@ -707,16 +750,17 @@ class TextTool extends BaseTool {
         const align = options.align || 'left';
         const rotation = (options.rotation || 0) * Math.PI / 180;
 
+        const fontSize = TextTool._fontSizeForCapHeight(font, height);
         // Textbreite für Alignment berechnen
         let xOffset = 0;
         if (align === 'center' || align === 'right') {
-            const totalWidth = font.getAdvanceWidth(text, height);
+            const totalWidth = font.getAdvanceWidth(text, fontSize);
             if (align === 'center') xOffset = -totalWidth / 2;
             else xOffset = -totalWidth;
         }
 
         // opentype.js Pfad generieren (Baseline bei y=0)
-        const path = font.getPath(text, xOffset, 0, height);
+        const path = font.getPath(text, xOffset, 0, fontSize);
 
         // Bezier → Polylinien (via Instanz-Methoden ohne Constructor)
         const helper = Object.create(TextTool.prototype);

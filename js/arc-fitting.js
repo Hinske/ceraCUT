@@ -1,5 +1,5 @@
 /**
- * CeraCUT V3.2 - Arc Fitting Module
+ * CeraCUT V3.3 - Arc Fitting Module
  * Konvertiert Splines/Polylines zu Bögen und Linien
  *
  * Algorithmen:
@@ -12,7 +12,7 @@
  *       (Schriften) 100+ einzelne 0.1–0.15mm G01-Blöcke → Sinumerik "Bahnkomponente = Null".
  *       Neu: else-Zweig sucht weitesten Punkt innerhalb tolerance und erzeugt EINEN langen G01.
  *
- * Last Modified: 2026-06-29
+ * Last Modified: 2026-11-04
  */
 
 const ArcFitting = {
@@ -351,14 +351,14 @@ const ArcFitting = {
   },
 
   /**
-   * Senkrechter Abstand von Punkt p zur Strecke a→b
+   * Senkrechter Abstand von Punkt p zur Geraden durch a,b
    */
   _distToLine(p, a, b) {
     const dx = b.x - a.x, dy = b.y - a.y;
     const lenSq = dx * dx + dy * dy;
     if (lenSq < 1e-10) return Math.hypot(p.x - a.x, p.y - a.y);
-    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
-    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+    // Abstand zur unendlichen Geraden (kein Klemmen auf das Segment)
+    return Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / Math.sqrt(lenSq);
   },
 
   /**
@@ -673,6 +673,20 @@ const ArcFittingUtils = {
   /**
    * Konvertiert einen Bogen zu Punkten
    */
+  /**
+   * Winkelspanne (>0) eines Bogens in Richtung arc.clockwise.
+   * Start == Ende (Vollkreis) ergibt 2π.
+   */
+  _arcSpan(arc) {
+    let span = arc.clockwise ? arc.startAngle - arc.endAngle : arc.endAngle - arc.startAngle;
+    while (span < 0) span += 2 * Math.PI;
+    if (span < 1e-9 && arc.start && arc.end &&
+        Math.hypot(arc.end.x - arc.start.x, arc.end.y - arc.start.y) < 1e-6) {
+      span = 2 * Math.PI;
+    }
+    return span;
+  },
+
   _arcToPoints(arc, numPoints) {
     if (!arc.center) return [arc.start, arc.end];
 
@@ -680,15 +694,7 @@ const ArcFittingUtils = {
     let startAngle = arc.startAngle;
     let endAngle = arc.endAngle;
 
-    // Winkelspanne berechnen
-    let span;
-    if (arc.clockwise) {
-      span = startAngle - endAngle;
-      if (span < 0) span += 2 * Math.PI;
-    } else {
-      span = endAngle - startAngle;
-      if (span < 0) span += 2 * Math.PI;
-    }
+    const span = this._arcSpan(arc);
 
     for (let i = 0; i <= numPoints; i++) {
       const t = i / numPoints;
@@ -752,15 +758,7 @@ const ArcFittingUtils = {
       if (seg.type === 'line') {
         totalLength += Math.hypot(seg.end.x - seg.start.x, seg.end.y - seg.start.y);
       } else if (seg.radius) {
-        // Bogenlänge: Richtung (CW/CCW) berücksichtigen
-        let span = Math.abs(seg.endAngle - seg.startAngle);
-        if (seg.clockwise) {
-          // CW: span > PI bedeutet Major-Arc → auf Minor-Arc korrigieren
-          if (span > Math.PI) span = 2 * Math.PI - span;
-        } else {
-          // CCW: span < PI bedeutet Math.abs hat falschen Ast gewählt → korrigieren
-          if (span < Math.PI) span = 2 * Math.PI - span;
-        }
+        const span = this._arcSpan(seg);
         totalLength += span * seg.radius;
       }
     }

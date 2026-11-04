@@ -1,5 +1,5 @@
 /**
- * CeraCUT DXF Writer V1.15
+ * CeraCUT DXF Writer V1.16
  * V1.15: R12-Symbolnamen-Sanitisierung — Layernamen mit Leerzeichen/Sonderzeichen
  *        (z.B. "Layer 1") sind in AC1009 unzulaessig und liessen AutoCAD 2017 beim
  *        Import abstuerzen (FliesenMeyer_Logo_Entwurf6.dxf). Namen werden jetzt auf
@@ -342,7 +342,8 @@ class DXFWriter {
         const pCenterX = (pb.minX + pb.maxX) / 2, pCenterY = (pb.minY + pb.maxY) / 2;
         const rCenterX = (rb.minX + rb.maxX) / 2, rCenterY = (rb.minY + rb.maxY) / 2;
         const diag = Math.hypot(pb.maxX - pb.minX, pb.maxY - pb.minY);
-        const tolerance = Math.max(5, diag);
+        // Cache ist veraltet, wenn das Zentrum merklich vom BBox-Zentrum der Punkte abweicht
+        const tolerance = Math.max(0.05, diag * 0.02);
         return Math.hypot(pCenterX - rCenterX, pCenterY - rCenterY) > tolerance;
     }
 

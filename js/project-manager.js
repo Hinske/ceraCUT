@@ -1,5 +1,5 @@
 /**
- * ProjectManager V1.0
+ * ProjectManager V1.1
  * Workspace-Verwaltung mit FSAPI
  *
  * Verwaltet einen lokalen Arbeitsordner als "Workspace":
@@ -274,7 +274,9 @@ class ProjectManager {
         if (!this.app.contours || this.app.contours.length === 0) return;
         if (!this.app.isDirty) return;
 
-        const baseName = this.app.loadedFileName || 'zeichnung';
+        // Unbenannte Tabs: eigene Sicherungsdatei pro Dokument, kein gegenseitiges Überschreiben
+        const docId = this.app.documentManager?.activeId;
+        const baseName = this.app.loadedFileName || (docId ? `zeichnung_${String(docId).replace(/[^\w-]/g, '')}` : 'zeichnung');
         const bakName = baseName.replace(/\.dxf$/i, '') + '.bak.dxf';
 
         try {

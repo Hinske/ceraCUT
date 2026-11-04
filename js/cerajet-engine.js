@@ -1,5 +1,5 @@
 /**
- * CeraJet Engine V1.0 — Technologie-Berechnung für Wasserstrahlschneiden
+ * CeraJet Engine V1.1 — Technologie-Berechnung für Wasserstrahlschneiden
  *
  * Reine Berechnungslogik, kein DOM. Liefert Vorschübe, Anschussparameter
  * und R-Parameter für den Sinumerik 840D Postprozessor.
@@ -9,7 +9,7 @@
  *
  * Referenzbedingungen: 10mm, 2900bar, 0.25W/0.80A, 200 g/min
  *
- * Last Modified: 2026-02-17
+ * Last Modified: 2026-11-04
  */
 
 class CeraJetEngine {
@@ -133,9 +133,11 @@ class CeraJetEngine {
      *   Stahl(AKZ=170)=4.3s, Granit(91)=1.0s, Alu(300)=2.9s, Edst(100)=2.4s @ 10mm
      */
     static calcPierceTime(akz, h, refQ4) {
-        const base = 2.0 * Math.pow(h / 10, 1.6);
-        const matFactor = Math.pow(100 / Math.max(refQ4, 10), 0.5);
-        return Math.max(0.3, base * matFactor);
+        // Log-Regression über die 4 Kalibrierpunkte (h=10): t = 2.14 * akz^0.576 * refQ4^-0.545
+        // (Abweichung <= ~15 %: Stahl 3.7 s, Granit 0.96 s, Alu 3.1 s, Edst 2.7 s).
+        const a = Math.max(akz || 100, 10);
+        const base = 2.14 * Math.pow(a, 0.576) * Math.pow(Math.max(refQ4, 10), -0.545);
+        return Math.max(0.3, base * Math.pow(h / 10, 1.6));
     }
 
     /**

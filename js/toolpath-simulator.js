@@ -1,5 +1,5 @@
 /**
- * CeraCUT Toolpath Simulator V1.3
+ * CeraCUT Toolpath Simulator V1.4
  * Simulation und Verifikation des Schneidpfads vor dem Export.
  *
  * Erkennt: Rapid-Moves durch Material, Lead-In/Out-Kollisionen,
@@ -23,8 +23,9 @@
  *   (2) worldToCanvas-Formel korrigiert (entspricht jetzt renderer.worldToScreen).
  *   (3) options-Parameter war Number statt Object — wird jetzt defensiv gehandhabt.
  *
- * Last Modified: 2026-06-29
- * Build: 20260629-rapidfix
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.4: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)629-rapidfix
  * Version: V1.3
  */
 
@@ -700,7 +701,7 @@ const ToolpathSimulator = {
     _getFeedRate(contour, technology) {
         if (technology?.feeds) {
             const qi = (contour.quality ?? 2);
-            const idx = Math.max(0, Math.min(4, qi));
+            const idx = Math.max(0, Math.min(4, qi - 1));  // Qualität 1-basiert
             return technology.feeds[idx] || technology.feeds[3] || 100;
         }
 
@@ -826,8 +827,13 @@ const ToolpathSimulator = {
             histCtx.stroke();
         };
 
-        const drawFrame = () => {
+        let lastFrameTs = null;
+        const drawFrame = (ts) => {
             if (!anim.running) return;
+            const now = (typeof ts === 'number') ? ts : performance.now();
+            // Gemessene Framezeit (clamp gegen Tab-Pausen); erster Frame: 60 fps annehmen
+            const frameMs = lastFrameTs === null ? 1000 / 60 : Math.min(100, Math.max(0, now - lastFrameTs));
+            lastFrameTs = now;
             if (anim.paused) {
                 anim.rafId = requestAnimationFrame(drawFrame);
                 return;
@@ -840,7 +846,7 @@ const ToolpathSimulator = {
                 return;
             }
 
-            const dt = (1000 / 60) * anim.speed;
+            const dt = frameMs * anim.speed;
             const segLength = seg.length || 1;
             const stepMM = (dt / 1000) * (seg.speed / 60);
             anim.segmentProgress += stepMM / segLength;

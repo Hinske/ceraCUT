@@ -1,5 +1,5 @@
 /**
- * CeraCUT/CeraCUT Sinumerik 840D Postprozessor V1.8
+ * CeraCUT/CeraCUT Sinumerik 840D Postprozessor V2.5
  *
  * Erzeugt CNC-Code im MPF-Format für Sinumerik 840D Steuerungen.
  * Format-Vorlage: 7 echte CNC-Referenzdateien (KERNKREIS, ERBEN, SCHWEDEN, etc.)
@@ -423,11 +423,28 @@ class SinumerikPostprocessor {
         const piercePoint = leadIn?.piercingPoint || pts[0];
         const entryPoint = leadIn?.entryPoint || pts[0];
 
+        // Lead-In-Segmente vorab berechnen: G41/G42 darf nur im Linearsatz angewählt werden.
+        const hasLeadIn = !!(leadIn && leadIn.points && leadIn.points.length >= 2);
+        const leadSegments = hasLeadIn ? this._processLeadPath(leadIn) : [];
+        let leadTangentPre = null;   // kurzer G01-Tangentensatz vor Lead-In-Bogen
+        let g00Pt = piercePoint;
+        if (hasLeadIn && leadSegments.length && leadSegments[0].type === 'arc') {
+            const sx = +this._tx(piercePoint.x), sy = +this._ty(piercePoint.y);
+            const t = this._arcTangentAt(sx, sy, sx + +this._fc(leadSegments[0].i), sy + +this._fc(leadSegments[0].j), leadSegments[0].clockwise);
+            if (t) {
+                // Anstich um TANGENT_EXT entgegen der Bogenrichtung nach hinten verlegt;
+                // Lead-In wird dadurch linear verlängert, Bogen/Kontur bleiben unverändert.
+                g00Pt = { x: piercePoint.x - t.x * this._TANGENT_EXT, y: piercePoint.y - t.y * this._TANGENT_EXT };
+                leadTangentPre = { x: piercePoint.x, y: piercePoint.y };
+                this._warnings.push(`Kontur ${contourNum}: Lead-In beginnt mit Bogen — ${this._TANGENT_EXT} mm Tangenten-Linearsatz für G41/G42-Anwahl vorgeschaltet`);
+            }
+        }
+
         // G00: Eilgang zum Anstichpunkt
-        lines.push(`N${this._lineNum++} G00 X${this._tx(piercePoint.x)} Y${this._ty(piercePoint.y)}`);
+        lines.push(`N${this._lineNum++} G00 X${this._tx(g00Pt.x)} Y${this._ty(g00Pt.y)}`);
         // V2.1: curX/curY verfolgen für CR=-Berechnung
-        let curX = +this._tx(piercePoint.x);
-        let curY = +this._ty(piercePoint.y);
+        let curX = +this._tx(g00Pt.x);
+        let curY = +this._ty(g00Pt.y);
 
         // Schneidreihe (Qualität)
         const quality = contour.quality || 2;
@@ -468,18 +485,22 @@ class SinumerikPostprocessor {
         const speedFactor = this._getSpeedFactor(contour);
         const hasSpeedRamp = speedFactor !== null;
 
-        // Lead-In Bewegung mit Kerf-Anwahl
-        if (leadIn && leadIn.points && leadIn.points.length >= 2) {
-            if (hasSpeedRamp) {
-                lines.push(`N${this._lineNum++} VAKT=${this._getEckenVorschubParam(quality)}+${speedFactor.toFixed(2)}*(${this._getNormalVorschubParam(quality)}-${this._getEckenVorschubParam(quality)})`);
-            }
+        // VAKT immer setzen (auch im Fallback ohne Lead-In), sonst F=VAKT undefiniert
+        if (hasSpeedRamp) {
+            lines.push(`N${this._lineNum++} VAKT=${this._getEckenVorschubParam(quality)}+${speedFactor.toFixed(2)}*(${this._getNormalVorschubParam(quality)}-${this._getEckenVorschubParam(quality)})`);
+        }
 
-            // Lead-In Segmente per Arc-Fitting oder direkt
-            const leadSegments = this._processLeadPath(leadIn);
+        // Lead-In Bewegung mit Kerf-Anwahl
+        if (hasLeadIn && leadSegments.length) {
+            if (leadTangentPre) {
+                const feedStr = hasSpeedRamp ? 'F=VAKT FLIN H1' : `F=${this._getEckenVorschubParam(quality)} FLIN H1`;
+                lines.push(`N${this._lineNum++} ${kerfCode} G01 X${this._tx(leadTangentPre.x)} Y${this._ty(leadTangentPre.y)} ${feedStr}`);
+                curX = +this._tx(leadTangentPre.x); curY = +this._ty(leadTangentPre.y);
+            }
 
             for (let i = 0; i < leadSegments.length; i++) {
                 const seg = leadSegments[i];
-                const isFirst = (i === 0);
+                const isFirst = (i === 0) && !leadTangentPre;
 
                 if (seg.type === 'line') {
                     if (isFirst) {
@@ -584,43 +605,46 @@ class SinumerikPostprocessor {
         }
 
         // ── Lead-Out + Kerf abwählen ──
+        // G40 nur im Linearsatz (Sinumerik 10775/10776); kein Nullweg-Satz (Alarm "Bahnkomponente = Null").
         const leadOut = contour.getLeadOutPath?.();
-        if (leadOut?.points?.length >= 2) {
-            const leadOutSegments = this._processLeadPath(leadOut);
-            if (!leadOutSegments.length) {
-                // Fallback: Kerf abwählen am letzten Konturpunkt
-                const fallbackPt = overcut?.endPoint || pts[pts.length - 1];
-                if (fallbackPt) lines.push(`N${this._lineNum++} G40 G01 X${this._tx(fallbackPt.x)} Y${this._ty(fallbackPt.y)}`);
-            } else {
-            const lastSeg = leadOutSegments[leadOutSegments.length - 1];
-
-            for (let i = 0; i < leadOutSegments.length - 1; i++) {
-                const seg = leadOutSegments[i];
+        const leadOutSegments = (leadOut?.points?.length >= 2) ? this._processLeadPath(leadOut) : [];
+        if (leadOutSegments.length) {
+            const emitSeg = (seg, prefix) => {
                 if (seg.type === 'line') {
-                    lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
+                    lines.push(`N${this._lineNum++} ${prefix}G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}`);
                     curX = +this._tx(seg.x); curY = +this._ty(seg.y);
                 } else {
                     const arcCmd = seg.clockwise ? 'G02' : 'G03';
                     const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
                     const adj = this._adjustArcIJ(curX, curY, +this._fc(seg.i), +this._fc(seg.j), endX, endY);
-                    lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}`);
+                    lines.push(`N${this._lineNum++} ${prefix}${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}`);
                     curX = endX; curY = endY;
                 }
-            }
-
-            // Letztes Segment: G40 (Kerf abwählen)
+            };
+            const lastSeg = leadOutSegments[leadOutSegments.length - 1];
+            for (let i = 0; i < leadOutSegments.length - 1; i++) emitSeg(leadOutSegments[i], '');
             if (lastSeg.type === 'line') {
-                lines.push(`N${this._lineNum++} G40 G01 X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)}`);
+                emitSeg(lastSeg, 'G40 ');
             } else {
-                const arcCmd = lastSeg.clockwise ? 'G02' : 'G03';
+                // Bogen als letzter Satz: Bogen normal fahren, danach kurzer Tangenten-Linearsatz mit G40
+                const bx = curX, by = curY;
                 const endX = +this._tx(lastSeg.x), endY = +this._ty(lastSeg.y);
-                const adj = this._adjustArcIJ(curX, curY, +this._fc(lastSeg.i), +this._fc(lastSeg.j), endX, endY);
-                lines.push(`N${this._lineNum++} G40 ${arcCmd} X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}`);
+                const adj = this._adjustArcIJ(bx, by, +this._fc(lastSeg.i), +this._fc(lastSeg.j), endX, endY);
+                emitSeg(lastSeg, '');
+                const t = this._arcTangentAt(endX, endY, bx + adj.i, by + adj.j, lastSeg.clockwise);
+                if (t) {
+                    const ex = endX + t.x * this._TANGENT_EXT, ey = endY + t.y * this._TANGENT_EXT;
+                    lines.push(`N${this._lineNum++} G40 G01 X${this._fc(ex)} Y${this._fc(ey)}`);
+                    curX = ex; curY = ey;
+                    this._warnings.push(`Kontur ${contourNum}: Lead-Out endet mit Bogen — ${this._TANGENT_EXT} mm Tangenten-Linearsatz für G40-Abwahl angehängt`);
+                } else {
+                    lines.push(`N${this._lineNum++} G40 G01 X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)}`);
+                }
             }
-            } // Ende: leadOutSegments.length > 0
         } else {
+            // Fallback ohne Lead-Out: G40 in kurzem Tangentensatz in Konturrichtung (kein Nullweg)
             const lastPt = overcut?.endPoint || (pts.length > 0 ? pts[pts.length - 1] : null);
-            if (lastPt) lines.push(`N${this._lineNum++} G40 G01 X${this._tx(lastPt.x)} Y${this._ty(lastPt.y)}`);
+            if (lastPt) this._emitG40Tangent(lines, lastPt, pts, curX, curY);
         }
 
         // L205: Jet-Off
@@ -667,47 +691,54 @@ class SinumerikPostprocessor {
         const eckenParam = this._getEckenVorschubParam(quality);
         const normalParam = this._getNormalVorschubParam(quality);
 
-        const segments = this._processContourPoints(pts);
+        const minArcRSlit = Math.max((contour.kerfWidth ?? 0.8) * 1.5, 1.0);
+        const segments = this._processContourPoints(pts, minArcRSlit);
 
         if (segments.length === 0) return lines;
 
-        // Erster Punkt: Kerf-Anwahl + Eckengeschwindigkeit
-        const firstSeg = segments[0];
-        lines.push(`N${this._lineNum++} ${kerfCode} G01 X${this._tx(firstSeg.x)} Y${this._ty(firstSeg.y)} F=${eckenParam} FLIN H1`);
-
-        // Zweiter Punkt: Ramp-Up
-        if (segments.length > 1) {
-            const secondSeg = segments[1];
-            lines.push(`N${this._lineNum++} G01 X${this._tx(secondSeg.x)} Y${this._ty(secondSeg.y)} F=${normalParam} FLIN`);
+        // Alle Segmente (Linien UND Bögen) ausgeben. G41/G42 nur im Linearsatz:
+        // beginnt der Slit mit einem Bogen, wird vorab ein kurzer G01-Tangentensatz eingefügt.
+        let slitCurX = +this._tx(startPt.x), slitCurY = +this._ty(startPt.y);
+        const blocks = [];  // { seg, pre? }
+        if (segments[0].type === 'arc') {
+            const s0 = pts[0];
+            const sx = +this._tx(s0.x), sy = +this._ty(s0.y);
+            const t = this._arcTangentAt(sx, sy, sx + +this._fc(segments[0].i), sy + +this._fc(segments[0].j), segments[0].clockwise);
+            if (t) {
+                // G00 wurde bereits auf startPt ausgegeben -> korrigierende Zeile nicht möglich; daher
+                // Tangentensatz von der Startposition bis pts[0] nur wenn Start != pts[0], sonst
+                // Start (G00) nachträglich nach hinten verlegt.
+                const bx = s0.x - t.x * this._TANGENT_EXT, by = s0.y - t.y * this._TANGENT_EXT;
+                const g00Idx = lines.findIndex(l => /^N\d+ G00 /.test(l));
+                if (g00Idx >= 0) {
+                    lines[g00Idx] = lines[g00Idx].replace(/G00 .*/, `G00 X${this._tx(bx)} Y${this._ty(by)}`);
+                    slitCurX = +this._tx(bx); slitCurY = +this._ty(by);
+                    blocks.push({ seg: { type: 'line', x: s0.x, y: s0.y } });
+                    this._warnings.push(`Slit ${contourNum}: Start mit Bogen — ${this._TANGENT_EXT} mm Tangenten-Linearsatz für G41/G42-Anwahl vorgeschaltet`);
+                }
+            }
         }
+        for (const seg of segments) blocks.push({ seg });
 
-        // Slit: curX/curY nach G41 G01 auf firstSeg setzen
-        let slitCurX = +this._tx(firstSeg.x), slitCurY = +this._ty(firstSeg.y);
-        if (segments.length > 1) {
-            slitCurX = +this._tx(segments[1].x);
-            slitCurY = +this._ty(segments[1].y);
-        }
-
-        // Hauptschnitt
-        for (let i = 2; i < segments.length - 1; i++) {
-            const seg = segments[i];
+        const nb = blocks.length;
+        for (let k = 0; k < nb; k++) {
+            const seg = blocks[k].seg;
+            let prefix = '';
+            let suffix = '';
+            if (k === 0) { prefix = `${kerfCode} `; suffix = ` F=${eckenParam} FLIN H1`; }
+            else if (k === 1) suffix = ` F=${normalParam} FLIN`;
+            else if (k === 2) suffix = ' H0';
+            if (k === nb - 1 && nb > 2) suffix = ` F=${eckenParam} FLIN H1`;
             if (seg.type === 'line') {
-                const suffix = (i === 2) ? ' H0' : '';
-                lines.push(`N${this._lineNum++} G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}${suffix}`);
+                lines.push(`N${this._lineNum++} ${prefix}G01 X${this._tx(seg.x)} Y${this._ty(seg.y)}${suffix}`);
                 slitCurX = +this._tx(seg.x); slitCurY = +this._ty(seg.y);
             } else {
                 const arcCmd = seg.clockwise ? 'G02' : 'G03';
                 const endX = +this._tx(seg.x), endY = +this._ty(seg.y);
                 const adj = this._adjustArcIJ(slitCurX, slitCurY, +this._fc(seg.i), +this._fc(seg.j), endX, endY);
-                lines.push(`N${this._lineNum++} ${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}`);
+                lines.push(`N${this._lineNum++} ${prefix}${arcCmd} X${this._tx(seg.x)} Y${this._ty(seg.y)} I${this._fc(adj.i)} J${this._fc(adj.j)}${suffix}`);
                 slitCurX = endX; slitCurY = endY;
             }
-        }
-
-        // Letzter Punkt: Ramp-Down
-        if (segments.length > 2) {
-            const lastSeg = segments[segments.length - 1];
-            lines.push(`N${this._lineNum++} G01 X${this._tx(lastSeg.x)} Y${this._ty(lastSeg.y)}  F=${eckenParam} FLIN H1`);
         }
 
         // L205: Jet-Off
@@ -950,6 +981,43 @@ class SinumerikPostprocessor {
     // ════════════════════════════════════════════════════════════════
     // FORMATIERUNG
     // ════════════════════════════════════════════════════════════════
+
+    /** Länge [mm] der Tangenten-Linearsätze für G41/G42/G40-An-/Abwahl bei Bogen. */
+    get _TANGENT_EXT() { return 1.0; }
+
+    /**
+     * Einheitstangente (Fahrtrichtung) im Punkt (px,py) eines Bogens mit Zentrum (cx,cy).
+     * G03 (CCW): (-ry, rx); G02 (CW): (ry, -rx). null bei Radius ~ 0.
+     */
+    _arcTangentAt(px, py, cx, cy, clockwise) {
+        const rx = px - cx, ry = py - cy;
+        const len = Math.hypot(rx, ry);
+        if (len < 1e-9) return null;
+        return clockwise ? { x: ry / len, y: -rx / len } : { x: -ry / len, y: rx / len };
+    }
+
+    /**
+     * G40-Abwahl ohne Lead-Out: Zielpunkt atPt (Weltkoordinaten). Liegt er auf der aktuellen
+     * Position (Nullweg -> Alarm "Bahnkomponente = Null"), wird ein kurzer Satz in
+     * Konturrichtung (letztes Punktpaar von ptsForDir) gefahren.
+     */
+    _emitG40Tangent(lines, atPt, ptsForDir, curX, curY) {
+        let x = atPt.x, y = atPt.y;
+        const dist = Math.hypot(+this._tx(x) - curX, +this._ty(y) - curY);
+        if (dist < 0.001) {
+            let dir = null;
+            for (let k = ptsForDir.length - 1; k > 0 && !dir; k--) {
+                const dx = ptsForDir[k].x - ptsForDir[k - 1].x, dy = ptsForDir[k].y - ptsForDir[k - 1].y;
+                const l = Math.hypot(dx, dy);
+                if (l > 1e-6) dir = { x: dx / l, y: dy / l };
+            }
+            if (dir) {
+                x += dir.x * this._TANGENT_EXT; y += dir.y * this._TANGENT_EXT;
+                this._warnings.push('Kein Lead-Out: G40-Abwahl in kurzem Satz in Konturrichtung (kein Nullweg-Satz)');
+            }
+        }
+        lines.push(`N${this._lineNum++} G40 G01 X${this._tx(x)} Y${this._ty(y)}`);
+    }
 
     _fc(value) {
         if (value == null || !isFinite(value)) {

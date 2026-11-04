@@ -1,68 +1,74 @@
 /**
- * CeraCUT Build Info V6.75
- * Version: V6.75
- * Last Modified: 2026-07-14 MEZ
- * Build: 20260714-r12namesanitize
+ * CeraCUT Build Info V6.76
+ * Version: V6.76
+ * Last Modified: 2026-11-04 MEZ
+ * Build: 20261104-reviewfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.75',
-    build: '20260714-r12namesanitize',
-    date: '2026-07-14',
+    version: '6.76',
+    build: '20261104-reviewfix',
+    date: '2026-11-04',
     time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '96125f9',
-        date: '2026-07-14 09:36:47 +0200',
-        message: 'fix: R12-Symbolnamen-Sanitisierung — Layername mit Leerzeichen liess AutoCAD beim Import abstuerzen (dxf-writer V1.15, build V6.75)'
+        hash: 'f25c4c8',
+        date: '2026-11-04 20:09:30 +0100',
+        message: 'fix: Komplett-Code-Review 2026-11-04 — Server-Haertung, Datenverlust-, Export-, Import- und Tool-Fixes (V6.76)'
     },
 
     modules: {
-        'dxf-parser':         { version: '3.18', build: '20260625-chainsplinedataloss' },
-        'geometry':           { version: '2.13', build: '20260624-gapfix' },
-        'pipeline':           { version: '3.9', build: '20260624-referencerefresh' },
-        'cam-contour':        { version: '5.21', build: '20260626-r923fix' },
-        'canvas-renderer':    { version: '3.42', build: '20260625-snapcenterfix' },
-        'undo-manager':       { version: '1.3', build: '20260625-deletedcontourguard' },
-        'sinumerik-pp':       { version: '2.4', build: '20260629-arcradiusfix' },
-        'command-line':       { version: '1.5', build: '20260624-polarinput' },
-        'snap-manager':       { version: '1.5', build: '20260625-snapcenterfix' },
-        'geometry-ops':       { version: '2.6', build: '20260624-cadimprovements7' },
-        'drawing-tools':      { version: '2.18', build: '20260625-thickerpreview' },
-        'drawing-tools-ext':  { version: '1.10', build: '20260625-splineclosedring' },
+        'dxf-parser':         { version: '3.19', build: '20261104-reviewfix' },
+        'geometry':           { version: '2.14', build: '20261104-reviewfix' },
+        'pipeline':           { version: '3.10', build: '20261104-reviewfix' },
+        'cam-contour':        { version: '5.22', build: '20261104-reviewfix' },
+        'canvas-renderer':    { version: '3.43', build: '20261104-reviewfix' },
+        'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
+        'sinumerik-pp':       { version: '2.5', build: '20261104-reviewfix' },
+        'command-line':       { version: '1.6', build: '20261104-reviewfix' },
+        'snap-manager':       { version: '1.6', build: '20261104-reviewfix' },
+        'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },
+        'drawing-tools':      { version: '2.19', build: '20261104-reviewfix' },
+        'drawing-tools-ext':  { version: '1.11', build: '20261104-reviewfix' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
-        'layer-manager':      { version: '1.2', build: '20260324-undofix' },
-        'text-tool':          { version: '1.2', build: '20260312-textimport' },
-        'dxf-writer':         { version: '1.15', build: '20260714-r12namesanitize' },
+        'layer-manager':      { version: '1.3', build: '20261104-reviewfix' },
+        'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
+        'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.35', build: '20260630-intarsiaoffsetfix' },
-        'document-manager':   { version: '1.4', build: '20260625-tabswitch-cancel' },
-        'project-manager':    { version: '1.0', build: '20260313-workspace' },
-        'properties-panel':   { version: '1.5', build: '20260316-hatchentity' },
+        'app':                { version: '6.36', build: '20261104-reviewfix' },
+        'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
+        'project-manager':    { version: '1.1', build: '20261104-reviewfix' },
+        'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
         'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
-        'nesting':            { version: '1.1', build: '20260315-bugfix35' },
-        'toolpath-simulator': { version: '1.3', build: '20260629-rapidfix' },
-        'cost-calculator':    { version: '1.2', build: '20260623-bugfixaudit' },
-        'machine-profiles':   { version: '1.1', build: '20260624-userlogin' },
-        'bridge-cutting':     { version: '1.0', build: '20260309' },
-        'quality-zones':      { version: '1.1', build: '20260315-bugfix35' },
-        'cam-tools':          { version: '1.4', build: '20260625-analyzefix' },
-        'advanced-tools':     { version: '1.8', build: '20260625-filletjoin' },
-        'arc-fitting':        { version: '3.2', build: '20260629-collinearmerge' },
-        'measure-tool':       { version: '1.2', build: '20260325-curvcheck' },
-        'dimension-tool':     { version: '2.4', build: '20260326-dimedit' },
-        'dxf-browser':        { version: '1.1', build: '20260624-userlogin' },
-        'server':             { version: '1.6', build: '20260625-slowlorisfix' },
-        'user-store':         { version: '1.0', build: '20260624-userlogin' },
-        'session-store':      { version: '1.0', build: '20260624-userlogin' },
-        'auth-helper':        { version: '1.0', build: '20260624-userlogin' }
+        'nesting':            { version: '1.2', build: '20261104-reviewfix' },
+        'toolpath-simulator': { version: '1.4', build: '20261104-reviewfix' },
+        'cost-calculator':    { version: '1.3', build: '20261104-reviewfix' },
+        'machine-profiles':   { version: '1.2', build: '20261104-reviewfix' },
+        'bridge-cutting':     { version: '1.1', build: '20261104-reviewfix' },
+        'quality-zones':      { version: '1.2', build: '20261104-reviewfix' },
+        'cam-tools':          { version: '1.5', build: '20261104-reviewfix' },
+        'advanced-tools':     { version: '1.9', build: '20261104-reviewfix' },
+        'arc-fitting':        { version: '3.3', build: '20261104-reviewfix' },
+        'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
+        'dimension-tool':     { version: '2.5', build: '20261104-reviewfix' },
+        'dxf-browser':        { version: '1.2', build: '20261104-reviewfix' },
+        'server':             { version: '1.7', build: '20261104-reviewfix' },
+        'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
+        'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
+        'constants': { version: '2.11', build: '20261104-reviewfix' },
+        'image-underlay': { version: '1.1', build: '20261104-reviewfix' },
+        'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
+        'user-store':         { version: '1.1', build: '20261104-reviewfix' },
+        'session-store':      { version: '1.1', build: '20261104-reviewfix' },
+        'auth-helper':        { version: '1.1', build: '20261104-reviewfix' }
     },
 
     changes: [
+        'V6.76: Fix — Komplett-Code-Review 2026-11-04 (91 Funde): Server-Haertung (Static-Blockliste, Cookie/Login/Pfad-Crashes, atomares users.json, Session-Sweep), Strg+S-Handle-Swap, cut()-Tracking, Multi-Material-cutOrder, WRK-Anwahl im Linearsatz, Nesting-Mindestabstand, Qualitaets-Feed-Index, Geometrie/Boolean/Arc-Fitting, Import (SVG/DXF/CNC), Zeichen-/Mess-/Undo-/Snap-Tools. Offen: Multi-Head, kerfFlipped, NEG/POS. Details: tasks/code-review-2026-11-04.md',
         'V6.75: Fix — DXF-Export: R12-Symbolnamen-Sanitisierung (dxf-writer V1.15). ' +
         'FliesenMeyer_Logo_Entwurf6.dxf liess AutoCAD 2017 beim Import weiterhin abstuerzen ' +
         '(acad.err: Unhandled Access Violation, verwaiste .dwl-Locks). Datei-Forensik zeigte: ' +

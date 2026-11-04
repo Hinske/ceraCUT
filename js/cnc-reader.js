@@ -1,5 +1,5 @@
 /**
- * CNCReader V1.2 — Importiert CNC/MPF-Dateien als geometrische Entities
+ * CNCReader V1.3 — Importiert CNC/MPF-Dateien als geometrische Entities
  * IGEMS Kap. 9.2 "NC reader" equivalent
  *
  * Unterstützt: G00/G01 (Linien), G02/G03 (Bögen)
@@ -58,6 +58,7 @@ class CNCReader {
         let posX = 0, posY = 0;   // aktuelle Maschinenposition (ohne zeroPoint)
         let mode = 0;              // 0=Rapid G00, 1=Linear G01, 2=CW G02, 3=CCW G03
         let absMode     = true;    // G90 absolut (default)
+        let unitScale   = 1;       // G20/G70 (Zoll) → 25.4
         let kerfActive  = false;   // V1.2: true zwischen G41/G42 und G40
         let lineNum     = 0;
         const stats  = { inputLines: 0, moves: 0, arcs: 0, rapids: 0, skipped: 0 };
@@ -85,9 +86,10 @@ class CNCReader {
 
             // R-Wert: nur wenn < 500 (sonst Sinumerik R-Parameter!)
             let rVal = null;
-            const rMatch = line.match(/(?<![A-Z])R([+-]?[\d.]+)/);
+            // Sinumerik: CR=… (Radius), R1=… (Parameter-Zuweisung) wird ignoriert
+            const rMatch = line.match(/(?:CR\s*=\s*|(?<![A-Z])R)([+-]?[\d.]+)(?![\d.]|\s*=)/);
             if (rMatch) {
-                const rv = parseFloat(rMatch[1]);
+                const rv = parseFloat(rMatch[1]) * unitScale;
                 if (rv < 500) rVal = rv;
             }
 
@@ -105,6 +107,13 @@ class CNCReader {
                 console.log(`[CNCReader V1.2] L${lineNum}: Lead-out erkannt (G40)`);
             }
 
+            // Einheiten: G20/G70 = Zoll, G21/G71 = mm
+            if (gCodes.includes(20) || gCodes.includes(70)) {
+                if (unitScale !== 25.4) warnings.push(`L${lineNum}: Zoll-Modus (G${gCodes.includes(20)?'20':'70'}) → Koordinaten ×25.4 nach mm`);
+                unitScale = 25.4;
+            }
+            if (gCodes.includes(21) || gCodes.includes(71)) unitScale = 1;
+
             // Moduswechsel verarbeiten
             if (gCodes.includes(90)) absMode = true;
             if (gCodes.includes(91)) absMode = false;
@@ -116,20 +125,25 @@ class CNCReader {
             }
 
             // Keine Koordinaten → nächste Zeile
-            if (!xMatch && !yMatch) continue;
+            // (Vollkreis "G2 I-10" ohne X/Y ist erlaubt)
+            const isArcMode = (mode === 2 || mode === 3);
+            const fullCircle = isArcMode && !xMatch && !yMatch && (iMatch || jMatch);
+            if (!xMatch && !yMatch && !fullCircle) continue;
 
             // Zielposition berechnen
             let toX, toY;
             if (absMode) {
-                toX = xMatch ? parseFloat(xMatch[1]) : posX;
-                toY = yMatch ? parseFloat(yMatch[1]) : posY;
+                toX = xMatch ? parseFloat(xMatch[1]) * unitScale : posX;
+                toY = yMatch ? parseFloat(yMatch[1]) * unitScale : posY;
             } else {
-                toX = posX + (xMatch ? parseFloat(xMatch[1]) : 0);
-                toY = posY + (yMatch ? parseFloat(yMatch[1]) : 0);
+                toX = posX + (xMatch ? parseFloat(xMatch[1]) * unitScale : 0);
+                toY = posY + (yMatch ? parseFloat(yMatch[1]) * unitScale : 0);
             }
 
             // Nullbewegungen überspringen
-            if (Math.abs(toX - posX) < 1e-8 && Math.abs(toY - posY) < 1e-8) {
+            // (Ausnahme: Vollkreis G2/G3 mit Start=Ziel und I/J)
+            if (Math.abs(toX - posX) < 1e-8 && Math.abs(toY - posY) < 1e-8
+                && !(isArcMode && (iMatch || jMatch))) {
                 posX = toX; posY = toY;
                 continue;
             }
@@ -173,8 +187,8 @@ class CNCReader {
                 const arcEnt = this._parseArc(
                     { x: fromWX, y: fromWY },
                     { x: toWX,   y: toWY   },
-                    iMatch ? parseFloat(iMatch[1]) : null,
-                    jMatch ? parseFloat(jMatch[1]) : null,
+                    iMatch ? parseFloat(iMatch[1]) * unitScale : null,
+                    jMatch ? parseFloat(jMatch[1]) * unitScale : null,
                     rVal,
                     mode === 2 ? 'CW' : 'CCW',
                     warnings,

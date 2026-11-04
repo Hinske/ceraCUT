@@ -1,5 +1,5 @@
 /**
- * CeraCUT Bridge Cutting V1.0 — Micro-Joint / Steg-Modul
+ * CeraCUT Bridge Cutting V1.1 — Micro-Joint / Steg-Modul
  *
  * Verwaltet Bridges (Stege/Micro-Joints) zwischen Teilen und Restmaterial.
  * Bridges halten Teile während des Schneidvorgangs in Position.
@@ -13,8 +13,9 @@
  *
  * Speichert Bridges auf contour.bridges = [{position, width, segIndex, param}]
  *
- * Last Modified: 2026-03-09 MEZ
- * Build: 20260309
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.1: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
 const BridgeCutting = (() => {
@@ -287,15 +288,29 @@ const BridgeCutting = (() => {
         if (totalLength < 1e-6) return [];
 
         // Bridge-Intervalle berechnen: [startDist, endDist]
-        const intervals = bridges.map(b => {
+        const closedPath = Math.hypot(points[0].x - points[points.length - 1].x,
+                                      points[0].y - points[points.length - 1].y) < 0.01;
+        const intervals = [];
+        for (const b of bridges) {
             const halfW = b.width / 2;
-            let start = b.position - halfW;
-            let end = b.position + halfW;
-            // Clamp auf [0, totalLength]
-            start = Math.max(0, start);
-            end = Math.min(totalLength, end);
-            return { start, end };
-        }).sort((a, b) => a.start - b.start);
+            const start = b.position - halfW;
+            const end = b.position + halfW;
+            if (closedPath && (end - start) < totalLength) {
+                // Geschlossene Kontur: Intervalle ueber Start/Ende hinweg wrappen
+                if (start < 0) {
+                    intervals.push({ start: start + totalLength, end: totalLength });
+                    intervals.push({ start: 0, end: Math.min(totalLength, end) });
+                    continue;
+                }
+                if (end > totalLength) {
+                    intervals.push({ start: Math.max(0, start), end: totalLength });
+                    intervals.push({ start: 0, end: end - totalLength });
+                    continue;
+                }
+            }
+            intervals.push({ start: Math.max(0, start), end: Math.min(totalLength, end) });
+        }
+        intervals.sort((a, b) => a.start - b.start);
 
         // Intervalle zusammenführen (falls überlappend)
         const merged = [];
@@ -414,6 +429,7 @@ const BridgeCutting = (() => {
      *
      * @param {CamContour} contour - Kontur mit Bridges
      * @param {object} [options] - Optionale Parameter
+     * @param {number} [options.cutZ=0] - Schnitt-Z-Hoehe (Maschinenprofil)
      * @param {number} [options.retractHeight=5.0] - Z-Höhe für Rückzug über Bridge (mm)
      * @param {number} [options.feedRate=1000] - Vorschub für Schnitt (mm/min)
      * @returns {Array<{type: string, gcode: string[], points?: Array}>} G-Code-Segmente
@@ -421,6 +437,7 @@ const BridgeCutting = (() => {
     function generateBridgeGCode(contour, options = {}) {
         const retractHeight = options.retractHeight ?? 5.0;
         const feedRate = options.feedRate ?? 1000;
+        const cutZ = options.cutZ ?? 0;
 
         const segments = getBridgedPath(contour);
         if (segments.length === 0) return [];
@@ -436,7 +453,7 @@ const BridgeCutting = (() => {
                 if (i > 0 && segments[i - 1].type === 'skip') {
                     // Nach Bridge: Absenken und Piercing
                     lines.push(`; --- Bridge-Ende: Absenken ---`);
-                    lines.push(`G01 Z0 F${feedRate}`);
+                    lines.push(`G01 Z${cutZ.toFixed(1)} F${feedRate}`);
                 }
                 for (let j = 1; j < seg.points.length; j++) {
                     const p = seg.points[j];

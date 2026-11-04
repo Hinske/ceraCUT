@@ -1,5 +1,5 @@
 /**
- * CeraCUT Snap Manager V1.5
+ * CeraCUT Snap Manager V1.6
  * V1.5: Fix — contour._center/_radius (DXF-Parser Unterstrich-Properties) unterstützt;
  *        Endpoint-Spam für Kreiskonturen unterdrückt (AutoCAD-konform: nur Center+Quadrant);
  *        invalidatePointsCache() Methode für externe Cache-Invalidierung (nach Grip-Editing etc.)
@@ -12,8 +12,9 @@
  * - Grid-Snap
  * - Visuelle Snap-Marker (verschiedene Symbole pro Typ)
  * Created: 2026-02-13 MEZ
- * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-snapcenterfix
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.6: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
 class SnapManager {
@@ -92,6 +93,31 @@ class SnapManager {
     }
 
     /** V1.5: Punkt-Cache invalidieren (nach Grip-Editing, Kontur-Mutation etc.) */
+    /** LayerManager (explizit gesetzt oder global) */
+    _getLayerManager() {
+        return this.layerManager || (typeof window !== 'undefined' ? window.app?.layerManager : null) || null;
+    }
+
+    /** Darf auf Geometrie dieses Layers gesnappt werden? (sichtbar und nicht gesperrt) */
+    _isLayerSnappable(layerName) {
+        const lm = this._getLayerManager();
+        const ld = lm?.layers?.get?.(layerName || '0');
+        return !(ld && (!ld.visible || ld.locked));
+    }
+
+    /** Caches verwerfen, wenn sich Sichtbarkeit/Sperre von Layern geändert hat. */
+    _checkLayerState() {
+        const lm = this._getLayerManager();
+        if (!lm?.layers) return;
+        let sig = '';
+        for (const [n, l] of lm.layers) sig += n + (l.visible ? 'v' : '-') + (l.locked ? 'l' : '-') + '|';
+        if (sig !== this._layerSig) {
+            this._layerSig = sig;
+            this._pointsCache = null;
+            this._segmentCache = null;
+        }
+    }
+
     invalidatePointsCache() {
         this._pointsCache = null;
         this._segmentCache = null;
@@ -124,6 +150,7 @@ class SnapManager {
         // Alle Punkt-Quellen sammeln (V1.1: inkl. arcs-Daten)
         let allPoints;
         try {
+            this._checkLayerState();
             if (!this._pointsCache) this._pointsCache = this._collectAllPoints();
             allPoints = this._pointsCache;
         } catch (err) {
@@ -492,6 +519,7 @@ class SnapManager {
         for (const contour of this._contours) {
             const pts = contour.points;
             if (!pts || pts.length < 2) continue;
+            if (!this._isLayerSnappable(contour.layer)) continue; // unsichtbar/gesperrt
 
             const endpoints = [];
             const midpoints = [];
@@ -673,12 +701,14 @@ class SnapManager {
      * V5.0: Gecachte Segmente mit Kontur-ID für Skip-Logik
      */
     _getSegmentCache() {
+        this._checkLayerState();
         if (this._segmentCache) return this._segmentCache;
 
         const allSegments = [];
         for (let ci = 0; ci < this._contours.length; ci++) {
             const pts = this._contours[ci].points;
             if (!pts || pts.length < 2) continue;
+            if (!this._isLayerSnappable(this._contours[ci].layer)) continue;
             for (let i = 0; i < pts.length - 1; i++) {
                 allSegments.push({ p1: pts[i], p2: pts[i + 1], cid: ci, sid: i });
             }
@@ -950,9 +980,9 @@ class SnapManager {
         const baseAngle = Math.atan2(dy, dx); // Winkel Center → P
 
         // Zwei Tangentenpunkte: links und rechts der Verbindungslinie
-        // Die Tangentenpunkte liegen auf dem Kreis bei (baseAngle + π ± α)
+        // Die Tangentenpunkte liegen auf dem Kreis bei (baseAngle ± α)
         const results = [];
-        const angles = [baseAngle + Math.PI + alpha, baseAngle + Math.PI - alpha];
+        const angles = [baseAngle + alpha, baseAngle - alpha];
 
         for (const a of angles) {
             const tx = cx + r * Math.cos(a);
@@ -1058,8 +1088,11 @@ class SnapManager {
         const cx = mx + sign * d * nx;
         const cy = my + sign * d * ny;
 
-        const startAngle = Math.atan2(p1.y - cy, p1.x - cx);
-        const endAngle = Math.atan2(p2.y - cy, p2.x - cx);
+        let startAngle = Math.atan2(p1.y - cy, p1.x - cx);
+        let endAngle = Math.atan2(p2.y - cy, p2.x - cx);
+        // CW-Bogen (bulge < 0): als CCW-Bogen von p2 nach p1 liefern, da
+        // _isAngleInArc immer den CCW-Bereich start→end prüft.
+        if (bulge < 0) { const t = startAngle; startAngle = endAngle; endAngle = t; }
 
         return { cx, cy, r, startAngle, endAngle };
     }

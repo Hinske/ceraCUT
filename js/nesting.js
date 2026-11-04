@@ -1,5 +1,5 @@
 /**
- * CeraCUT Nesting Engine V1.1
+ * CeraCUT Nesting Engine V1.2
  * Automatische Teile-Verschachtelung für Wasserstrahlschneiden
  *
  * Algorithmen:
@@ -8,8 +8,9 @@
  *   - Multi-Sheet Overflow
  *   - Rotationsoptimierung (0°, 90°, 180°, 270° oder benutzerdefiniert)
  *
- * Last Modified: 2026-03-09
- * Build: 20260309
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.2: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * (c) Cerasell GmbH
  */
@@ -525,6 +526,10 @@ const NestingEngine = (() => {
                 if (_polygonsOverlap(partPoints, position, placed.points, placed.position)) {
                     return true;
                 }
+                // Mindestabstand gegen die ECHTE Kontur (BBox allein lässt ~0 mm Steg zu)
+                if (spacing > 0 && _polygonsCloserThan(partPoints, position, placed.points, placed.position, spacing)) {
+                    return true;
+                }
             }
         }
         return false;
@@ -545,6 +550,29 @@ const NestingEngine = (() => {
      * Polygon-Überlappungsprüfung (SAT-basiert für konvexe Approximation)
      * Prüft ob ein Eckpunkt von A in B liegt oder umgekehrt.
      */
+    /** Kleinster Abstand Punkt–Segment */
+    function _distPointSeg(p, a, b) {
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const l2 = dx * dx + dy * dy;
+        let t = l2 > 0 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0;
+        t = Math.max(0, Math.min(1, t));
+        return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+    }
+
+    /** true, wenn der Kantenabstand zweier (nicht überlappender) Polygone < minDist ist */
+    function _polygonsCloserThan(pointsA, posA, pointsB, posB, minDist) {
+        const A = pointsA.map(p => ({ x: p.x + posA.x, y: p.y + posA.y }));
+        const B = pointsB.map(p => ({ x: p.x + posB.x, y: p.y + posB.y }));
+        for (const [P, Q] of [[A, B], [B, A]]) {
+            for (const p of P) {
+                for (let j = 0; j < Q.length; j++) {
+                    if (_distPointSeg(p, Q[j], Q[(j + 1) % Q.length]) < minDist) return true;
+                }
+            }
+        }
+        return false;
+    }
+
     function _polygonsOverlap(pointsA, posA, pointsB, posB) {
         // Punkte an Position verschieben
         const translatedA = pointsA.map(p => ({ x: p.x + posA.x, y: p.y + posA.y }));

@@ -1,7 +1,8 @@
 /**
- * CeraCUT V3.9 - Processing Pipeline
- * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-referencerefresh
+ * CeraCUT V3.10 - Processing Pipeline
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V3.10: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * V3.9: Fix — _analyzeTopology() behandelt die Referenz jetzt IMMER als "transparent"
  *       (egal ob skipReference gesetzt ist), und Lead-Caches werden bei cuttingMode-
@@ -43,7 +44,11 @@ const CeraCutPipeline = {
 
         const camContours = contours.map(c => {
             if (typeof CamContour !== 'undefined' && c instanceof CamContour) {
-                c.kerfWidth = this.kerfWidth;
+                if (c.kerfWidth !== this.kerfWidth) {
+                    c.kerfWidth = this.kerfWidth;
+                    // Kerf-Aenderung -> Kerf-Polylinie und Lead-Caches veraltet
+                    if (typeof ModificationTool !== 'undefined') ModificationTool.invalidateCache(c);
+                }
                 return c;
             }
             if (typeof CamContour !== 'undefined') {
@@ -255,6 +260,12 @@ const CeraCutPipeline = {
         });
 
         let discCount = 0, holeCount = 0;
+
+        // Bei Auto-Erkennung (kein skipReference) entscheidet _detectReference() neu und
+        // korrigiert den Nesting-Level selbst -> vorherige Referenz-Flags hier NICHT
+        // zusaetzlich beruecksichtigen (sonst doppelte Dekrementierung).
+        const honorRefFlags = !!options.skipReference;
+        if (!honorRefFlags) sorted.forEach(c => { c.isReference = false; });
 
         for (let i = 0; i < sorted.length; i++) {
             const contour = sorted[i];
@@ -623,6 +634,12 @@ const CeraCutPipeline = {
 
         const gapReports = this.healingStats?.gapReports || [];
         let healedCount = 0, healableCount = 0, openCount = 0;
+
+        // Reset: wiederholte autoProcess-Laeufe duerfen Eintraege nicht duplizieren
+        for (const c of contours) {
+            if (c && Array.isArray(c.gaps)) c.gaps = [];
+            if (c && Array.isArray(c.healedGaps)) c.healedGaps = [];
+        }
 
         // 1. Geheilte Gaps aus MicroHealing-Reports auf Konturen übertragen
         for (const report of gapReports) {

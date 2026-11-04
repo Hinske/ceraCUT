@@ -3,9 +3,10 @@
  *  CeraCUT / CeraCUT – Undo/Redo Manager (Command Pattern) + Clipboard
  * =========================================================================
  *  Datei:    undo-manager.js
- *  Version:  V1.3
+ *  Version:  V1.4
  *  Erstellt: 2026-02-12
- *  Build:    20260625-deletedcontourguard
+ *  Build:    20261104-reviewfix
+ * V1.4: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  *  V1.3: Fix — DeleteContoursCommand trackt geloeschte Konturen jetzt zusaetzlich per Name
  *        in app.deletedContourNames (execute() fuegt hinzu, undo() entfernt), damit
@@ -188,11 +189,13 @@ class DeleteContoursCommand extends BaseCommand {
 
     undo() {
         // In Originalreihenfolge wieder einfügen
-        for (let i = 0; i < this.contours.length; i++) {
-            const pos = this.positions[i];
-            if (pos >= 0) {
-                this.contourArray.splice(pos, 0, this.contours[i]);
-            }
+        // (aufsteigend nach Originalposition, damit Indizes stimmen)
+        const order = this.positions
+            .map((pos, i) => ({ pos, i }))
+            .filter(o => o.pos >= 0)
+            .sort((a, b) => a.pos - b.pos);
+        for (const { pos, i } of order) {
+            this.contourArray.splice(Math.min(pos, this.contourArray.length), 0, this.contours[i]);
         }
         if (this.app?.deletedContourNames) {
             for (const c of this.contours) {
@@ -450,6 +453,7 @@ class UndoManager {
             if (this._groupCommands) {
                 this._groupCommands = null;
                 this._groupDescription = null;
+                this._groupDepth = 0;
             }
             throw err;
         }
@@ -470,6 +474,22 @@ class UndoManager {
         }
 
         console.debug(`[UndoManager V1.1] Ausgeführt: "${command.description}"`);
+    }
+
+    /**
+     * Bereits ausgeführten Command registrieren (ohne execute() erneut aufzurufen).
+     * Beachtet offene Gruppen, _trimStack und leert den Redo-Stack.
+     * @param {BaseCommand} command
+     */
+    pushExecuted(command) {
+        if (this._groupCommands) {
+            this._groupCommands.push(command);
+            return;
+        }
+        this.undoStack.push(command);
+        this._trimStack();
+        if (this.redoStack.length > 0) this.redoStack.length = 0;
+        this._notifyStateChange();
     }
 
     /**
@@ -524,9 +544,11 @@ class UndoManager {
      */
     beginGroup(description = 'Gruppierte Aktion') {
         if (this._groupCommands) {
-            console.warn('[UndoManager V1.0] Verschachtelte Gruppen nicht unterstützt!');
+            // Verschachtelt: nur Tiefe zählen, innere Gruppe geht in der äußeren auf
+            this._groupDepth = (this._groupDepth || 1) + 1;
             return;
         }
+        this._groupDepth = 1;
         this._groupCommands = [];
         this._groupDescription = description;
     }
@@ -537,6 +559,11 @@ class UndoManager {
             console.warn('[UndoManager V1.0] Kein Gruppen-Modus aktiv!');
             return;
         }
+        if ((this._groupDepth || 1) > 1) {
+            this._groupDepth--;
+            return;
+        }
+        this._groupDepth = 0;
 
         const commands = this._groupCommands;
         const description = this._groupDescription;
@@ -570,6 +597,7 @@ class UndoManager {
         this.undoStack.length = 0;
         this.redoStack.length = 0;
         this._groupCommands = null;
+        this._groupDepth = 0;
         this._notifyStateChange();
         console.debug('[UndoManager V1.0] Historie gelöscht');
     }
@@ -764,7 +792,8 @@ class ClipboardManager {
                 this.app.rebuildCutOrder?.();
                 this.app.renderer?.setContours(this.app.contours);
                 this.app.updateContourPanel?.();
-            }
+            },
+            this.app   // deletedContourNames-Tracking (sonst kehrt Kontur bei Layer-Rerun zurück)
         );
         this.undoManager.execute(deleteCmd);
 

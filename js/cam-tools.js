@@ -1,5 +1,5 @@
 /**
- * CeraCUT CAM-Tools V1.4 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
+ * CeraCUT CAM-Tools V1.5 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
  * 7 Tools für Analyse, Optimierung und Vorbereitung der Schnittgeometrie
  *
  * Tools:
@@ -20,8 +20,9 @@
  *       Shift-Tracking für BoundaryTrim, Redo-Stack-Clearing nach Undo-Push, alle TOOL_TOOLTIPS
  * V1.1: Hit-Test Scaling — Klick-Threshold skaliert mit Zoom-Level
  * Created: 2026-02-17 MEZ
- * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-analyzefix
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.5: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -803,7 +804,7 @@ class PolyJointTool extends BaseTool {
                     contourRef.points = part1;
                     contourRef.isClosed = false;
                     ModificationTool.invalidateCache(contourRef);
-                    const newContour = new CamContour(part2, false);
+                    const newContour = new CamContour(part2, { isClosed: false });
                     newContour.cuttingMode = 'slit';
                     appRef.contours.push(newContour);
                     this._newContour = newContour;
@@ -840,18 +841,24 @@ class PolyJointTool extends BaseTool {
         // A ab Split-Punkt
         for (let i = nearA.segmentIndex + 1; i < ptsA.length; i++) newPoints.push({ x: ptsA[i].x, y: ptsA[i].y });
         for (let i = 1; i <= nearA.segmentIndex; i++) newPoints.push({ x: ptsA[i].x, y: ptsA[i].y });
-        newPoints.push({ x: nearA.point.x, y: nearA.point.y });
+        // Bruecke mit Breite this.width: Hin- und Rueckweg um +/- W/2 quer zur Verbindung versetzt,
+        // damit zwischen beiden ein Steg (Breite W) stehen bleibt.
+        const bdx = nearB.point.x - nearA.point.x, bdy = nearB.point.y - nearA.point.y;
+        const bLen = Math.hypot(bdx, bdy);
+        const hw = (this.width > 0 && bLen > 1e-9) ? this.width / 2 : 0;
+        const ox = hw ? (-bdy / bLen) * hw : 0, oy = hw ? (bdx / bLen) * hw : 0;
+        newPoints.push({ x: nearA.point.x + ox, y: nearA.point.y + oy });
 
         // Brücke A→B
-        newPoints.push({ x: nearB.point.x, y: nearB.point.y });
+        newPoints.push({ x: nearB.point.x + ox, y: nearB.point.y + oy });
 
         // B ab Split-Punkt
         for (let i = nearB.segmentIndex + 1; i < ptsB.length; i++) newPoints.push({ x: ptsB[i].x, y: ptsB[i].y });
         for (let i = 1; i <= nearB.segmentIndex; i++) newPoints.push({ x: ptsB[i].x, y: ptsB[i].y });
-        newPoints.push({ x: nearB.point.x, y: nearB.point.y });
+        newPoints.push({ x: nearB.point.x - ox, y: nearB.point.y - oy });
 
         // Brücke B→A (schließt)
-        newPoints.push({ x: nearA.point.x, y: nearA.point.y });
+        newPoints.push({ x: nearA.point.x - ox, y: nearA.point.y - oy });
 
         // Undo
         const oldPointsA = ptsA.map(p => ({ x: p.x, y: p.y }));
@@ -1141,7 +1148,7 @@ class ConvexHullTool extends ModificationTool {
         const undoMgr = app?.undoManager;
 
         if (app && undoMgr) {
-            const newContour = new CamContour(hullPoints, true);
+            const newContour = new CamContour(hullPoints, { isClosed: true });
             newContour.cuttingMode = 'disc';
 
             const cmd = {

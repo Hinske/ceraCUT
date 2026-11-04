@@ -1,7 +1,8 @@
 /**
- * CeraCUT V6.35 - Main Application
- * Last Modified: 2026-06-30
- * Build: 20260630-intarsiaoffsetfix
+ * CeraCUT V6.36 - Main Application
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
  *        NEG-Aussparung wurde kleiner statt größer — bei gap ≠ 2×kerf passte der Einleger nicht.
@@ -459,7 +460,7 @@ class CeraCutApp {
             if (this.currentStep === 3) {
                 const point = this.currentSnapPoint || worldPoint;
                 this.setOriginFromPoint(point);
-                this.currentStep = 0; // Reset nach Setzen
+                this.currentStep = this._stepBeforeOrigin || 1; // Reset nach Setzen (vorherigen Schritt wiederherstellen)
                 document.getElementById('btn-set-origin-from-snap')?.classList.remove('active');
                 document.getElementById('ct-origin')?.classList.remove('active');
                 this.showToast(`Nullpunkt: X=${point.x.toFixed(3)}, Y=${point.y.toFixed(3)}`, 'success');
@@ -501,7 +502,7 @@ class CeraCutApp {
             if (this.currentStep === 3) {
                 const point = this.currentSnapPoint || worldPoint;
                 this.setOriginFromPoint(point);
-                this.currentStep = 0;
+                this.currentStep = this._stepBeforeOrigin || 1;
                 document.getElementById('btn-set-origin-from-snap')?.classList.remove('active');
                 document.getElementById('ct-origin')?.classList.remove('active');
                 this.showToast(`Nullpunkt: X=${point.x.toFixed(3)}, Y=${point.y.toFixed(3)}`, 'success');
@@ -840,6 +841,7 @@ class CeraCutApp {
         // Damit STRG+Z jeweils EINE Kontur entfernt statt alle auf einmal
         const onChanged = () => {
             this.rebuildCutOrder();
+            if (this.settings.intarsiaMode) this.regenerateIntarsiaContours();
             this.renderer?.setContours(this.contours);
             this.snapManager?.invalidatePointsCache?.(); // V6.31: Snap-Cache nach neuen Konturen
             this.updateContourPanel();
@@ -950,6 +952,11 @@ class CeraCutApp {
 
             // Wenn geschlossen, alten Anfang anhängen
             if (contour.isClosed) {
+                // Alten Schlusspunkt (== Startpunkt) entfernen, sonst doppelter Nahtpunkt
+                if (newPoints.length > 1) {
+                    const l = newPoints[newPoints.length - 1], f = points[0];
+                    if (Math.hypot(l.x - f.x, l.y - f.y) < 1e-9) newPoints.pop();
+                }
                 newPoints.push(...before);
                 // Schließen
                 if (newPoints.length > 0) {
@@ -1257,7 +1264,7 @@ class CeraCutApp {
 
         // Paste Verfügbarkeit
         const pasteItem = menu.querySelector('[data-canvas-action="paste"]');
-        if (pasteItem) pasteItem.style.opacity = this.clipboardManager?.clipboard?.length ? '1' : '0.4';
+        if (pasteItem) pasteItem.style.opacity = (typeof ClipboardManager !== 'undefined' && ClipboardManager._sharedClipboard?.length) ? '1' : '0.4';
 
         // Position
         menu.style.left = `${screenX}px`;
@@ -1419,6 +1426,7 @@ class CeraCutApp {
             [contour],
             () => {
                 this.rebuildCutOrder();
+                if (this.settings.intarsiaMode) this.regenerateIntarsiaContours();
                 this.renderer?.setContours(this.contours);
                 this.updateContourPanel();
                 this.updateStats({ totalEntities: this.contours.length });
@@ -1444,6 +1452,7 @@ class CeraCutApp {
             selected,
             () => {
                 this.rebuildCutOrder();
+                if (this.settings.intarsiaMode) this.regenerateIntarsiaContours();
                 this.renderer?.setContours(this.contours);
                 this.updateContourPanel();
             },
@@ -1493,6 +1502,7 @@ class CeraCutApp {
             index + 1,
             () => {
                 this.rebuildCutOrder();
+                if (this.settings.intarsiaMode) this.regenerateIntarsiaContours();
                 this.renderer?.setContours(this.contours);
                 this.updateContourPanel();
             }
@@ -1749,6 +1759,10 @@ class CeraCutApp {
                 break;
         }
         
+        // Nur TSP-Sortierung setzt _lastReversedContours neu; sonst veraltete Refs verwerfen
+        if (method !== 'shortest-path' && method !== 'shortest-path-selected') {
+            this._lastReversedContours = [];
+        }
         const oldOrder = [...this.cutOrder];
         const newOrder = cuttable.map(item => item.index);
         this.cutOrder = newOrder;
@@ -2753,16 +2767,18 @@ class CeraCutApp {
 
         // Close handlers
         const closeBtn = document.getElementById('shortcut-modal-close');
-        let escHandler;
-        const closeModal = () => { modal.style.display = 'none'; document.removeEventListener('keydown', escHandler); };
-        closeBtn?.addEventListener('click', closeModal, { once: true });
+        // Vorherige Listener des letzten Öffnens entfernen (kein Akkumulieren)
+        this._shortcutModalAbort?.abort();
+        const ac = new AbortController();
+        this._shortcutModalAbort = ac;
+        const closeModal = () => { modal.style.display = 'none'; ac.abort(); };
+        closeBtn?.addEventListener('click', closeModal, { signal: ac.signal });
         modal.addEventListener('click', (e) => {
             if (e.target === modal) closeModal();
-        }, { once: true });
+        }, { signal: ac.signal });
 
         // ESC closes
-        escHandler = (e) => { if (e.key === 'Escape') closeModal(); };
-        document.addEventListener('keydown', escHandler);
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); }, { signal: ac.signal });
     }
 
     onStepEnter(step) {
@@ -2789,7 +2805,10 @@ class CeraCutApp {
                 break;
             case 4:
                 if (this.renderer) this.renderer.currentMode = 'anschuss';
+                // Undo-fähig: Snapshot vor dem Überschreiben, Commit danach
+                this._captureLeadSnapshot();
                 this._applyLeadValues();
+                this._commitLeadChanges();
                 this._runMultiContourCollisionCheck();
                 this.updateContourPanel();
                 break;
@@ -2886,9 +2905,10 @@ class CeraCutApp {
                     id: 'ceracut-dxf',
                     startIn: this._lastDirHandle || 'documents'
                 });
-                this._dxfFileHandle = fileHandle;  // Handle merken für Strg+S
                 const file = await fileHandle.getFile();
-                this.loadFile(file);
+                // Handle erst NACH Tab-Erzeugung setzen (loadDXFContent), sonst schreibt
+                // _captureFromApp es in den alten Tab → Strg+S überschreibt falsche Datei
+                this.loadFile(file, fileHandle);
                 console.log('[App] DXF geöffnet via File Picker, Handle gespeichert');
                 return;
             } catch (err) {
@@ -2899,7 +2919,7 @@ class CeraCutApp {
         fileInput?.click();
     }
 
-    loadFile(file) {
+    loadFile(file, fileHandle = null) {
         if (!file.name.toLowerCase().endsWith('.dxf')) {
             this.showToast('Bitte eine DXF-Datei auswählen', 'error');
             return;
@@ -2913,11 +2933,19 @@ class CeraCutApp {
 
         reader.onload = (e) => {
             console.timeEnd('[PERF] FileReader.readAsText');
-            this.loadDXFContent(file.name, e.target.result, (file.size / 1024).toFixed(1));
+            // Encoding nach $ACADVER: AC1021+ (AutoCAD 2007+) = UTF-8, älter = ISO-8859-1
+            const buf = e.target.result;
+            const head = new TextDecoder('iso-8859-1').decode(new Uint8Array(buf, 0, Math.min(buf.byteLength, 65536)));
+            const ver = head.match(/\$ACADVER\s*\r?\n\s*1\s*\r?\n\s*AC(\d+)/);
+            const isUtf8 = ver && parseInt(ver[1], 10) >= 1021;
+            let text = new TextDecoder(isUtf8 ? 'utf-8' : 'iso-8859-1').decode(buf);
+            // \U+XXXX-Escapes (Text-Entities) zu Unicode dekodieren
+            text = text.replace(/\\U\+([0-9A-Fa-f]{4})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+            this.loadDXFContent(file.name, text, (file.size / 1024).toFixed(1), fileHandle);
         };
 
         console.time('[PERF] FileReader.readAsText');
-        reader.readAsText(file, 'ISO-8859-1');
+        reader.readAsArrayBuffer(file);
     }
 
     /**
@@ -2926,10 +2954,11 @@ class CeraCutApp {
      * @param {string} content - DXF-Dateiinhalt als String
      * @param {string} sizeKB - Dateigröße in KB (für Anzeige)
      */
-    loadDXFContent(filename, content, sizeKB) {
+    loadDXFContent(filename, content, sizeKB, fileHandle = null) {
         // V6.20: Jede neu geöffnete Datei bekommt einen eigenen Tab — außer dem
         // allerersten leeren Start-Tab, der einmalig wiederverwendet wird.
         this.documentManager?.ensureTargetForNewFile();
+        this._dxfFileHandle = fileHandle;  // gehört zum (ggf. neuen) Ziel-Tab, Strg+S
 
         this.dxfFileName = filename;
         this.loadedFileName = filename;
@@ -2976,7 +3005,8 @@ class CeraCutApp {
                 
                 console.time('[PERF] DXFParser.parse');
                 this.dxfResult = DXFParser.parse(this.dxfContent, {
-                    chainingTolerance: tolerance
+                    chainingTolerance: tolerance,
+                    applyInsUnits: true   // Zoll-DXF ($INSUNITS) auf mm umrechnen
                 });
                 console.timeEnd('[PERF] DXFParser.parse');
                 this.deletedContourNames = new Set(); // V6.25: neuer Import, alte Loeschungen verwerfen
@@ -3266,12 +3296,15 @@ class CeraCutApp {
         
         document.getElementById('btn-set-origin-from-snap')?.addEventListener('click', () => {
             // V5.0: Nullpunkt-Modus togglen (wie ct-origin in Canvas-Toolbar)
-            if (this.currentStep === 3) {
-                this.currentStep = 0;
+            if (this.currentStep === 3 && this._originPickActive) {
+                this._originPickActive = false;
+                this.currentStep = this._stepBeforeOrigin || 1;
                 document.getElementById('btn-set-origin-from-snap')?.classList.remove('active');
                 document.getElementById('ct-origin')?.classList.remove('active');
                 this.showToast('Nullpunkt-Modus beendet', 'info');
             } else {
+                this._stepBeforeOrigin = this.currentStep === 3 ? (this._stepBeforeOrigin || 1) : this.currentStep;
+                this._originPickActive = true;
                 this.currentStep = 3;
                 document.getElementById('btn-set-origin-from-snap')?.classList.add('active');
                 document.getElementById('ct-origin')?.classList.add('active');
@@ -4620,7 +4653,7 @@ class CeraCutApp {
             const negClone = c.clone();
             negClone._intarsiaType = 'neg';
             if (Math.abs(additionalOffset) >= 0.01 && negClone.isClosed && negClone.cuttingMode !== 'slit') {
-                this._applyIntarsiaOffset(negClone, +additionalOffset);
+                this._applyIntarsiaOffset(negClone, +additionalOffset, c.cuttingMode === 'hole');
             }
 
             // ─── POS-Clone: Einleger — cuttingMode invertieren, Offset nach innen ───
@@ -4634,7 +4667,7 @@ class CeraCutApp {
                 posClone.type = 'OUTER';
             }
             if (Math.abs(additionalOffset) >= 0.01 && posClone.isClosed && posClone.cuttingMode !== 'slit') {
-                this._applyIntarsiaOffset(posClone, -additionalOffset);
+                this._applyIntarsiaOffset(posClone, -additionalOffset, c.cuttingMode === 'hole');
             }
 
             // Intarsien-Lead-Profil anwenden
@@ -4713,6 +4746,13 @@ class CeraCutApp {
 
         const isMultiMaterial = usedGroups.size > 1;
         let fileCount = 0;
+        let savedFiles = 0;
+        let failedFiles = 0;
+
+        // cutOrder indiziert das UNgefilterte Array → auf gefiltertes Array umrechnen
+        const remapOrder = (all, filtered) => this.cutOrder
+            .map(idx => filtered.indexOf(all[idx]))
+            .filter(i => i >= 0);
 
         for (const groupId of usedGroups) {
             const suffix = isMultiMaterial ? `_M${groupId}` : '';
@@ -4725,7 +4765,7 @@ class CeraCutApp {
                 : negAll;
 
             const ppNeg = new SinumerikPostprocessor();
-            const negResult = ppNeg.generate(negFiltered, this.cutOrder, {
+            const negResult = ppNeg.generate(negFiltered, remapOrder(negAll, negFiltered), {
                 ...commonSettings,
                 planName: baseName + suffix + '_NEG'
             });
@@ -4737,16 +4777,19 @@ class CeraCutApp {
                 : posAll;
 
             const ppPos = new SinumerikPostprocessor();
-            const posResult = ppPos.generate(posFiltered, this.cutOrder, {
+            const posResult = ppPos.generate(posFiltered, remapOrder(posAll, posFiltered), {
                 ...commonSettings,
                 planName: baseName + suffix + '_POS'
             });
 
             // Downloads
-            this._downloadIntarsiaFile(posResult.code, baseName + suffix + '_POS.CNC');
-            setTimeout(() => {
-                this._downloadIntarsiaFile(negResult.code, baseName + suffix + '_NEG.CNC');
-            }, 300 * (fileCount + 1));
+            // Sequenziell awaiten (kein setTimeout → Fehler werden gezählt, Toast ehrlich)
+            const okPos = await this._downloadIntarsiaFile(posResult.code, baseName + suffix + '_POS.CNC');
+            await new Promise(r => setTimeout(r, 300));
+            const okNeg = await this._downloadIntarsiaFile(negResult.code, baseName + suffix + '_NEG.CNC');
+            if (okPos) savedFiles++; else failedFiles++;
+            if (okNeg) savedFiles++; else failedFiles++;
+            await new Promise(r => setTimeout(r, 300));
             fileCount++;
 
             if (isMultiMaterial) {
@@ -4755,10 +4798,11 @@ class CeraCutApp {
         }
 
         const groupLabel = isMultiMaterial ? ` (${usedGroups.size} Materialgruppen)` : '';
-        this.showToast(
-            `Intarsien: ${fileCount * 2} Dateien exportiert${groupLabel}`,
-            'success'
-        );
+        if (failedFiles > 0) {
+            this.showToast(`Intarsien: ${savedFiles} Dateien exportiert, ${failedFiles} FEHLGESCHLAGEN${groupLabel}`, 'error');
+        } else {
+            this.showToast(`Intarsien: ${savedFiles} Dateien exportiert${groupLabel}`, 'success');
+        }
 
         console.log(`[Intarsia V2.0] Export abgeschlossen: ${fileCount} Materialgruppen`);
         console.timeEnd('[Intarsia V2.0] Export');
@@ -4785,7 +4829,8 @@ class CeraCutApp {
      * additionalOffset > 0 → Kontur wächst (NEG: Aussparung größer)
      * additionalOffset < 0 → Kontur schrumpft (POS: Einleger kleiner)
      */
-    _applyIntarsiaOffset(clone, additionalOffset) {
+    _applyIntarsiaOffset(clone, additionalOffset, isHole = false) {
+        // Innenkonturen (Loch/Insel): Material-Wachstum = Polygon-Schrumpfen → Flächenerwartung invertieren
         if (Math.abs(additionalOffset) < 0.001) return;
 
         const areaOrig = Math.abs(Geometry.getSignedArea(clone.points));
@@ -4798,7 +4843,8 @@ class CeraCutApp {
         let pts = Geometry.offsetPolygon(clone.points, additionalOffset, true);
         if (pts && pts.length > 2) {
             const areaNew = Math.abs(Geometry.getSignedArea(pts));
-            if ((areaNew > areaOrig) !== (additionalOffset > 0)) {
+            const wantGrow = isHole ? (additionalOffset < 0) : (additionalOffset > 0);
+            if ((areaNew > areaOrig) !== wantGrow) {
                 pts = Geometry.offsetPolygon(clone.points, -additionalOffset, true);
             }
         }
@@ -4819,9 +4865,9 @@ class CeraCutApp {
      * Nutzt FSAPI-Ordner wenn verfügbar (CeraCUT Shim setzt window._cncDirHandle).
      */
     async _downloadIntarsiaFile(code, filename) {
-        if (!code) return;
+        if (!code) return false;
         if (!this._savingFiles) this._savingFiles = new Set();
-        if (this._savingFiles.has(filename)) return;
+        if (this._savingFiles.has(filename)) return false;
 
         // FSAPI-Ordner-Export (wie normaler CNC-Export)
         if (window._cncDirHandle) {
@@ -4832,7 +4878,7 @@ class CeraCutApp {
                 await w.write(code);
                 await w.close();
                 console.log(`[Intarsia V2.0] FSAPI: ${filename} → ${window._cncDirHandle.name}/`);
-                return;
+                return true;
             } catch (err) {
                 console.warn(`[Intarsia V2.0] FSAPI fehlgeschlagen, Fallback auf Download:`, err);
             } finally {
@@ -4853,6 +4899,10 @@ class CeraCutApp {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             console.log(`[Intarsia V2.0] Download: ${filename} (${code.length} bytes)`);
+            return true;
+        } catch (err) {
+            console.error(`[Intarsia V2.0] Download fehlgeschlagen: ${filename}`, err);
+            return false;
         } finally {
             this._savingFiles?.delete(filename);
         }

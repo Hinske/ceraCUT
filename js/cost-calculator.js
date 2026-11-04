@@ -1,5 +1,5 @@
 /**
- * CeraCUT Cost Calculator V1.2
+ * CeraCUT Cost Calculator V1.3
  * V1.2: Fix — toter d.contour-Verweis entfernt, nutzt direkt d.type für disc/hole-Filter
  * Kosten- und Zeitberechnung für Wasserstrahlschneiden
  *
@@ -8,8 +8,9 @@
  *
  * Integration: CeraJetEngine (optional), CamContour
  *
- * Build: 20260309
- * Last Modified: 2026-03-09
+ * Build: 20261104-reviewfix
+ * V1.3: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
+ * Last Modified: 2026-11-04
  */
 
 const CostCalculator = (() => {
@@ -139,8 +140,9 @@ const CostCalculator = (() => {
                 pressure: settings.pressure ?? 2900,
                 optMode: settings.optMode ?? 'kostenProduktion',
             });
-            if (tech?.feeds?.[quality] !== undefined) {
-                return tech.feeds[quality];
+            const fi = Math.max(0, Math.min(4, (quality ?? 2) - 1));  // Qualität 1-basiert, feeds 0-basiert
+            if (tech?.feeds?.[fi] !== undefined) {
+                return tech.feeds[fi];
             }
         }
 

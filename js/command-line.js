@@ -1,5 +1,5 @@
 /**
- * CeraCUT Command Line V1.5
+ * CeraCUT Command Line V1.6
  * AutoCAD-style Command Line Interface
  * - Prompt-System für Zeichentools
  * - Koordinateneingabe (absolut + relativ + polar)
@@ -9,8 +9,9 @@
  * - V1.5: Polar-Koordinaten-Eingabe ("50<45" / "@50<45") in parseInput()
  * - V1.4: 'echo'-Log-Typ für AutoCAD-Style Command-Echo ("_LINE")
  * Created: 2026-02-13 MEZ
- * Last Modified: 2026-06-24 MEZ
- * Build: 20260624-polarinput
+ * Last Modified: 2026-11-04
+ * Build: 20261104-reviewfix
+ * V1.6: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
 class CommandLine {
@@ -151,9 +152,9 @@ class CommandLine {
         // Relative Koordinaten: @x,y oder @x y
         if (trimmed.startsWith('@')) {
             const coords = trimmed.substring(1);
-            const parts = coords.split(/[,\s]+/).map(Number);
+            const parts = coords.split(/[,\s]+/).map(t => t === '' ? NaN : Number(t));
 
-            if (parts.length === 2 && parts.every(n => !isNaN(n))) {
+            if (parts.length === 2 && parts.every(n => Number.isFinite(n))) {
                 const baseX = lastPoint?.x || 0;
                 const baseY = lastPoint?.y || 0;
                 return {
@@ -163,21 +164,21 @@ class CommandLine {
                 };
             }
             // @distance (relative Distanz, z.B. für Radius)
-            if (parts.length === 1 && !isNaN(parts[0])) {
+            if (parts.length === 1 && Number.isFinite(parts[0])) {
                 return { type: 'distance', value: parts[0] };
             }
             return null;
         }
 
         // Absolute Koordinaten: x,y oder x y
-        const parts = trimmed.split(/[,\s]+/).map(Number);
+        const parts = trimmed.split(/[,\s]+/).map(t => t === '' ? NaN : Number(t));
 
-        if (parts.length === 2 && parts.every(n => !isNaN(n))) {
+        if (parts.length === 2 && parts.every(n => Number.isFinite(n))) {
             return { type: 'point', x: parts[0], y: parts[1] };
         }
 
         // Einzelwert (Radius, Distanz, Durchmesser)
-        if (parts.length === 1 && !isNaN(parts[0])) {
+        if (parts.length === 1 && Number.isFinite(parts[0])) {
             return { type: 'distance', value: parts[0] };
         }
 

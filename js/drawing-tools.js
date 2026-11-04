@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.18
+ * CeraCUT Drawing & Modification Tools V2.19
  * AutoCAD-style CAD Tools für CeraCUT
  *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
@@ -599,7 +599,7 @@ class DrawingToolManager {
                     entity.center.x, entity.center.y,
                     entity.radius,
                     entity.startAngle, entity.endAngle,
-                    entity.ccw
+                    !entity.ccw
                 );
                 ctx.stroke();
                 break;
@@ -695,7 +695,7 @@ class DrawingToolManager {
                         rb.data.center.x, rb.data.center.y,
                         rb.data.radius,
                         rb.data.startAngle, rb.data.endAngle,
-                        rb.data.ccw
+                        !rb.data.ccw
                     );
                     ctx.stroke();
                 }
@@ -1943,7 +1943,9 @@ class RotateTool extends ModificationTool {
 
     handleDistance(value) {
         if ((this.state === 'angle' || this.state === 'newangle') && this.basePoint) {
-            const angleRad = value * Math.PI / 180;
+            let angleRad = value * Math.PI / 180;
+            // Referenzmodus: getippter Winkel = neuer absoluter Winkel
+            if (this.state === 'newangle' && this.referenceAngle !== null) angleRad -= this.referenceAngle;
             this.cmd?.log(`→ Rotation ${value}°`, 'info');
             this._applyRotation(angleRad);
         }
@@ -2169,6 +2171,7 @@ class MirrorTool extends ModificationTool {
             }
         );
         app?.undoManager?.execute(addCmd);
+        this._addCmd = addCmd;
 
         this.manager.ghostContours = null;
         this.manager.rubberBand = null;
@@ -2223,7 +2226,18 @@ class MirrorTool extends ModificationTool {
             },
             app
         );
-        app.undoManager?.execute(deleteCmd);
+        const um = app.undoManager;
+        const stack = um?.undoStack;
+        if (um && this._addCmd && stack && stack[stack.length - 1] === this._addCmd) {
+            // Add + Delete = EINE Undo-Einheit
+            stack.pop();
+            um.beginGroup('Spiegeln (Quelle löschen)');
+            um.pushExecuted(this._addCmd);
+            um.execute(deleteCmd);
+            um.endGroup();
+        } else {
+            um?.execute(deleteCmd);
+        }
 
         this.cmd?.log(`✓ ${this.selectedContours.length} Quellobjekt(e) gelöscht`, 'success');
         app.showToast?.(`🪞 Gespiegelt + Quelle gelöscht (STRG+Z = Rückgängig)`, 'success');
@@ -2763,10 +2777,10 @@ class LineTool extends BaseTool {
     }
 
     cancel() {
-        for (const seg of this.segments) {
-            const idx = this.manager.entities.indexOf(seg);
-            if (idx !== -1) this.manager.entities.splice(idx, 1);
-        }
+        // Bereits bestätigte Segmente bleiben als pending Entities erhalten (AutoCAD-Verhalten);
+        // nur der laufende Zustand wird verworfen.
+        this.points = [];
+        this.segments = [];
         super.cancel();
     }
 
