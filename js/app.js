@@ -1,5 +1,10 @@
 /**
- * CeraCUT V6.45 - Main Application
+ * CeraCUT V6.50 - Main Application
+ * V6.50: Feat — Konturen vereinfachen (simplify.js): Toleranz-Slider mit Live-Vorschau, Ecken/Startpunkt erhalten, Schutz vor Nachbar-Kollision, Undo
+ * V6.49: Feat — Strahlbreiten-Check (feasibility.js): Pruefen/Halo, Auswahl nach Kriterien (schmal/nah/Breite/Flaeche), Typ aus Schachtelung
+ * V6.48: Feat — Richtungspfeile-Umschalter (Auto/An/Aus) im Bearbeitung-Tab; Konturauswahl-Fix siehe canvas-renderer V3.49
+ * V6.47: Feat — Setup/Technologie: Duese, Druck, Optimierung eingeklappt (Toggle ⚙); Export: Maschine-Gruppe ausgeblendet
+ * V6.46: Feat — Bearbeitung-Tab: erweiterte Lead-Parameter (Radius, Winkel, Ausfahrt, Anschluss, Dynamisch, Innen-Lead, Profil speichern/loeschen) standardmaessig eingeklappt, Toggle '⚙ Erweitert' (merkt Zustand)
  * V6.45: Feat — Sortiermethode 'Mosaik-Maeander' (_planMosaicMeander/applyMosaicMeander): durchgehende Innenlinien je Richtung zu EINER Kontur, Halbkreis-Wendungen 3 mm ausserhalb der Fliese (Opferplatte), Rand zuletzt; Helfer _mosaicDetectBorder/_mosaicNearest
  * V6.44: Feat — Sortiermethode 'Mosaik' (sortMosaic): Fliesenrand zuletzt, Innenkonturen Nearest-Neighbor ab Nullpunkt (Standard im Dropdown)
  * V6.43: Feat — CNC-Export speichert direkt auf dem Server (POST /api/cnc/save → Share Wasserstrahl/CNC), Rueckfrage bei vorhandener Datei; Fallback Workspace/Download
@@ -9,7 +14,7 @@
  * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
  * Last Modified: 2026-11-05
- * Build: 20261105-meander
+ * Build: 20261105-simp1
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -4112,6 +4117,172 @@ class CeraCutApp {
         document.getElementById('btn-direction-ccw')?.addEventListener('click', () => this.setDirectionForSelected('ccw'));
     }
     
+    // ═══════════════════════════════════════════════════
+    // MACHBARKEIT / STRAHLBREITE (V6.49)
+    // ═══════════════════════════════════════════════════
+
+    runFeasibility(silent) {
+        if (typeof Feasibility === 'undefined') return null;
+        const kerf = parseFloat(this.settings.kerfWidth) || 0.8;
+        const res = Feasibility.analyze(this.contours, kerf);
+        this._feas = res;
+        if (this.renderer) this.renderer.feasibilityMap = res.map;
+        const n = res.counts;
+        const sum = document.getElementById('feas-summary');
+        if (sum) {
+            sum.innerHTML = `<span style="color:#ff6b6b">${n.narrow + n.both} schmal</span> · ` +
+                `<span style="color:#ffb340">${n.close + n.both} nah</span> · ` +
+                `<span style="color:#8bc34a">${n.ok} ok</span> / ${n.total}`;
+        }
+        const kl = document.getElementById('feas-kerf');
+        if (kl) kl.textContent = `Strahl ${kerf} mm`;
+        this.renderer?.render();
+        if (!silent) this.showToast(`Strahlbreite ${kerf} mm: ${n.narrow + n.both} zu schmal, ${n.close + n.both} zu nah, ${n.ok} ok (von ${n.total})`, n.ok === n.total ? 'success' : 'warning');
+        return res;
+    }
+
+    clearFeasibility() {
+        this._feas = null;
+        if (this.renderer) this.renderer.feasibilityMap = null;
+        const sum = document.getElementById('feas-summary');
+        if (sum) { sum.textContent = 'nicht geprüft'; sum.style.color = '#888'; }
+        this.renderer?.render();
+    }
+
+    selectByCriteria(crit, label) {
+        const res = this.runFeasibility(true);
+        if (!res) return;
+        const hits = new Set(Feasibility.filter(res, crit));
+        this.contours.forEach(c => { c.isSelected = hits.has(c); });
+        this.renderer?.invalidateGrips?.();
+        this.renderer?.render();
+        this.updateContourPanel();
+        this.showToast(hits.size ? `${hits.size} Konturen gewählt (${label}) — Entf löscht, STRG+Z macht rückgängig` : `Keine Kontur gefunden (${label})`, hits.size ? 'success' : 'info');
+    }
+
+    classifyByNesting() {
+        const res = this.runFeasibility(true);
+        if (!res) return;
+        const plan = Feasibility.classifyByNesting(res).filter(x => x.contour.cuttingMode !== x.mode);
+        if (plan.length === 0) { this.showToast('Scheibe/Loch passt bereits zur Schachtelung', 'info'); return; }
+        this.undoManager.beginGroup('Typ aus Schachtelung');
+        plan.forEach(x => {
+            this.undoManager.execute(new PropertyChangeCommand(x.contour, 'cuttingMode', x.mode, () => { x.contour.invalidate?.(); }));
+        });
+        this.undoManager.endGroup();
+        const holes = plan.filter(x => x.mode === 'hole').length;
+        this.showToast(`${plan.length} Konturen gesetzt (${plan.length - holes} Scheibe, ${holes} Loch) — STRG+Z = Rückgängig`, 'success');
+        this.renderer?.render();
+        this.updateContourPanel();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // KONTUREN VEREINFACHEN (V6.50)
+    // ═══════════════════════════════════════════════════
+
+    _simpScope() {
+        const sel = this.contours.filter(c => c.isSelected && !c.isReference);
+        return sel.length ? { list: sel, label: `Auswahl (${sel.length})` }
+                          : { list: this.contours.filter(c => !c.isReference), label: 'alle Konturen' };
+    }
+
+    _simpPreview(tol) {
+        const infoEl = document.getElementById('simp-info');
+        const valEl = document.getElementById('simp-tol-val');
+        const applyBtn = document.getElementById('btn-simp-apply');
+        const cancelBtn = document.getElementById('btn-simp-cancel');
+        if (!(tol > 0)) { this._simpClear(); return; }
+        if (typeof Simplify === 'undefined' || typeof Feasibility === 'undefined') return;
+
+        const scope = this._simpScope();
+        // Nachbar-/Breiten-Schutz einmalig berechnen (ueber ALLE Konturen, damit Nachbarn ausserhalb der Auswahl zaehlen)
+        if (!this._simpInfo) {
+            const f = Feasibility.analyze(this.contours, parseFloat(this.settings.kerfWidth) || 0.8);
+            this._simpInfo = new Map(f.items.map(i => [i.contour, i]));
+        }
+        const res = Simplify.simplifyContours(scope.list, tol, { info: this._simpInfo });
+        this._simpResult = res;
+        if (this.renderer) this.renderer.simplifyPreview = res.map;
+        if (valEl) valEl.textContent = tol.toFixed(2) + ' mm';
+        const pct = res.before ? Math.round((1 - res.after / res.before) * 100) : 0;
+        if (infoEl) {
+            infoEl.textContent = res.changed
+                ? `Punkte ${res.before} → ${res.after} (−${pct} %) · ${res.changed} Konturen`
+                : 'Keine Kontur vereinfachbar bei dieser Toleranz';
+            infoEl.style.color = res.changed ? '#4fc3f7' : '#888';
+        }
+        const scopeEl = document.getElementById('simp-scope');
+        if (scopeEl) scopeEl.textContent = scope.label;
+        if (applyBtn) applyBtn.disabled = !res.changed;
+        if (cancelBtn) cancelBtn.disabled = false;
+        this.renderer?.render();
+    }
+
+    _simpClear() {
+        this._simpResult = null;
+        this._simpInfo = null;
+        if (this.renderer) this.renderer.simplifyPreview = null;
+        const slider = document.getElementById('simp-tol');
+        if (slider) slider.value = 0;
+        const set = (id, t, color) => { const el = document.getElementById(id); if (el) { el.textContent = t; if (color) el.style.color = color; } };
+        set('simp-tol-val', 'aus');
+        set('simp-info', 'Regler ziehen für Vorschau', '#888');
+        set('simp-scope', '');
+        const a = document.getElementById('btn-simp-apply'); if (a) a.disabled = true;
+        const c = document.getElementById('btn-simp-cancel'); if (c) c.disabled = true;
+        this.renderer?.render();
+    }
+
+    applySimplify() {
+        const res = this._simpResult;
+        if (!res || !res.changed) return;
+        const list = [...res.map.keys()];
+        const cmd = new TransformContoursCommand(list, (c) => {
+            const v = res.map.get(c);
+            if (v) c.points = v.pts.map(p => ({ x: p.x, y: p.y }));
+        }, `Vereinfachen (${res.changed} Konturen)`, () => {
+            this.renderer?.invalidateGrips?.();
+            this.renderer?.render();
+            this.updateContourPanel();
+        });
+        this.undoManager.execute(cmd);
+        const msg = `Vereinfacht: Punkte ${res.before} → ${res.after}, ${res.changed} Konturen (STRG+Z = Rückgängig)`;
+        this._simpClear();
+        if (this.renderer?.feasibilityMap) this.runFeasibility(true);   // Markierung aktualisieren
+        this.showToast(msg, 'success');
+    }
+
+    _bindSimplifyUI() {
+        const slider = document.getElementById('simp-tol');
+        if (!slider) return;
+        let raf = 0;
+        slider.addEventListener('input', () => {
+            cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(() => this._simpPreview(parseFloat(slider.value)));
+        });
+        document.getElementById('btn-simp-apply')?.addEventListener('click', () => this.applySimplify());
+        document.getElementById('btn-simp-cancel')?.addEventListener('click', () => this._simpClear());
+    }
+
+    _bindFeasibilityUI() {
+        const on = (id, fn) => document.getElementById(id)?.addEventListener('click', fn);
+        on('btn-feas-check', () => this.runFeasibility(false));
+        on('btn-feas-clear', () => this.clearFeasibility());
+        on('btn-feas-sel-narrow', () => this.selectByCriteria({ narrow: true }, 'zu schmal'));
+        on('btn-feas-sel-close', () => this.selectByCriteria({ close: true }, 'zu nah'));
+        on('btn-feas-nesting', () => this.classifyByNesting());
+        on('btn-feas-sel-crit', () => {
+            const w = parseFloat(document.getElementById('feas-width-lt')?.value);
+            const a = parseFloat(document.getElementById('feas-area-lt')?.value);
+            const crit = {};
+            if (!isNaN(w)) crit.widthLt = w;
+            if (!isNaN(a)) crit.areaLt = a;
+            if (Object.keys(crit).length === 0) { this.showToast('Bitte Breite oder Fläche eintragen', 'warning'); return; }
+            const label = [crit.widthLt != null ? `Breite < ${w} mm` : '', crit.areaLt != null ? `Fläche < ${a} mm²` : ''].filter(Boolean).join(', ');
+            this.selectByCriteria(crit, label);
+        });
+    }
+
     setCuttingModeForSelected(mode) {
         const selected = this.contours.filter(c => c.isSelected && c.isClosed && !c.isReference);
         
@@ -4591,6 +4762,51 @@ class CeraCutApp {
         document.getElementById('btn-batch-apply')?.addEventListener('click', () => {
             this._applyBatchRules();
         });
+
+        // V6.91: Erweitert-Toggle (Zustand pro Browser merken)
+        const advPanel = document.querySelector('.ribbon-panel[data-ribbon="bearbeitung"]');
+        const advBtn = document.getElementById('btn-lead-adv-toggle');
+        if (advPanel && advBtn) {
+            try { if (localStorage.getItem('ceracut_lead_adv') === '1') advPanel.classList.add('lead-adv-open'); } catch (e) { /* ignore */ }
+            advBtn.addEventListener('click', () => {
+                const open = advPanel.classList.toggle('lead-adv-open');
+                try { localStorage.setItem('ceracut_lead_adv', open ? '1' : '0'); } catch (e) { /* ignore */ }
+            });
+        }
+
+        // V6.47: Technologie-Toggle (Setup-Tab)
+        const techPanel = document.querySelector('.ribbon-panel[data-ribbon="setup"]');
+        const techBtn = document.getElementById('btn-tech-adv-toggle');
+        if (techPanel && techBtn) {
+            try { if (localStorage.getItem('ceracut_tech_adv') === '1') techPanel.classList.add('tech-adv-open'); } catch (e) { /* ignore */ }
+            techBtn.addEventListener('click', () => {
+                const open = techPanel.classList.toggle('tech-adv-open');
+                try { localStorage.setItem('ceracut_tech_adv', open ? '1' : '0'); } catch (e) { /* ignore */ }
+            });
+        }
+
+        this._bindFeasibilityUI();
+        this._bindSimplifyUI();
+
+        // V6.48: Richtungspfeile Auto/An/Aus
+        const arrowBtn = document.getElementById('btn-arrow-mode');
+        if (arrowBtn && this.renderer) {
+            const modes = ['auto', 'always', 'never'];
+            const labels = { auto: '➤ Auto', always: '➤ An', never: '➤ Aus' };
+            let mode = 'auto';
+            try { const m = localStorage.getItem('ceracut_arrow_mode'); if (modes.includes(m)) mode = m; } catch (e) { /* ignore */ }
+            const applyMode = () => {
+                this.renderer.directionArrowMode = mode;
+                arrowBtn.textContent = labels[mode];
+                this.renderer.render();
+            };
+            arrowBtn.addEventListener('click', () => {
+                mode = modes[(modes.indexOf(mode) + 1) % modes.length];
+                try { localStorage.setItem('ceracut_arrow_mode', mode); } catch (e) { /* ignore */ }
+                applyMode();
+            });
+            applyMode();
+        }
 
         console.debug('[App V6.0] Lead-Profile initialisiert');
     }

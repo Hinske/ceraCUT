@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CeraCUT V6.90 — Wasserstrahl CAM</title>
+    <title>CeraCUT V6.91 — Wasserstrahl CAM</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260625-favicon">
-    <link rel="stylesheet" href="styles.css?v=20261105-printmode">
+    <link rel="stylesheet" href="styles.css?v=20261105-techadv">
     <link rel="stylesheet" href="properties-panel-styles.css?v=20260315-ctxmenu">
     <script>
         // V6.32: Login/User-Management — Server injiziert window.CeraCutCurrentUser
@@ -61,7 +61,7 @@
             </button>
         </div>
         <span class="title-text">
-            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V6.90 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
+            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V6.91 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
         </span>
         <div class="title-right">
             <span class="version-badge">SINUMERIK 840D</span>
@@ -557,7 +557,7 @@
                         <span class="ribbon-field-label">◆</span>
                         <select class="ribbon-select" id="tech-material" style="width:140px" title="Material"></select>
                     </div>
-                    <div class="ribbon-inline-row">
+                    <div class="ribbon-inline-row tech-adv">
                         <span class="ribbon-field-label">◎</span>
                         <select class="ribbon-select" id="tech-nozzle" style="width:140px" title="Düsenkombination"></select>
                     </div>
@@ -565,12 +565,13 @@
                         <span class="ribbon-field-label">▬</span>
                         <input type="number" class="ribbon-input" value="10" step="0.5" min="0.5" max="300" id="material-thickness" style="width:50px" title="Materialdicke">
                         <span class="ribbon-field-unit">mm</span>
-                        <span class="ribbon-field-label" style="margin-left:4px">↕</span>
-                        <input type="number" class="ribbon-input" value="2900" step="100" min="1000" max="6000" id="tech-pressure" style="width:55px" title="Schneiddruck">
-                        <span class="ribbon-field-unit">bar</span>
+                        <button class="ribbon-btn-mini" id="btn-tech-adv-toggle" title="Düse, Druck, Optimierung ein-/ausblenden (Werte werden an der Anlage eingestellt, die Steuerung ignoriert die R-Parameter)">⚙</button>
+                        <span class="ribbon-field-label tech-adv" style="margin-left:4px">↕</span>
+                        <input type="number" class="ribbon-input" value="2900" step="100" min="1000" max="6000" id="tech-pressure" class="tech-adv" style="width:55px" title="Schneiddruck">
+                        <span class="ribbon-field-unit tech-adv">bar</span>
                     </div>
                 </div>
-                <div class="ribbon-sm-stack">
+                <div class="ribbon-sm-stack tech-adv">
                     <div class="ribbon-inline-row" id="tech-opt-row" style="gap:2px">
                         <button class="ribbon-btn-mini tech-opt-btn active" data-opt="minKosten" title="Min. Kosten">Min.K</button>
                         <button class="ribbon-btn-mini tech-opt-btn" data-opt="kostenProduktion" title="Kosten/Produktion">K/P</button>
@@ -601,11 +602,12 @@
                     <div class="ribbon-inline-row" id="lead-profile-status"
                          style="font-size:9px;color:#888;min-height:13px"></div>
                     <div class="ribbon-inline-row" style="gap:3px">
-                        <button class="ribbon-btn-mini" id="btn-lead-profile-save" title="Profil speichern">💾</button>
-                        <button class="ribbon-btn-mini" id="btn-lead-profile-delete" title="Profil löschen">🗑</button>
+                        <button class="ribbon-btn-mini lead-adv" id="btn-lead-profile-save" title="Profil speichern">💾</button>
+                        <button class="ribbon-btn-mini lead-adv" id="btn-lead-profile-delete" title="Profil löschen">🗑</button>
                         <button class="ribbon-btn-mini" id="btn-batch-apply"
                                 title="Regeln auf alle Konturen anwenden"
                                 style="color:#8bc34a;font-weight:600">⚡ Regeln</button>
+                        <button class="ribbon-btn-mini" id="btn-lead-adv-toggle" title="Erweiterte Lead-Parameter ein-/ausblenden">⚙ Erweitert</button>
                     </div>
                 </div>
             </div>
@@ -634,15 +636,15 @@
                             <input type="number" class="ribbon-input" id="lead-in-length" value="4.0" step="0.5" min="0.5" max="30" style="width:34px">
                             <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
                         </div>
-                        <span class="ribbon-field-label lead-tip lead-col-in"
+                        <span class="ribbon-field-label lead-tip lead-col-in lead-adv"
                               data-tip="Bogenradius&#10;Radius des Anfahrtbogens (nur bei Typ Arc, mm)">R:</span>
-                        <div class="stepper-wrap">
+                        <div class="stepper-wrap lead-adv">
                             <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
                             <input type="number" class="ribbon-input" id="lead-in-radius" value="2.0" step="0.5" min="0.5" max="15" style="width:30px">
                             <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
                         </div>
                     </div>
-                    <div class="ribbon-inline-row">
+                    <div class="ribbon-inline-row lead-adv">
                         <span class="ribbon-field-label lead-tip lead-col-in"
                               data-tip="Anfahrtwinkel&#10;Winkel der Anfahrt zur Kontur (15°–90°)">∠:</span>
                         <div class="stepper-wrap">
@@ -658,7 +660,7 @@
                 </div>
                 <!-- ▼ Ausfahrt-Spalte (orange) -->
                 <div class="ribbon-sm-stack lead-out-stack">
-                    <div class="ribbon-inline-row">
+                    <div class="ribbon-inline-row lead-adv">
                         <span class="ribbon-field-label lead-tip lead-col-out"
                               data-tip="Ausfahrtlänge&#10;Strecke des Strahls nach dem Schnittende (mm)">Out:</span>
                         <div class="stepper-wrap">
@@ -678,7 +680,7 @@
                     </div>
                 </div>
                 <!-- ▼ Anschluss / Piercing (blau) -->
-                <div class="ribbon-sm-stack lead-out-stack">
+                <div class="ribbon-sm-stack lead-out-stack lead-adv">
                     <div class="ribbon-inline-row">
                         <span class="ribbon-field-label lead-tip lead-col-pierce"
                               data-tip="Anschlussart (Piercing)&#10;Wie der Wasserstrahl das Material initial durchdringt">Ansch:</span>
@@ -720,11 +722,11 @@
                 </div>
                 <!-- ▼ Dynamisch / Manuell -->
                 <div class="ribbon-sm-stack lead-out-stack">
-                    <div class="ribbon-inline-row">
+                    <div class="ribbon-inline-row lead-adv">
                         <input type="checkbox" id="dynamic-lead-ext">
                         <label for="dynamic-lead-ext" class="ribbon-cb-label" style="color:#f0a030">Dynamisch</label>
                     </div>
-                    <div class="ribbon-inline-row dyn-lead-ext-field" style="display:none">
+                    <div class="ribbon-inline-row dyn-lead-ext-field lead-adv" style="display:none">
                         <span class="ribbon-field-label lead-tip"
                               data-tip="Minimale Anfahrtlänge (dynamischer Modus, mm)">Min:</span>
                         <div class="stepper-wrap">
@@ -749,7 +751,7 @@
         </div>
 
         <!-- ═══ Innen-Lead (V3.15 — Tooltips + Stepper) ═══ -->
-        <div class="ribbon-group lead-group">
+        <div class="ribbon-group lead-group lead-adv">
             <div class="ribbon-group-content">
                 <div class="ribbon-sm-stack">
                     <div class="ribbon-inline-row">
@@ -845,6 +847,7 @@
                         <button class="ribbon-btn-mini" data-mode="disc" title="Als Scheibe (Außenkontur)">🔵</button>
                         <button class="ribbon-btn-mini" id="btn-direction-cw" title="CW">↻</button>
                         <button class="ribbon-btn-mini" id="btn-direction-ccw" title="CCW">↺</button>
+                        <button class="ribbon-btn-mini" id="btn-arrow-mode" title="Schneidrichtungs-Pfeile: Auto (bei vielen Konturen nur Auswahl) / An / Aus">➤ Auto</button>
                     </div>
                     <div class="ribbon-inline-row">
                         <div class="quality-buttons-sm">
@@ -861,6 +864,60 @@
                 </div>
             </div>
             <div class="ribbon-group-label">Typ & Qualität</div>
+        </div>
+
+        <!-- ═══ Strahlbreite / Machbarkeit (V6.49) ═══ -->
+        <div class="ribbon-group">
+            <div class="ribbon-group-content">
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row" style="gap:3px">
+                        <button class="ribbon-btn-mini" id="btn-feas-check" style="color:#f0a030;font-weight:600"
+                                title="Prüft alle Konturen gegen die Strahlbreite: zu schmal (rot) / zu nah am Nachbarn (orange)">⚠ Prüfen</button>
+                        <button class="ribbon-btn-mini" id="btn-feas-clear" title="Markierung ausblenden">✕</button>
+                        <span id="feas-kerf" style="font-size:9px;color:#888"></span>
+                    </div>
+                    <div class="ribbon-inline-row" id="feas-summary" style="font-size:10px;color:#888;min-height:13px">nicht geprüft</div>
+                    <div class="ribbon-inline-row" style="gap:3px">
+                        <button class="ribbon-btn-mini" id="btn-feas-sel-narrow" title="Alle zu schmalen Konturen auswählen (danach Entf zum Löschen)">Schmale wählen</button>
+                        <button class="ribbon-btn-mini" id="btn-feas-sel-close" title="Alle Konturen mit Nachbarabstand unter Strahlbreite auswählen">Nahe wählen</button>
+                    </div>
+                </div>
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row">
+                        <span class="ribbon-field-label" title="Konturen schmaler als dieser Wert (≈ 2·Fläche/Umfang)">Breite &lt;</span>
+                        <input type="number" class="ribbon-input" id="feas-width-lt" step="0.1" min="0" placeholder="mm" style="width:42px">
+                        <span class="ribbon-field-label" title="Konturen kleiner als diese Fläche">Fläche &lt;</span>
+                        <input type="number" class="ribbon-input" id="feas-area-lt" step="1" min="0" placeholder="mm²" style="width:42px">
+                        <button class="ribbon-btn-mini" id="btn-feas-sel-crit" title="Konturen nach diesen Kriterien auswählen (leere Felder werden ignoriert)">Wählen</button>
+                    </div>
+                    <div class="ribbon-inline-row">
+                        <button class="ribbon-btn-mini" id="btn-feas-nesting"
+                                title="Scheibe/Loch automatisch aus der Schachtelung setzen: äußerste = Scheibe, darin Loch, darin wieder Scheibe … (STRG+Z macht es rückgängig)">Typ aus Schachtelung</button>
+                    </div>
+                </div>
+            </div>
+            <div class="ribbon-group-label">Strahlbreite</div>
+        </div>
+
+        <!-- ═══ Vereinfachen (V6.50) ═══ -->
+        <div class="ribbon-group">
+            <div class="ribbon-group-content">
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row" style="gap:4px">
+                        <span class="ribbon-field-label" title="Maximale Abweichung der vereinfachten Kontur vom Original">Toleranz</span>
+                        <input type="range" id="simp-tol" min="0" max="1" step="0.01" value="0" style="width:110px">
+                        <span id="simp-tol-val" style="font-size:10px;min-width:42px;color:#4fc3f7">aus</span>
+                    </div>
+                    <div class="ribbon-inline-row" id="simp-info" style="font-size:10px;color:#888;min-height:13px">Regler ziehen für Vorschau</div>
+                    <div class="ribbon-inline-row" style="gap:3px">
+                        <button class="ribbon-btn-mini" id="btn-simp-apply" style="color:#8bc34a;font-weight:600"
+                                title="Vereinfachung übernehmen (STRG+Z macht sie rückgängig)" disabled>Anwenden</button>
+                        <button class="ribbon-btn-mini" id="btn-simp-cancel" title="Vorschau verwerfen" disabled>Abbrechen</button>
+                        <span id="simp-scope" style="font-size:9px;color:#888"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="ribbon-group-label">Vereinfachen</div>
         </div>
     </div>
 
@@ -1120,8 +1177,8 @@
             <div class="ribbon-group-label">Kalkulation</div>
         </div>
 
-        <!-- ═══ Maschinenpark (V5.5) ═══ -->
-        <div class="ribbon-group">
+        <!-- ═══ Maschinenpark (V5.5) — V6.47: ausgeblendet (fuer das Programm nicht relevant), IDs bleiben fuer JS ═══ -->
+        <div class="ribbon-group" style="display:none">
             <div class="ribbon-group-content">
                 <div class="ribbon-sm-stack">
                     <div class="ribbon-inline-row">
@@ -1580,7 +1637,7 @@
 <!-- Scripts -->
 <!-- DebugMonitor: MUSS als ERSTES geladen werden — fängt alle Fehler ab -->
 <script src="js/debug-monitor.js?v=20260630-consolelog"></script>
-<script src="js/build-info.js?v=20261105-ppfix"></script>
+<script src="js/build-info.js?v=20261105-simp1"></script>
 <script src="js/constants.js?v=20261105-zuschnitt"></script>
 <script src="js/geometry.js?v=20261104-reviewfix"></script>
 <script src="js/arc-fitting.js?v=20261105-meander"></script>
@@ -1589,13 +1646,15 @@
 <script src="js/lead-profiles.js?v=20260625-cornerleadslot"></script>
 <script src="js/cerajet-engine.js?v=20261104-reviewfix"></script>
 <script src="js/ceracut-pipeline.js?v=20261104-reviewfix"></script>
-<script src="js/canvas-renderer.js?v=20261105-gripdir"></script>
+<script src="js/canvas-renderer.js?v=20261105-simp1"></script>
 <script src="js/undo-manager.js?v=20261104-reviewfix"></script>
 <script src="js/sinumerik-postprocessor.js?v=20261105-ppfix"></script>
 <script src="js/command-line.js?v=20261104-reviewfix"></script>
 <script src="js/dynamic-input.js?v=20260623-autocadfeel"></script>
 <script src="js/snap-manager.js?v=20261105-acmarker"></script>
 <script src="js/geometry-ops.js?v=20261104-reviewfix"></script>
+<script src="js/feasibility.js?v=20261105-feas1"></script>
+<script src="js/simplify.js?v=20261105-simp1"></script>
 <script src="js/drawing-tools.js?v=20261105-otrack"></script>
 <script src="js/layer-manager.js?v=20261104-reviewfix"></script>
 <script src="js/dxf-writer.js?v=20261104-reviewfix"></script>
@@ -1622,7 +1681,7 @@
 <script src="js/quality-zones.js?v=20261104-reviewfix"></script>
 <script src="js/project-manager.js?v=20261104-pushexecuted"></script>
 <script src="js/dxf-browser.js?v=20261105-sort2"></script>
-<script src="js/app.js?v=20261105-meander"></script>
+<script src="js/app.js?v=20261105-simp1"></script>
 
 <!-- Hidden Image Input -->
 <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/bmp,image/webp" hidden>

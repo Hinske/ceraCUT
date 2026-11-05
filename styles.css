@@ -2533,3 +2533,12 @@ html, body {
     color: var(--ribbon-label);
     font-size: 11px;
 }
+
+/* V6.91: Bearbeitung-Tab — Erweiterte Lead-Parameter standardmäßig eingeklappt */
+.ribbon-panel[data-ribbon="bearbeitung"]:not(.lead-adv-open) .lead-adv { display: none !important; }
+#btn-lead-adv-toggle { white-space: nowrap; }
+.ribbon-panel[data-ribbon="bearbeitung"].lead-adv-open #btn-lead-adv-toggle { color: #f0a030; font-weight: 600; }
+
+/* V6.47: Setup/Technologie — Düse, Druck, Optimierung eingeklappt */
+.ribbon-panel[data-ribbon="setup"]:not(.tech-adv-open) .tech-adv { display: none !important; }
+.ribbon-panel[data-ribbon="setup"].tech-adv-open #btn-tech-adv-toggle { color: #f0a030; font-weight: 600; }

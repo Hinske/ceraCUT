@@ -1,5 +1,9 @@
 /**
- * CeraCUT V3.47 - Canvas Renderer
+ * CeraCUT V3.51 - Canvas Renderer
+ * V3.51: Feat — Vereinfachen-Vorschau (simplifyPreview): vereinfachte Kontur Cyan mit Stuetzpunkten ueber dem Original
+ * V3.50: Feat — Machbarkeits-Halo (feasibilityMap): zu schmale Konturen rot, zu nahe Nachbarn orange (Strahlbreiten-Check, feasibility.js)
+ * V3.49: Fix — Konturen-Auswahl bei vielen kleinen Konturen: findContourAtPoint waehlt jetzt die NAECHSTE Kante (statt die zuletzt gezeichnete im 12-px-Radius), exakter Kantentreffer (5 px) > Flaeche (innerste Kontur) > weiter Kantenradius. Startpunkt-Drag erst nach >4 px Bewegung (Klick verschiebt Anschnitt nicht mehr). Richtungspfeile: directionArrowMode 'auto' (bei >25 Konturen nur Auswahl/Hover) | 'always' | 'never'.
+ * V3.48: Feat — Lead-Typ optisch unterscheidbar: Normalzustand nach Typ gefaerbt (Arc Cyan, Linear Orange, Tangential Violett), Pierce-/Exit-Marker als Kreis/Quadrat/Raute. Warnfarben (gekuerzt/rotiert/Alternative/Fallback) unveraendert.
  * V3.47: Feat — Rechteck mit gerundeten Ecken: nur 4 Kanten-Grips (Größe ändern per Ziehen + Maßeingabe, Ecken/Radius laufen mit)
  * V3.44: Feat — Tracking-Overlay (Object Snap Tracking / Polar): gestrichelte Linien, erfasste Punkte, Fadenkreuz am getrackten Punkt
  * Features: Selection, Lead-In/Out, Overcut, Micro-Joints, Travel Paths, Order Numbers,
@@ -45,7 +49,7 @@
  * V3.5: Ghost-Preview + Window-Selection Rendering
  * V3.4: Drawing-Overlay + SnapManager-Rendering
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-gripdir
+ * Build: 20261105-simp1
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -75,6 +79,8 @@ const CANVAS_THEMES = {
         leadRotated:    '#00FF00',       // Grün: Rotiert (Strategy A)
         leadAlternative:'#FFFF00',       // Gelb: Dog-Leg / Alternative (Strategy B)
         leadFallback:   '#FF00FF',       // Magenta: Center-Pierce Fallback
+        leadTypeLinear: '#FFA500',       // V3.48: Orange: Linear-Lead (Normalzustand)
+        leadTypeTangent:'#C77DFF',       // V3.48: Violett: Tangential-Lead (Normalzustand)
         overcut:        '#00ffff',
         microjoint:     '#ff8800',
         travel:         '#888888',
@@ -114,6 +120,8 @@ const CANVAS_THEMES = {
         leadRotated:    '#007700',
         leadAlternative:'#AA8800',
         leadFallback:   '#880088',
+        leadTypeLinear: '#CC6600',
+        leadTypeTangent:'#7B3FBF',
         overcut:        '#006688',
         microjoint:     '#cc5500',
         travel:         '#666666',
@@ -377,6 +385,7 @@ class CanvasRenderer {
 
         // Startpunkt-Drag State
         let isDraggingStartPoint = false;
+        let startDragDown = null, startDragMoved = false; // V3.49: Drag-Schwelle (4 px)
         let dragContour = null;
 
         // V3.10: Grip-Drag State
@@ -437,6 +446,8 @@ class CanvasRenderer {
                 const hit = this._hitTestStartTriangle(worldPos);
                 if (hit) {
                     isDraggingStartPoint = true;
+                    startDragDown = { x: e.offsetX, y: e.offsetY };
+                    startDragMoved = false;
                     dragContour = hit;
                     this.canvas.style.cursor = 'grabbing';
                     return;
@@ -508,6 +519,12 @@ class CanvasRenderer {
 
             // Startpunkt-Drag aktiv
             if (isDraggingStartPoint && dragContour) {
+                // V3.49: Startpunkt erst nach >4 px Mausbewegung verschieben — ein einfacher Klick
+                // nahe einem Startpunkt darf die Anschnittposition nicht veraendern.
+                if (!startDragMoved) {
+                    if (startDragDown && Math.hypot(e.offsetX - startDragDown.x, e.offsetY - startDragDown.y) <= 4) return;
+                    startDragMoved = true;
+                }
                 dragContour.setStartPoint(worldPos);
                 this.render();
                 return;
@@ -674,6 +691,7 @@ class CanvasRenderer {
             if (isDraggingStartPoint) {
                 isDraggingStartPoint = false;
                 dragContour = null;
+                startDragDown = null;
                 this.canvas.style.cursor = 'default';
             }
             if (isPanning) {
@@ -843,7 +861,9 @@ class CanvasRenderer {
             // V3.28: Hatch-Konturen zuerst (Hintergrund), dann Reference, dann Rest
             visible.filter(c => c.isHatchContour || c.cuttingMode === 'none').forEach(c => this.drawContour(ctx, c));
             visible.filter(c => c.isReference).forEach(c => this.drawContour(ctx, c));
+            if (this.feasibilityMap) this._drawFeasibilityHalo(ctx, visible);
             visible.filter(c => !c.isReference && !c.isHatchContour && c.cuttingMode !== 'none').forEach(c => this.drawContour(ctx, c));
+            if (this.simplifyPreview) this._drawSimplifyPreview(ctx);
 
             // V3.28: Hatch Live-Preview (halbtransparent während HatchTool-Hover)
             if (this._hatchPreview) {
@@ -1013,6 +1033,48 @@ class CanvasRenderer {
         ctx.globalAlpha = 1;
     }
 
+    /** V3.51: Vorschau der vereinfachten Konturen (Cyan, mit Stuetzpunkten) */
+    _drawSimplifyPreview(ctx) {
+        const lw = 2 / this.scale, r = 2.2 / this.scale;
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = lw;
+        ctx.strokeStyle = '#00e5ff';
+        ctx.fillStyle = '#00e5ff';
+        for (const [c, v] of this.simplifyPreview) {
+            const pts = v.pts;
+            if (!pts || pts.length < 2) continue;
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            if (c.isClosed) ctx.closePath();
+            ctx.stroke();
+            for (const p of pts) { ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill(); }
+        }
+        ctx.restore();
+    }
+
+    /** V3.50: Machbarkeits-Halo — rot = schmaler als Strahl, orange = Nachbar naeher als Strahl */
+    _drawFeasibilityHalo(ctx, list) {
+        const lw = 7 / this.scale;
+        ctx.save();
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = lw;
+        ctx.setLineDash([]);
+        for (const c of list) {
+            const f = this.feasibilityMap.get(c);
+            if (!f || (!f.narrow && !f.close) || !c.points || c.points.length < 2) continue;
+            ctx.strokeStyle = f.narrow ? 'rgba(255,50,50,0.55)' : 'rgba(255,170,0,0.6)';
+            ctx.beginPath();
+            ctx.moveTo(c.points[0].x, c.points[0].y);
+            for (let i = 1; i < c.points.length; i++) ctx.lineTo(c.points[i].x, c.points[i].y);
+            if (c.isClosed) ctx.closePath();
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
     drawContour(ctx, contour, options) {
         const points = contour.points;
         if (!points || points.length < 2) return;
@@ -1127,7 +1189,7 @@ class CanvasRenderer {
             // V3.10: Anschussfahnen nur in CAM-Modi (nicht im CAD-Zeichenmodus)
             if (this.currentMode === 'anschuss' || this.currentMode === 'reihenfolge') {
                 this.drawStartTriangle(ctx, markerPoints[0], this.colors.leadIn);
-                this.drawSingleDirectionArrow(ctx, markerPoints);
+                this.drawSingleDirectionArrow(ctx, markerPoints, contour);
                 this.drawLeadIn(ctx, contour, markerPoints);
                 this.drawOvercut(ctx, contour, markerPoints);
                 this.drawLeadOut(ctx, contour, markerPoints);
@@ -1159,7 +1221,7 @@ class CanvasRenderer {
             // V3.10: Anschussfahnen nur in CAM-Modi
             if (this.currentMode === 'anschuss' || this.currentMode === 'reihenfolge') {
                 this.drawStartTriangle(ctx, points[0], this.colors.leadIn);
-                this.drawSingleDirectionArrow(ctx, points);
+                this.drawSingleDirectionArrow(ctx, points, contour);
                 this.drawLeadIn(ctx, contour, points);
                 this.drawOvercut(ctx, contour, points);
             }
@@ -1364,8 +1426,15 @@ class CanvasRenderer {
      * (konstante Pixelgroesse, zoom-unabhaengig), Tangente ueber ein Fenster gemittelt
      * (stabil auf Kreisen/Splines), dunkler Halo + heller Kern fuer Kontrast auf jedem Hintergrund.
      */
-    drawSingleDirectionArrow(ctx, points) {
+    drawSingleDirectionArrow(ctx, points, contour) {
         if (!points || points.length < 2) return;
+
+        // V3.49: Richtungspfeile — Modus 'auto' (Standard) / 'always' / 'never'.
+        // Auto: bei vielen Konturen (> 25) nur fuer ausgewaehlte/gehoverte Kontur, sonst unlesbar.
+        const arrowMode = this.directionArrowMode || 'auto';
+        if (arrowMode === 'never') return;
+        if (arrowMode === 'auto' && (this.contours?.length || 0) > 25 &&
+            !(contour && (contour.isSelected || contour === this.hoveredContour))) return;
 
         const cum = [0];
         for (let i = 1; i < points.length; i++) {
@@ -1592,7 +1661,7 @@ class CanvasRenderer {
         ctx.restore();
 
         // Pierce-Punkt
-        this.drawPierceSymbol(ctx, pierce, color, 'pierce');
+        this.drawPierceSymbol(ctx, pierce, color, 'pierce', leadPath.type);
 
         // V3.20: Richtungspfeil am Kontureintritt (letzter Punkt)
         const entryIdx = pts.length - 1;
@@ -1657,14 +1726,25 @@ class CanvasRenderer {
     }
 
     /** V5.2: Pierce-Symbol — ⊕ (Kreis + Kreuz) statt einfachem Punkt */
-    drawPierceSymbol(ctx, point, color, type = 'pierce') {
+    drawPierceSymbol(ctx, point, color, type = 'pierce', leadType = null) {
         if (!point) return;
         const size = CanvasRenderer.MARKER_SIZE.PIERCE_POINT / this.scale;
         const crossSize = size * 1.4;
 
-        // Gefüllter Kreis
+        // V3.48: Form nach Lead-Typ — Arc=Kreis, Linear=Quadrat, Tangential=Raute
         ctx.beginPath();
-        ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
+        if (leadType === 'linear') {
+            ctx.rect(point.x - size, point.y - size, size * 2, size * 2);
+        } else if (leadType === 'tangent') {
+            const d = size * 1.35;
+            ctx.moveTo(point.x, point.y - d);
+            ctx.lineTo(point.x + d, point.y);
+            ctx.lineTo(point.x, point.y + d);
+            ctx.lineTo(point.x - d, point.y);
+            ctx.closePath();
+        } else {
+            ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
+        }
         ctx.fillStyle = color;
         ctx.fill();
         ctx.strokeStyle = '#000';
@@ -1692,6 +1772,9 @@ class CanvasRenderer {
         if (leadPath.shortened)              return this.colors.leadShortened;
         if (leadPath.isAlternative)          return this.colors.leadAlternative;
         if (leadPath.isRotated)              return this.colors.leadRotated;
+        // V3.48: Normalzustand nach Lead-Typ einfaerben (Arc=Cyan, Linear=Orange, Tangential=Violett)
+        if (leadPath.type === 'linear')      return this.colors.leadTypeLinear;
+        if (leadPath.type === 'tangent')     return this.colors.leadTypeTangent;
         return this.colors.leadDefault;
     }
 
@@ -1765,7 +1848,7 @@ class CanvasRenderer {
         ctx.restore();
 
         // End-Punkt
-        this.drawPierceSymbol(ctx, pts[pts.length - 1], color, 'exit');
+        this.drawPierceSymbol(ctx, pts[pts.length - 1], color, 'exit', leadPath.type);
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -2125,14 +2208,18 @@ class CanvasRenderer {
      * @param {object} [options] - { edgeOnly: true } = nur Kanten-Hit, kein Flächen-Hit
      */
     findContourAtPoint(worldX, worldY, options) {
-        const tolerance = CanvasRenderer.TOLERANCE.HIT_TEST / this.scale;
+        const px = 1 / this.scale;
+        const tolerance = CanvasRenderer.TOLERANCE.HIT_TEST * px;
+        const preciseTol = Math.min(5 * px, tolerance); // exakter Kantentreffer (5 px)
         if (!this.contours) return null;
 
         // V3.11: LayerManager für Sichtbarkeits-Check
         const lm = this.app?.layerManager;
 
-        // === Pass 1: Kanten-Hit (exakte Linien-Nähe) — hat Priorität ===
-        // V5.0: Rückwärts iterieren (AutoCAD-Konvention: zuletzt gezeichnet = oben)
+        // === Pass 1: Kanten-Hit — V3.49: NAECHSTE Kante gewinnt (nicht die zuletzt gezeichnete) ===
+        // Bei vielen kleinen Konturen liegen mehrere Kanten innerhalb der Toleranz; frueher
+        // wurde die letzte in der Liste gewaehlt, die gewuenschte war so kaum anwaehlbar.
+        let bestEdge = null, bestDist = Infinity;
         for (let ci = this.contours.length - 1; ci >= 0; ci--) {
             const contour = this.contours[ci];
             // V3.11: Unsichtbare Layer überspringen, V3.31: Gesperrte Layer blockieren
@@ -2144,7 +2231,7 @@ class CanvasRenderer {
             if (points && points.length >= 2) {
                 for (let i = 0; i < points.length - 1; i++) {
                     const dist = this.pointToSegmentDistance(worldX, worldY, points[i].x, points[i].y, points[i+1].x, points[i+1].y);
-                    if (dist < tolerance) return contour;
+                    if (dist < tolerance && dist < bestDist) { bestDist = dist; bestEdge = contour; }
                 }
             }
 
@@ -2155,17 +2242,18 @@ class CanvasRenderer {
                         const dist = this.pointToSegmentDistance(worldX, worldY,
                             kerf.points[i].x, kerf.points[i].y,
                             kerf.points[i+1].x, kerf.points[i+1].y);
-                        if (dist < tolerance) return contour;
+                        if (dist < tolerance && dist < bestDist) { bestDist = dist; bestEdge = contour; }
                     }
                 }
             } catch(e) {}
         }
 
-        // V3.36: edgeOnly-Modus — kein Flächen-Hit (für Rechtsklick-Kontextmenü)
+        // Exakter Kantentreffer (oder reiner Kanten-Modus, z.B. Rechtsklick) → sofort
+        if (bestEdge && (bestDist <= preciseTol || options?.edgeOnly)) return bestEdge;
         if (options?.edgeOnly) return null;
 
         // === Pass 2: Flächen-Hit — Klick IN geschlossene Kontur (V3.27) ===
-        // Löst das Problem: Klick in die Mitte einer großen Kontur wurde nicht erkannt
+        // V3.49: Flaeche hat Vorrang vor der weiten Kanten-Toleranz → innerste Kontur anwaehlbar
         if (typeof GeometryOps !== 'undefined' && GeometryOps.pointInPolygon) {
             const point = { x: worldX, y: worldY };
             const candidates = [];
@@ -2193,7 +2281,8 @@ class CanvasRenderer {
             }
         }
 
-        return null;
+        // Weite Kanten-Toleranz als Fallback (knapp neben der Kante, ausserhalb jeder Flaeche)
+        return bestEdge;
     }
 
     /**

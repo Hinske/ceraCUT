@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '6.90',
-    build: '20261105-ppfix',
+    version: '6.91',
+    build: '20261105-simp1',
     date: '2026-11-05',
-    time: '16:50 MEZ',
+    time: '18:12 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'c2552b6',
+        hash: '9900452',
         date: '2026-11-05',
-        message: 'fix: Sinumerik-PP V2.6 (Steg ohne Nullweg-Satz, Multi-Head lauffaehig, cuttingMode-Pruefun'
+        message: 'feat: Bearbeitung-Tab vereinfacht, Strahlbreiten-Check, Konturen vereinfachen, Auswahl-Fix V6.91'
     },
 
     modules: {
@@ -25,12 +25,14 @@ const CERACUT_BUILD = {
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.10', build: '20261104-reviewfix' },
         'cam-contour':        { version: '5.23', build: '20261104-pushexecuted' },
-        'canvas-renderer':    { version: '3.47', build: '20261105-gripdir' },
+        'canvas-renderer':    { version: '3.51', build: '20261105-simp1' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.6', build: '20261105-ppfix' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
         'snap-manager':       { version: '1.9', build: '20261105-acmarker' },
         'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },
+        'feasibility':        { version: '1.0', build: '20261105-feas1' },
+        'simplify':           { version: '1.0', build: '20261105-simp1' },
         'drawing-tools':      { version: '2.21', build: '20261105-otrack' },
         'drawing-tools-ext':  { version: '1.11', build: '20261104-reviewfix' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
@@ -39,7 +41,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.45', build: '20261105-meander' },
+        'app':                { version: '6.50', build: '20261105-simp1' },
         'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
