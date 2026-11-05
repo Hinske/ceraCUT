@@ -1613,7 +1613,7 @@
 <script src="js/svg-parser.js?v=20261104-reviewfix"></script>
 <script src="js/properties-panel.js?v=20261104-reviewfix"></script>
 <script src="js/nesting.js?v=20261104-reviewfix"></script>
-<script src="js/toolpath-simulator.js?v=20261104-reviewfix"></script>
+<script src="js/toolpath-simulator.js?v=20261105-simplayer"></script>
 <script src="js/cost-calculator.js?v=20261104-reviewfix"></script>
 <script src="js/machine-profiles.js?v=20261104-reviewfix"></script>
 <script src="js/bridge-cutting.js?v=20261104-reviewfix"></script>
@@ -3760,7 +3760,7 @@
 
                 const overlay = document.createElement('div');
                 overlay.id = 'sim-overlay';
-                overlay.style.cssText = 'position:absolute;inset:0;z-index:100;';
+                overlay.style.cssText = 'position:absolute;inset:0;z-index:100;pointer-events:none;';
 
                 const simCanvas = document.createElement('canvas');
                 simCanvas.width = mainCanvas.width;
@@ -3768,33 +3768,86 @@
                 simCanvas.style.cssText = 'width:100%;height:100%;display:block;';
 
                 const stopBtn = document.createElement('button');
-                stopBtn.textContent = '■ Simulation stoppen';
-                stopBtn.style.cssText = 'position:absolute;top:8px;right:8px;padding:6px 14px;background:#c0392b;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;';
+                stopBtn.textContent = '✕ Schliessen';
+                stopBtn.style.cssText = 'position:absolute;top:8px;right:8px;pointer-events:auto;padding:6px 14px;background:#c0392b;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;';
+
+                // Player-Leiste
+                const bar = document.createElement('div');
+                bar.style.cssText = 'position:absolute;left:50%;bottom:12px;transform:translateX(-50%);pointer-events:auto;display:flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(30,30,30,0.92);border:1px solid #555;border-radius:6px;color:#eee;font-size:12px;max-width:94%;';
+                const btnCss = 'background:#3a3a3a;color:#fff;border:1px solid #666;border-radius:4px;cursor:pointer;font-size:14px;min-width:32px;height:28px;';
+                bar.innerHTML = `
+                    <button data-a="restart" title="Von vorn (Home)" style="${btnCss}">⏮</button>
+                    <button data-a="play" title="Pause/Weiter (Leertaste)" style="${btnCss}">⏸</button>
+                    <input data-a="seek" type="range" min="0" max="1000" value="0" style="width:260px;">
+                    <select data-a="speed" title="Geschwindigkeit" style="background:#3a3a3a;color:#fff;border:1px solid #666;border-radius:4px;height:28px;">
+                        <option value="10">0.2×</option><option value="25">0.5×</option>
+                        <option value="50" selected>1×</option><option value="100">2×</option>
+                        <option value="250">5×</option><option value="500">10×</option><option value="1500">30×</option>
+                    </select>
+                    <span data-a="info" style="min-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>`;
+                const q = (a) => bar.querySelector(`[data-a="${a}"]`);
+                const playBtn = q('play'), seekEl = q('seek'), speedEl = q('speed'), infoEl = q('info');
 
                 overlay.appendChild(simCanvas);
                 overlay.appendChild(stopBtn);
+                overlay.appendChild(bar);
                 canvasArea.appendChild(overlay);
 
+                let player = null;
+                let scrubbing = false;
+                const phaseNames = { rapid: 'Eilgang', leadIn: 'Anschuss', cutting: 'Schnitt', overcut: 'Überschnitt', leadOut: 'Auslauf', complete: 'Fertig' };
+                const updatePlayBtn = () => { playBtn.textContent = player?.isFinished() ? '↻' : (player?.isPaused() ? '▶' : '⏸'); };
+
+                const onKey = (e) => {
+                    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && e.target.type !== 'range') return;
+                    if (e.key === ' ' ) { e.preventDefault(); e.stopPropagation(); playBtn.click(); }
+                    else if (e.key === 'Home') { q('restart').click(); }
+                    else if (e.key === 'Escape') { cleanup(); }
+                };
                 const cleanup = () => {
+                    document.removeEventListener('keydown', onKey, true);
                     ToolpathSimulator.stopAnimation();
                     overlay.remove();
                     renderer?.render();
                 };
+                document.addEventListener('keydown', onKey, true);
                 stopBtn.addEventListener('click', cleanup);
 
-                ToolpathSimulator.startAnimation(simCanvas, app.contours, app.cutOrder, {
+                q('restart').addEventListener('click', () => { player?.restart(); player?.resume(); updatePlayBtn(); });
+                playBtn.addEventListener('click', () => {
+                    if (!player) return;
+                    if (player.isFinished()) { player.restart(); player.resume(); }
+                    else if (player.isPaused()) player.resume(); else player.pause();
+                    updatePlayBtn();
+                });
+                speedEl.addEventListener('change', () => player?.setSpeed(parseFloat(speedEl.value)));
+                seekEl.addEventListener('input', () => { scrubbing = true; player?.seek(seekEl.value / 1000); });
+                seekEl.addEventListener('change', () => { scrubbing = false; updatePlayBtn(); });
+                // Mausrad auf der Leiste darf nicht zoomen/scrollen
+                bar.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
+
+                player = ToolpathSimulator.startAnimation(simCanvas, app.contours, app.cutOrder, {
                     speed: 50,
                     nullPoint: renderer?.nullPoint || { x: 0, y: 0 },
+                    getTransform: () => ({
+                        scale:   renderer?.scale   || 1,
+                        offsetX: renderer?.offsetX || 0,
+                        offsetY: renderer?.offsetY || 0,
+                        dpr:     renderer?._dpr    || 1,
+                        width:   mainCanvas.width,
+                        height:  mainCanvas.height
+                    }),
                     transform: {
                         scale:   renderer?.scale   || 1,
                         offsetX: renderer?.offsetX || 0,
                         offsetY: renderer?.offsetY || 0,
                         dpr:     renderer?._dpr    || 1
                     },
-                    onComplete: () => {
-                        stopBtn.textContent = '✓ Fertig — Klicken zum Schliessen';
-                        stopBtn.style.background = '#27ae60';
-                    }
+                    onStep: (st) => {
+                        if (!scrubbing) seekEl.value = Math.round(st.progress * 1000);
+                        infoEl.textContent = (phaseNames[st.phase] || st.phase) + (st.contourName ? ' · ' + st.contourName : '');
+                    },
+                    onComplete: () => { updatePlayBtn(); }
                 });
             });
             document.getElementById('btn-verify')?.addEventListener('click', () => {

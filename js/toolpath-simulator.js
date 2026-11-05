@@ -779,6 +779,9 @@ const ToolpathSimulator = {
             scale: 1,
             dpr: 1
         }, options.transform || {});
+        // Live-Transform (Zoom/Pan während der Simulation): Trail wird bei Änderung neu gezeichnet
+        const getTransform = (typeof options.getTransform === 'function') ? options.getTransform : null;
+        const paintedLines = [];
 
         // Off-Screen-History-Canvas: Trail wird inkrementell akkumuliert (O(1) pro Frame)
         const histCanvas = document.createElement('canvas');
@@ -816,7 +819,8 @@ const ToolpathSimulator = {
         });
 
         // Segment inkrementell auf History-Canvas malen
-        const paintLine = (from, to, phase) => {
+        const paintLine = (from, to, phase, record = true) => {
+            if (record) paintedLines.push({ from: { x: from.x, y: from.y }, to: { x: to.x, y: to.y }, phase });
             const f = w2c(from);
             const t = w2c(to);
             histCtx.beginPath();
@@ -834,25 +838,54 @@ const ToolpathSimulator = {
             // Gemessene Framezeit (clamp gegen Tab-Pausen); erster Frame: 60 fps annehmen
             const frameMs = lastFrameTs === null ? 1000 / 60 : Math.min(100, Math.max(0, now - lastFrameTs));
             lastFrameTs = now;
-            if (anim.paused) {
+            // Zoom/Pan/Resize: Transform übernehmen, Canvas-Größe angleichen, Trail neu zeichnen
+            if (getTransform) {
+                const t = getTransform();
+                if (t && (t.scale !== transform.scale || t.offsetX !== transform.offsetX ||
+                          t.offsetY !== transform.offsetY || t.dpr !== transform.dpr ||
+                          (t.width && t.width !== canvas.width) || (t.height && t.height !== canvas.height))) {
+                    transform.scale = t.scale; transform.offsetX = t.offsetX;
+                    transform.offsetY = t.offsetY; transform.dpr = t.dpr;
+                    if (t.width && t.height && (canvas.width !== t.width || canvas.height !== t.height)) {
+                        canvas.width = t.width; canvas.height = t.height;
+                    }
+                    histCanvas.width = canvas.width;
+                    histCanvas.height = canvas.height;
+                    for (const l of paintedLines) paintLine(l.from, l.to, l.phase, false);
+                    anim.needsRedraw = true;
+                }
+            }
+
+            if (anim.paused && !anim.needsRedraw) {
+                anim.rafId = requestAnimationFrame(drawFrame);
+                return;
+            }
+            const redrawOnly = anim.paused;
+            anim.needsRedraw = false;
+
+            const seg = segments[anim.segmentIndex];
+            if (!seg) {
+                // Ende erreicht: Loop bleibt aktiv (Zoom/Pan, Zurückspulen), onComplete nur einmal
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(histCanvas, 0, 0);
+                if (!anim.finished) {
+                    anim.finished = true;
+                    onStep?.({ phase: 'complete', contourIndex: -1, contourName: '', progress: 1, headPos: anim.lastPt });
+                    onComplete?.({ totalTime: (performance.now() - anim.startTime) / 1000 });
+                }
                 anim.rafId = requestAnimationFrame(drawFrame);
                 return;
             }
 
-            const seg = segments[anim.segmentIndex];
-            if (!seg) {
-                anim.running = false;
-                onComplete?.({ totalTime: (performance.now() - anim.startTime) / 1000 });
-                return;
-            }
-
-            const dt = frameMs * anim.speed;
+            const dt = redrawOnly ? 0 : frameMs * anim.speed;
             const segLength = seg.length || 1;
             const stepMM = (dt / 1000) * (seg.speed / 60);
             anim.segmentProgress += stepMM / segLength;
 
             let currentPt;
-            if (anim.segmentProgress >= 1) {
+            if (redrawOnly) {
+                currentPt = anim.lastPt || seg.points[0];
+            } else if (anim.segmentProgress >= 1) {
                 currentPt = seg.points[seg.points.length - 1];
                 if (anim.lastPt) paintLine(anim.lastPt, currentPt, seg.phase);
                 anim.segmentIndex++;
@@ -901,11 +934,32 @@ const ToolpathSimulator = {
 
         anim.rafId = requestAnimationFrame(drawFrame);
 
+        // Player: an Segment-Position springen (frac 0..1), Trail neu aufbauen
+        const seek = (frac) => {
+            const idx = Math.min(segments.length, Math.max(0, Math.round(frac * segments.length)));
+            paintedLines.length = 0;
+            histCtx.clearRect(0, 0, histCanvas.width, histCanvas.height);
+            for (let i = 0; i < idx; i++) {
+                const sg = segments[i];
+                for (let j = 1; j < sg.points.length; j++) paintLine(sg.points[j - 1], sg.points[j], sg.phase);
+            }
+            anim.segmentIndex = idx;
+            anim.segmentProgress = 0;
+            anim.finished = false;
+            const lp = idx > 0 ? segments[idx - 1].points[segments[idx - 1].points.length - 1] : firstPt;
+            anim.lastPt = { x: lp.x, y: lp.y };
+            anim.needsRedraw = true;
+        };
+
         return {
             stop: () => this.stopAnimation(),
             pause: () => { anim.paused = true; },
             resume: () => { anim.paused = false; },
-            setSpeed: (s) => { anim.speed = Math.max(0.1, s); }
+            setSpeed: (s) => { anim.speed = Math.max(0.1, s); },
+            seek,
+            restart: () => { seek(0); anim.startTime = performance.now(); },
+            isPaused: () => anim.paused,
+            isFinished: () => !!anim.finished
         };
     },
 

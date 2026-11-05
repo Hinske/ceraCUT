@@ -45,7 +45,7 @@ const CERACUT_BUILD = {
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
         'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
         'nesting':            { version: '1.2', build: '20261104-reviewfix' },
-        'toolpath-simulator': { version: '1.4', build: '20261104-reviewfix' },
+        'toolpath-simulator': { version: '1.6', build: '20261105-simplayer' },
         'cost-calculator':    { version: '1.3', build: '20261104-reviewfix' },
         'machine-profiles':   { version: '1.2', build: '20261104-reviewfix' },
         'bridge-cutting':     { version: '1.1', build: '20261104-reviewfix' },
