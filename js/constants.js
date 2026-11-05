@@ -1,11 +1,12 @@
 /**
- * CeraCUT V2.12 Constants
+ * CeraCUT V2.13 Constants
+ * V2.13: GENERAL_SHORTCUTS — Strg+Shift+P Bereich drucken
  * V2.12: GENERAL_SHORTCUTS — F9/F10/F11 + Shift-Ortho-Override
  * Blaues Farbschema
  * V2.10: TOOL_ECHO_NAMES — AutoCAD-Style Command-Echo-Tabelle (_LINE, _CIRCLE, ...)
  * V2.9: TOOL_TOOLTIPS — alle 7 CAM-Tools (EF, REP, AN, BT, PJ, VZ, HULL) eingetragen
  * V2.8: INTARSIA_MATERIALS — 5 Materialgruppen mit Farben
- * Build: 20261104-reviewfix
+ * Build: 20261105-printarea
  * V2.11: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
@@ -181,6 +182,7 @@ const GENERAL_SHORTCUTS = [
     { shortcut: 'Strg+A',       label: 'Alles waehlen' },
     { shortcut: 'Strg+S',       label: 'Speichern' },
     { shortcut: 'Strg+P',       label: 'Drucken' },
+    { shortcut: 'Strg+Shift+P', label: 'Bereich drucken (Rahmen aufziehen)' },
     { shortcut: 'F1',           label: 'Hilfe / Tastenkuerzel' },
     { shortcut: 'F3',           label: 'Messen' },
     { shortcut: 'F8',           label: 'Ortho-Modus' },

@@ -1,8 +1,9 @@
 /**
- * CeraCUT V6.38 - Main Application
+ * CeraCUT V6.39 - Main Application
+ * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
  * Last Modified: 2026-11-05
- * Build: 20261105-otrack
+ * Build: 20261105-printarea
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -2577,7 +2578,8 @@ class CeraCutApp {
                 case 'P':
                     if (ctrl) {
                         e.preventDefault();
-                        this.printCanvas();
+                        if (e.shiftKey) this.startPrintSelection(); // V6.79: Strg+Shift+P = Bereich drucken
+                        else this.printCanvas();
                     }
                     break;
             }
@@ -2972,6 +2974,7 @@ class CeraCutApp {
 
         // Print-Button
         document.getElementById('qa-print')?.addEventListener('click', () => this.printCanvas());
+        document.getElementById('qa-print-area')?.addEventListener('click', () => this.startPrintSelection());
 
         // Undo/Redo-Buttons (V6.9)
         document.getElementById('btn-undo')?.addEventListener('click', () => {
@@ -5456,7 +5459,7 @@ class CeraCutApp {
      * Canvas-Inhalt drucken — rendert auf ein temporäres Canvas mit weißem
      * Hintergrund und schwarzen Konturen, skaliert auf A4 Landscape.
      */
-    printCanvas() {
+    printCanvas(region = null) {
         if (!this.contours || this.contours.length === 0) {
             this.showToast('Keine Konturen zum Drucken', 'warning');
             return;
@@ -5477,12 +5480,17 @@ class CeraCutApp {
         }
 
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const c of visible) {
-            for (const p of c.points) {
-                if (p.x < minX) minX = p.x;
-                if (p.y < minY) minY = p.y;
-                if (p.x > maxX) maxX = p.x;
-                if (p.y > maxY) maxY = p.y;
+        if (region) {
+            // V6.79: Bereichsdruck — Ausschnitt statt Gesamt-Bounding-Box
+            ({ minX, minY, maxX, maxY } = region);
+        } else {
+            for (const c of visible) {
+                for (const p of c.points) {
+                    if (p.x < minX) minX = p.x;
+                    if (p.y < minY) minY = p.y;
+                    if (p.x > maxX) maxX = p.x;
+                    if (p.y > maxY) maxY = p.y;
+                }
             }
         }
 
@@ -5523,6 +5531,13 @@ class CeraCutApp {
         ctx.scale(scale, -scale);
         ctx.translate(-minX, -minY);
 
+        // V6.79: Bereichsdruck — alles ausserhalb des Auswahlrahmens abschneiden
+        if (region) {
+            ctx.beginPath();
+            ctx.rect(minX, minY, geoW, geoH);
+            ctx.clip();
+        }
+
         // Alle sichtbaren Konturen in Schwarz zeichnen
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 1.5 / scale;
@@ -5548,13 +5563,94 @@ class CeraCutApp {
         const footer = document.getElementById('print-footer');
         const fnEl = footer.querySelector('.print-filename');
         const dtEl = footer.querySelector('.print-date');
-        fnEl.textContent = this.loadedFileName || 'Unbenannt';
+        fnEl.textContent = (this.loadedFileName || 'Unbenannt') + (region ? ' (Ausschnitt)' : '');
         const now = new Date();
         dtEl.textContent = now.toLocaleDateString('de-DE') + ' ' + now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
         // System-Druckdialog
         console.log('[App] Drucken gestartet:', this.loadedFileName || 'Unbenannt');
         window.print();
+    }
+
+    /**
+     * V6.79: Bereichsdruck — Nutzer zieht einen Rahmen auf dem Canvas auf,
+     * danach wird nur dieser Ausschnitt (World-Koordinaten) gedruckt.
+     * ESC oder Rechtsklick bricht ab.
+     */
+    startPrintSelection() {
+        const renderer = this.renderer;
+        const canvas = renderer?.canvas;
+        const area = document.getElementById('canvas-area');
+        if (!canvas || !area) return;
+        if (!this.contours || this.contours.length === 0) {
+            this.showToast('Keine Konturen zum Drucken', 'warning');
+            return;
+        }
+        if (document.getElementById('print-select-overlay')) return; // laeuft bereits
+
+        const overlay = document.createElement('div');
+        overlay.id = 'print-select-overlay';
+        const box = document.createElement('div');
+        box.className = 'print-select-box';
+        box.style.display = 'none';
+        overlay.appendChild(box);
+        area.appendChild(overlay);
+        this.showToast('Druckbereich mit der Maus aufziehen (ESC = Abbruch)', 'info');
+
+        let start = null;
+        const cleanup = () => {
+            window.removeEventListener('keydown', onKey, true);
+            overlay.remove();
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cleanup(); }
+        };
+        window.addEventListener('keydown', onKey, true);
+
+        // Position relativ zum Canvas (wie e.offsetX im Renderer) und auf Canvas begrenzt
+        const rel = (e) => {
+            const r = canvas.getBoundingClientRect();
+            return {
+                x: Math.max(0, Math.min(r.width,  e.clientX - r.left)),
+                y: Math.max(0, Math.min(r.height, e.clientY - r.top)),
+                left: r.left, top: r.top
+            };
+        };
+
+        overlay.addEventListener('contextmenu', (e) => { e.preventDefault(); cleanup(); });
+        overlay.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            start = rel(e);
+            overlay.setPointerCapture(e.pointerId);
+            box.style.display = 'block';
+        });
+        overlay.addEventListener('pointermove', (e) => {
+            if (!start) return;
+            const cur = rel(e);
+            const ar = area.getBoundingClientRect();
+            box.style.left   = (start.left + Math.min(start.x, cur.x) - ar.left) + 'px';
+            box.style.top    = (start.top  + Math.min(start.y, cur.y) - ar.top)  + 'px';
+            box.style.width  = Math.abs(cur.x - start.x) + 'px';
+            box.style.height = Math.abs(cur.y - start.y) + 'px';
+        });
+        overlay.addEventListener('pointerup', (e) => {
+            if (!start) return;
+            const end = rel(e);
+            const s0 = start;
+            cleanup();
+            if (Math.abs(end.x - s0.x) < 5 || Math.abs(end.y - s0.y) < 5) {
+                this.showToast('Bereich zu klein — Auswahl abgebrochen', 'warning');
+                return;
+            }
+            // Bildschirm -> World (Y ist im Renderer invertiert, daher min/max neu bilden)
+            const a = renderer.screenToWorld(s0.x, s0.y);
+            const b = renderer.screenToWorld(end.x, end.y);
+            this.printCanvas({
+                minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x),
+                minY: Math.min(a.y, b.y), maxY: Math.max(a.y, b.y)
+            });
+        });
     }
 
     // ════════════════════════════════════════════════════════════════

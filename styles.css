@@ -2301,6 +2301,21 @@ html, body {
     }
 }
 
+/* V6.79: Bereichsdruck — Auswahl-Overlay ueber dem Canvas */
+#print-select-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5000;
+    cursor: crosshair;
+    touch-action: none;
+}
+#print-select-overlay .print-select-box {
+    position: absolute;
+    border: 1.5px dashed #4da3ff;
+    background: rgba(77, 163, 255, 0.15);
+    pointer-events: none;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    WORKSPACE SIDEBAR (LEFT)
    ═══════════════════════════════════════════════════════════════ */

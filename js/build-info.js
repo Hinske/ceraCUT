@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.78
- * Version: V6.78
+ * CeraCUT Build Info V6.79
+ * Version: V6.79
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-otrack
+ * Build: 20261105-printarea
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.78',
-    build: '20261105-otrack',
+    version: '6.79',
+    build: '20261105-printarea',
     date: '2026-11-05',
     time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '070a1a0',
-        date: '2026-11-05 07:09:40 +0100',
-        message: 'feat: Object Snap Tracking (F11), Polar Tracking (F10), Shift-Ortho-Override, Perpendicular-/Tangent-Fang (V6.78)'
+        hash: '43aebff',
+        date: '2026-11-05 07:19:37 +0100',
+        message: 'feat: Bereichsdruck — Rahmen aufziehen, nur Ausschnitt drucken/PDF (Strg+Shift+P) (V6.79)'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.38', build: '20261105-otrack' },
+        'app':                { version: '6.39', build: '20261105-printarea' },
         'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -59,7 +59,7 @@ const CERACUT_BUILD = {
         'server':             { version: '1.8', build: '20261104-pushexecuted' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
-        'constants': { version: '2.12', build: '20261105-otrack' },
+        'constants': { version: '2.13', build: '20261105-printarea' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },
