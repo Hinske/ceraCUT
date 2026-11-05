@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.79
- * Version: V6.79
+ * CeraCUT Build Info V6.80
+ * Version: V6.80
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-printarea
+ * Build: 20261105-printnolink
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.79',
-    build: '20261105-printarea',
+    version: '6.80',
+    build: '20261105-printnolink',
     date: '2026-11-05',
     time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '43aebff',
-        date: '2026-11-05 07:19:37 +0100',
-        message: 'feat: Bereichsdruck — Rahmen aufziehen, nur Ausschnitt drucken/PDF (Strg+Shift+P) (V6.79)'
+        hash: 'bd26068',
+        date: '2026-11-05 07:22:24 +0100',
+        message: 'fix: Druck ohne Browser-Kopf-/Fusszeile (URL) — @page margin 0, Rand per Padding (V6.80)'
     },
 
     modules: {
