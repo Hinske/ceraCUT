@@ -1,5 +1,5 @@
 /**
- * CeraCUT/CeraCUT Sinumerik 840D Postprozessor V2.5
+ * CeraCUT Sinumerik 840D Postprozessor V2.6
  *
  * Erzeugt CNC-Code im MPF-Format für Sinumerik 840D Steuerungen.
  * Format-Vorlage: 7 echte CNC-Referenzdateien (KERNKREIS, ERBEN, SCHWEDEN, etc.)
@@ -51,13 +51,18 @@
  *       engen Kurven (z.B. Cursive-DXF Irlich: Min-Radius 0.15–0.66mm) erzeugten Error 10763.
  *       Fix: minArcRadius = max(kerfWidth × 1.5, 1.0mm) — 50% Sicherheitsmarge über Kerf.
  *
- * Last Modified: 2026-06-29
- * Build: 20260629-arcradiusfix
+ * V2.6: Fixes — Haltesteg (skip) ohne Nullweg-Satz (erster Punkt = aktuelle Position wird uebersprungen);
+ *       Multi-Head erzeugt lauffaehiges Programm (KOPF_*-Zuweisungen vor M30, PARTn-Aufrufe,
+ *       vollstaendiger PART-Rahmen je Kopf mit ATRANS-Offset); fehlender cuttingMode blockiert Export;
+ *       Guard in _processArcLeadExact bei hasLinePortion mit < 3 Punkten; Log-Prefix nutzt VERSION.
+ *
+ * Last Modified: 2026-11-05
+ * Build: 20261105-ppfix
  */
 
 class SinumerikPostprocessor {
 
-    static VERSION = '2.4';
+    static VERSION = '2.6';
 
     constructor(options = {}) {
         // ═══ Formatierung ═══
@@ -175,9 +180,16 @@ class SinumerikPostprocessor {
     // MPF HEADER (Hauptprogramm)
     // ════════════════════════════════════════════════════════════════
 
-    _generateMPFHeader(planName, material, tafelName, plate, dicke) {
+    _generateMPFHeader(planName, material, tafelName, plate, dicke, multiHead = null) {
         const flaecheQM = ((plate.width * plate.height) / 1e6).toFixed(2);
         const maxVerfahrweg = Math.max(plate.width, plate.height).toFixed(2);
+
+        const headCalls = [];
+        if (multiHead) for (let h = 2; h <= multiHead.count; h++) headCalls.push(`PART${h}`);
+        const headDefs = multiHead ? [
+            `KOPF_ANZAHL=${multiHead.count}`,
+            `KOPF_ABSTAND=${Math.round(multiHead.spacing)}`
+        ] : [];
 
         return [
             `%_N_${planName}_MPF`,
@@ -221,7 +233,9 @@ class SinumerikPostprocessor {
             'N12 R402=0.00                           ; Nullpunktverschiebung Y',
             'N13 R403=0.00                           ; Winkel',
             'N14 R404=1                              ; Spiegelflag',
+            ...headDefs,
             'N15 PART1',
+            ...headCalls,
             'N16 L206',
             'N17 M30',
         ].join('\n') + '\n';
@@ -341,13 +355,13 @@ class SinumerikPostprocessor {
     // PART1_SPF (Geometrie — alle Konturen)
     // ════════════════════════════════════════════════════════════════
 
-    _generatePartSPF(planName, tafelName, cuttable) {
+    _generatePartSPF(planName, tafelName, cuttable, partNum = 1, headOffset = null) {
         const totalArea = cuttable.reduce((sum, c) => sum + Math.abs(c.getArea?.() || 0), 0);
         const lines = [];
 
-        lines.push(`%_N_PART1_SPF`);
+        lines.push(`%_N_PART${partNum}_SPF`);
         lines.push(`;$PATH=/_N_WKS_DIR/_N_${planName}_WPD`);
-        lines.push(`;NEUES TEIL NR 1`);
+        lines.push(`;NEUES TEIL NR ${partNum}`);
         lines.push(`MSG(" BTIDENTNR  : ${planName}")`);
         lines.push(`;KOMMISSION : ${tafelName}`);
         lines.push(`;FLAECHE    : ${totalArea.toFixed(0)}.000`);
@@ -356,6 +370,10 @@ class SinumerikPostprocessor {
 
         // Koordinaten-Transformation
         lines.push('N1 TRANS X=R401 Y=R402');
+        if (headOffset && headOffset.value > 0) {
+            lines.push(`;KOPF ${partNum} — Offset ${headOffset.axis}=${headOffset.value.toFixed(2)}mm`);
+            lines.push(`ATRANS ${headOffset.axis}=${headOffset.value.toFixed(2)}`);
+        }
         lines.push('N2 AROT RPL=R403');
         lines.push('N3 IF R404==1 GOTOF LABEL1');
         lines.push('N4 AMIRROR X0');
@@ -577,8 +595,11 @@ class SinumerikPostprocessor {
                 } else {
                     lines.push(`N${this._lineNum++} ${abrasiveOff}                            ; Steg — Abrasiv aus`);
                     for (const p of bseg.points) {
+                        const px = +this._tx(p.x), py = +this._ty(p.y);
+                        // Nullweg-Satz vermeiden (Steg beginnt an aktueller Position)
+                        if (Math.hypot(px - curX, py - curY) < 0.005) continue;
                         lines.push(`N${this._lineNum++} G01 X${this._tx(p.x)} Y${this._ty(p.y)}`);
-                        curX = +this._tx(p.x); curY = +this._ty(p.y);
+                        curX = px; curY = py;
                     }
                     lines.push(`N${this._lineNum++} ${abrasiveOn}                            ; Steg Ende — Abrasiv an`);
                 }
@@ -787,6 +808,7 @@ class SinumerikPostprocessor {
         if (!pts || pts.length < 2) return this._processContourPoints(pts);
         const center = leadPath.arcCenter;
         const clockwise = !leadPath.arcSweepCCW;
+        if (leadPath.hasLinePortion && pts.length < 3) return this._processContourPoints(pts);
         const isLeadIn = leadPath.entryPoint !== undefined;
         const segs = [];
 
@@ -897,7 +919,8 @@ class SinumerikPostprocessor {
             return flipped ? 'G41' : 'G42';
         }
 
-        this._warnings.push(`Kontur ohne cuttingMode — kein Kerf`);
+        this._warnings.push(`KOORDINATEN-FEHLER: Kontur ohne gueltigen cuttingMode (${mode}) — Kerf-Seite unbekannt, Export blockiert`);
+        this._hasFatalError = true;
         return 'G41';
     }
 
@@ -1022,7 +1045,7 @@ class SinumerikPostprocessor {
     _fc(value) {
         if (value == null || !isFinite(value)) {
             const msg = `KOORDINATEN-FEHLER: ungültiger Wert (${value})`;
-            console.error(`[PP V2.1] ${msg}`);
+            console.error(`[PP V${SinumerikPostprocessor.VERSION}] ${msg}`);
             this._warnings.push(msg);
             this._hasFatalError = true;
             return '0.000';  // Fallback, aber Export wird durch _hasFatalError blockiert
@@ -1144,41 +1167,23 @@ class SinumerikPostprocessor {
         }
 
         let code = '';
-        code += this._generateMPFHeader(planName, material, tafelName, plate, dicke);
-        code += `KOPF_ANZAHL=${this.headCount}\n`;
-        code += `KOPF_ABSTAND=${this.headSpacing.toFixed(2)}\n`;
+        code += this._generateMPFHeader(planName, material, tafelName, plate, dicke,
+            { count: this.headCount, spacing: this.headSpacing });
         code += ' \n';
         code += this._generateParameterSPF(planName, rp);
         code += ' \n';
 
-        // Für jeden Kopf ein PART-Subprogramm
+        // Fuer jeden Kopf ein vollstaendiges PART-Subprogramm
         for (let h = 0; h < this.headCount; h++) {
             const headContours = headGroups[h];
-            if (headContours.length === 0) continue;
-
-            const offset = h * this.headSpacing;
+            if (headContours.length === 0) {
+                // Leerer Kopf: trotzdem leeres PART erzeugen, da das Hauptprogramm PARTn aufruft
+                code += `%_N_PART${h + 1}_SPF\n;$PATH=/_N_WKS_DIR/_N_${planName}_WPD\n;KOPF ${h + 1} — keine Konturen\nRET\n \n`;
+                continue;
+            }
             const offsetAxis = this.headAxis === 'X' ? 'X' : 'Y';
-
-            code += `%_N_PART${h + 1}_SPF\n`;
-            code += `;$PATH=/_N_WKS_DIR/_N_${planName}_WPD\n`;
-            code += `;KOPF ${h + 1} — ${headContours.length} Konturen, Offset ${offsetAxis}=${offset.toFixed(2)}mm\n`;
-
-            if (offset > 0) {
-                code += `; Kopf-Offset\n`;
-                code += `TRANS ${offsetAxis}=${offset.toFixed(2)}\n`;
-            }
-
-            // Konturen dieses Kopfes
-            this._lineNum = 1;
-            for (let i = 0; i < headContours.length; i++) {
-                const contourLines = this._generateContourBlock(headContours[i], i + 1);
-                code += contourLines.join('\n') + '\n';
-            }
-
-            if (offset > 0) {
-                code += `TRANS\n`; // Reset
-            }
-            code += `N${this._lineNum++} RET\n`;
+            code += this._generatePartSPF(planName, tafelName, headContours, h + 1,
+                { axis: offsetAxis, value: h * this.headSpacing });
             code += ' \n';
         }
 

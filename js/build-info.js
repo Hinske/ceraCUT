@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.89
- * Version: V6.89
+ * CeraCUT Build Info V6.90
+ * Version: V6.90
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-meander
+ * Build: 20261105-ppfix
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.89',
-    build: '20261105-meander',
+    version: '6.90',
+    build: '20261105-ppfix',
     date: '2026-11-05',
     time: '16:50 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '714fdc0',
+        hash: 'c2552b6',
         date: '2026-11-05',
-        message: 'feat: Mosaik-Maeander V6.89; fix: ArcFitting V3.4 (Ecken nicht mehr als Riesenbogen)'
+        message: 'fix: Sinumerik-PP V2.6 (Steg ohne Nullweg-Satz, Multi-Head lauffaehig, cuttingMode-Pruefun'
     },
 
     modules: {
@@ -27,7 +27,7 @@ const CERACUT_BUILD = {
         'cam-contour':        { version: '5.23', build: '20261104-pushexecuted' },
         'canvas-renderer':    { version: '3.47', build: '20261105-gripdir' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
-        'sinumerik-pp':       { version: '2.5', build: '20261104-reviewfix' },
+        'sinumerik-pp':       { version: '2.6', build: '20261105-ppfix' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
         'snap-manager':       { version: '1.9', build: '20261105-acmarker' },
         'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },
@@ -70,6 +70,7 @@ const CERACUT_BUILD = {
 
     changes: [
         'V6.89: Feat — Mosaik-Maeander (durchgehende Innenlinien je Richtung, Halbkreise ausserhalb der Fliese, Rand zuletzt) (app V6.45); Fix — arc-fitting V3.4: scharfe Ecken wurden zu Riesenbogen',
+        'V6.90: Fix — Sinumerik-PP V2.6: Haltesteg ohne Nullweg-Satz (Alarm "Bahnkomponente = Null"); Multi-Head erzeugt lauffaehiges Programm (KOPF_*-Zuweisungen vor M30, PARTn-Aufrufe, voller PART-Rahmen mit ATRANS-Offset); fehlender cuttingMode blockiert Export; Guard in _processArcLeadExact; Versionsangaben vereinheitlicht',
         'V6.88: Feat — Sortierung "Mosaik": Fliesenrand (verkettete Randkontur) wird immer zuletzt geschnitten, alle Konturen davor per Nearest-Neighbor ab Nullpunkt (offene Linien in guenstigerer Richtung) (app V6.44)',
         'V6.87: Feat — Simulation: Player-Leiste (Play/Pause, Restart, Seek-Slider, Speed 0.2x-30x, Phasenanzeige, Leertaste/Home/Esc) + Zoom/Pan waehrend laufender Simulation (Overlay pointer-events:none, Animation folgt Live-Transform, Trail-Neuzeichnung) (toolpath-simulator V1.6)',
         'V6.86: Feat — CNC-Export (normal + Intarsien POS/NEG) speichert direkt auf dem Server in Share Wasserstrahl/CNC (/mnt/cnc, CNC_ROOT): neuer Endpunkt POST /api/cnc/save (nur *.CNC, flach, Login, 409 + Rueckfrage bei vorhandener Datei), Fallback Workspace/Download (app V6.43, server V1.10)',
