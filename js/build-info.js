@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.88
- * Version: V6.88
+ * CeraCUT Build Info V6.89
+ * Version: V6.89
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-mosaicsort
+ * Build: 20261105-meander
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.88',
-    build: '20261105-mosaicsort',
+    version: '6.89',
+    build: '20261105-meander',
     date: '2026-11-05',
     time: '16:50 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'f04e424',
+        hash: '714fdc0',
         date: '2026-11-05',
-        message: 'feat: Sortierung Mosaik (Rand zuletzt, NN ab Nullpunkt), Standardmethode (V6.88)'
+        message: 'feat: Mosaik-Maeander V6.89; fix: ArcFitting V3.4 (Ecken nicht mehr als Riesenbogen)'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.44', build: '20261105-mosaicsort' },
+        'app':                { version: '6.45', build: '20261105-meander' },
         'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -52,7 +52,7 @@ const CERACUT_BUILD = {
         'quality-zones':      { version: '1.2', build: '20261104-reviewfix' },
         'cam-tools':          { version: '1.6', build: '20261104-pushexecuted' },
         'advanced-tools':     { version: '1.9', build: '20261104-reviewfix' },
-        'arc-fitting':        { version: '3.3', build: '20261104-reviewfix' },
+        'arc-fitting':        { version: '3.4', build: '20261105-meander' },
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
         'dimension-tool':     { version: '2.6', build: '20261104-pushexecuted' },
         'dxf-browser':        { version: '1.3', build: '20261105-cncsave' },
@@ -69,6 +69,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.89: Feat — Mosaik-Maeander (durchgehende Innenlinien je Richtung, Halbkreise ausserhalb der Fliese, Rand zuletzt) (app V6.45); Fix — arc-fitting V3.4: scharfe Ecken wurden zu Riesenbogen',
         'V6.88: Feat — Sortierung "Mosaik": Fliesenrand (verkettete Randkontur) wird immer zuletzt geschnitten, alle Konturen davor per Nearest-Neighbor ab Nullpunkt (offene Linien in guenstigerer Richtung) (app V6.44)',
         'V6.87: Feat — Simulation: Player-Leiste (Play/Pause, Restart, Seek-Slider, Speed 0.2x-30x, Phasenanzeige, Leertaste/Home/Esc) + Zoom/Pan waehrend laufender Simulation (Overlay pointer-events:none, Animation folgt Live-Transform, Trail-Neuzeichnung) (toolpath-simulator V1.6)',
         'V6.86: Feat — CNC-Export (normal + Intarsien POS/NEG) speichert direkt auf dem Server in Share Wasserstrahl/CNC (/mnt/cnc, CNC_ROOT): neuer Endpunkt POST /api/cnc/save (nur *.CNC, flach, Login, 409 + Rueckfrage bei vorhandener Datei), Fallback Workspace/Download (app V6.43, server V1.10)',

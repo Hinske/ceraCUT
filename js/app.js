@@ -1,5 +1,6 @@
 /**
- * CeraCUT V6.44 - Main Application
+ * CeraCUT V6.45 - Main Application
+ * V6.45: Feat — Sortiermethode 'Mosaik-Maeander' (_planMosaicMeander/applyMosaicMeander): durchgehende Innenlinien je Richtung zu EINER Kontur, Halbkreis-Wendungen 3 mm ausserhalb der Fliese (Opferplatte), Rand zuletzt; Helfer _mosaicDetectBorder/_mosaicNearest
  * V6.44: Feat — Sortiermethode 'Mosaik' (sortMosaic): Fliesenrand zuletzt, Innenkonturen Nearest-Neighbor ab Nullpunkt (Standard im Dropdown)
  * V6.43: Feat — CNC-Export speichert direkt auf dem Server (POST /api/cnc/save → Share Wasserstrahl/CNC), Rueckfrage bei vorhandener Datei; Fallback Workspace/Download
  * V6.42: Fix — Offene Linien gelten immer als Slit (Reihenfolge fand 'keine schneidbaren Konturen'); Auto-Referenz verkettet Einzellinien zu geschlossener Fliese
@@ -8,7 +9,7 @@
  * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
  * Last Modified: 2026-11-05
- * Build: 20261105-mosaicsort
+ * Build: 20261105-meander
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -1798,6 +1799,11 @@ class CeraCutApp {
             return;
         }
         
+        if (method === 'mosaic-meander') {
+            this.applyMosaicMeander(cuttable);
+            return;
+        }
+
         // Für "shortest-path-selected": Prüfe ob eine Kontur ausgewählt ist
         let startContour = null;
         if (method === 'shortest-path-selected') {
@@ -1891,35 +1897,25 @@ class CeraCutApp {
         this.renderer?.render();
     }
     
-    /**
-     * V6.88: Mosaik-Sortierung. Die Randkontur der Fliese (meist EINE verkettete Kontur ueber alle
-     * 4 Seiten, sonst die aeussersten Einzellinien) wird IMMER zuletzt geschnitten, damit die
-     * Mosaiksteine bis zum Schluss im Fliesenverbund gehalten werden. Alle Konturen davor werden per
-     * Nearest-Neighbor ab dem Nullpunkt angefahren (offene Linien in der naeheren Richtung, ggf.
-     * umgedreht); der Rand startet am Ende an dem Randpunkt, der der letzten Innenkontur am naechsten liegt.
-     */
-    sortMosaic(cuttable) {
-        if (cuttable.length < 2) return;
-        const bbox = (c) => {
-            let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-            for (const p of c.points) {
-                if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x;
-                if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y;
-            }
-            return { x0, x1, y0, y1, area: (x1 - x0) * (y1 - y0) };
-        };
-        const bb = new Map(cuttable.map(it => [it, bbox(it.contour)]));
+    // ── Mosaik-Helfer (V6.89) ──────────────────────────────────────
 
-        // --- Randkontur(en) bestimmen ---
-        let border = [];
+    _mosaicBBox(c) {
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        for (const p of c.points) {
+            if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x;
+            if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y;
+        }
+        return { x0, x1, y0, y1, area: (x1 - x0) * (y1 - y0) };
+    }
+
+    /** Randkontur(en): verkettete Kontur mit groesster Bounding-Box, sonst aeusserste Einzellinien je Seite. */
+    _mosaicDetectBorder(cuttable) {
+        const bb = new Map(cuttable.map(it => [it, this._mosaicBBox(it.contour)]));
         let maxArea = 0;
         for (const it of cuttable) if (bb.get(it).area > maxArea) maxArea = bb.get(it).area;
-        if (maxArea > 0) {
-            // verkettete Randkontur: Flaeche der Bounding-Box (nahezu) maximal
-            border = cuttable.filter(it => bb.get(it).area >= maxArea * 0.98 && it.contour.points.length >= 4);
-        }
+        let border = [];
+        if (maxArea > 0) border = cuttable.filter(it => bb.get(it).area >= maxArea * 0.98 && it.contour.points.length >= 4);
         if (border.length === 0) {
-            // Rand als Einzellinien: je eine aeusserste Linie pro Seite (links/rechts/unten/oben)
             const tol = 1e-3;
             const lines = cuttable.filter(it => it.contour.points.length >= 2);
             const pick = (axis, dir) => {
@@ -1929,48 +1925,224 @@ class CeraCutApp {
                 if (!cand.length) return null;
                 return cand.reduce((a, b) => (dir < 0 ? val(b) < val(a) : val(b) > val(a)) ? b : a);
             };
-            const set = new Set([pick('x', -1), pick('x', 1), pick('y', -1), pick('y', 1)].filter(Boolean));
-            border = [...set];
+            border = [...new Set([pick('x', -1), pick('x', 1), pick('y', -1), pick('y', 1)].filter(Boolean))];
         }
-        const borderSet = new Set(border);
-        const inner = cuttable.filter(it => !borderSet.has(it));
+        return { border, bb };
+    }
 
-        // --- Greedy Nearest-Neighbor ab Nullpunkt ---
+    _mosaicOrigin() {
         const o = (this.settings && this.settings.originSet && this.settings.origin) ? this.settings.origin : { x: 0, y: 0 };
-        let pos = { x: o.x, y: o.y };
+        return { x: o.x, y: o.y };
+    }
+
+    /** Greedy Nearest-Neighbor ab pos; offene Linien ggf. umgedreht (in `reversed` vermerkt). */
+    _mosaicNearest(pool, pos, reversed) {
         const d2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
-        const reversed = [];
-        const takeNearest = (pool) => {
-            let best = null, bestD = Infinity, bestRev = false;
-            for (const it of pool) {
+        const rest = [...pool], out = [];
+        while (rest.length) {
+            let bi = 0, bd = Infinity, brev = false;
+            rest.forEach((it, i) => {
                 const pts = it.contour.points;
                 const dS = d2(pos, pts[0]);
-                if (dS < bestD) { bestD = dS; best = it; bestRev = false; }
+                if (dS < bd) { bd = dS; bi = i; brev = false; }
                 if (!it.contour.isClosed) {
                     const dE = d2(pos, pts[pts.length - 1]);
-                    if (dE < bestD) { bestD = dE; best = it; bestRev = true; }
+                    if (dE < bd) { bd = dE; bi = i; brev = true; }
                 }
-            }
-            if (bestRev) {
-                best.contour.points.reverse();
-                best.contour.invalidate?.();
-                reversed.push(best.contour);
-            }
+            });
+            const best = rest.splice(bi, 1)[0];
+            if (brev) { best.contour.points.reverse(); best.contour.invalidate?.(); reversed.push(best.contour); }
             const pts = best.contour.points;
             pos = best.contour.isClosed ? pts[0] : pts[pts.length - 1];
-            return best;
+            out.push(best);
+        }
+        return { sorted: out, pos };
+    }
+
+    /**
+     * V6.88: Mosaik-Sortierung. Randkontur der Fliese IMMER zuletzt; alle Konturen davor
+     * Nearest-Neighbor ab Nullpunkt (offene Linien in der naeheren Richtung).
+     */
+    sortMosaic(cuttable) {
+        if (cuttable.length < 2) return;
+        const { border } = this._mosaicDetectBorder(cuttable);
+        const bset = new Set(border);
+        const inner = cuttable.filter(it => !bset.has(it));
+        const reversed = [];
+        const a = this._mosaicNearest(inner, this._mosaicOrigin(), reversed);
+        const b = this._mosaicNearest(border, a.pos, reversed);
+        cuttable.length = 0;
+        cuttable.push(...a.sorted, ...b.sorted);
+        this._lastReversedContours = reversed;
+        console.log(`[SORT V6.89] Mosaik: ${inner.length} innen, ${border.length} Rand (zuletzt), ${reversed.length} umgekehrt`);
+    }
+
+    /**
+     * V6.89: Mosaik-Maeander. Parallele, durchgehende Innenlinien (Ende < `tol` vom Fliesenrand) werden
+     * pro Richtung zu EINER Kontur verkettet: Linien laufen `reserve` mm ueber die Fliesenkante hinaus,
+     * dort verbindet ein Halbkreis (r = Linienabstand/2) die Nachbarlinien. Spart Anstiche + Eilgaenge.
+     * Erwartet eine Opferplatte unter der Fliese. Rand bleibt als letzte Kontur.
+     * @returns {{order:Array, added:Array, removed:Set, reversed:Array, stats:Object}|null}
+     */
+    _planMosaicMeander(cuttable, opt = {}) {
+        const reserve = opt.reserve ?? 3, tol = opt.tol ?? 10, maxR = opt.maxR ?? 30, minR = opt.minR ?? 1.5;
+        const axTol = 1e-3;
+        const { border } = this._mosaicDetectBorder(cuttable);
+        if (border.length === 0) return null;
+        const bset = new Set(border);
+        const T = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+        for (const it of border) {
+            const b = this._mosaicBBox(it.contour);
+            T.x0 = Math.min(T.x0, b.x0); T.x1 = Math.max(T.x1, b.x1);
+            T.y0 = Math.min(T.y0, b.y0); T.y1 = Math.max(T.y1, b.y1);
+        }
+
+        const groups = { V: [], H: [] };
+        const others = [];
+        for (const it of cuttable) {
+            if (bset.has(it)) continue;
+            const c = it.contour, pts = c.points;
+            if (!c.isClosed && pts.length === 2) {
+                const [p, q] = pts;
+                if (Math.abs(p.x - q.x) < axTol && Math.abs(p.y - q.y) > axTol) {
+                    const a = Math.min(p.y, q.y), b = Math.max(p.y, q.y);
+                    if (a <= T.y0 + tol && b >= T.y1 - tol) { groups.V.push({ it, c: p.x }); continue; }
+                } else if (Math.abs(p.y - q.y) < axTol && Math.abs(p.x - q.x) > axTol) {
+                    const a = Math.min(p.x, q.x), b = Math.max(p.x, q.x);
+                    if (a <= T.x0 + tol && b >= T.x1 - tol) { groups.H.push({ it, c: p.y }); continue; }
+                }
+            }
+            others.push(it);
+        }
+
+        // Ketten je Richtung: aufsteigend nach c, Bruch bei unpassendem Abstand
+        const chains = [];
+        for (const o of ['V', 'H']) {
+            const arr = groups[o].sort((a, b) => a.c - b.c);
+            let cur = [];
+            const flush = () => { if (cur.length >= 2) chains.push({ o, lines: cur }); else others.push(...cur.map(l => l.it)); cur = []; };
+            for (const l of arr) {
+                if (cur.length) {
+                    const r = (l.c - cur[cur.length - 1].c) / 2;
+                    if (r < minR || r > maxR) flush();
+                }
+                cur.push(l);
+            }
+            flush();
+        }
+        if (chains.length === 0) return null;
+
+        const reversed = [];
+        const removed = new Set();
+        const added = [];
+        const unions = (o) => o === 'V' ? { lo: T.y0 - reserve, hi: T.y1 + reserve } : { lo: T.x0 - reserve, hi: T.x1 + reserve };
+        const mk = (o, c, t) => o === 'V' ? { x: c, y: t } : { x: t, y: c };
+        const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+
+        // Konturen vor den Maeandern (Nicht-Durchgangslinien etc.): Nearest-Neighbor ab Nullpunkt
+        const pre = this._mosaicNearest(others, this._mosaicOrigin(), reversed);
+        let pos = pre.pos;
+        const order = [...pre.sorted.map(it => it.contour)];
+
+        const build = (chain, startDesc, startHigh) => {
+            const { o } = chain, { lo, hi } = unions(o);
+            const lines = startDesc ? [...chain.lines].reverse() : chain.lines;
+            const pts = [];
+            let up = startHigh ? false : true;   // Fahrtrichtung entlang t
+            lines.forEach((l, k) => {
+                const t0 = up ? lo : hi, t1 = up ? hi : lo;
+                if (k === 0) pts.push(mk(o, l.c, t0));
+                // Kollinearer Mittelpunkt: ArcFitting legt sonst einen Riesenkreis durch Linienende + erste Bogenpunkte
+                pts.push(mk(o, l.c, (t0 + t1) / 2));
+                pts.push(mk(o, l.c, t1));
+                if (k < lines.length - 1) {
+                    const n = lines[k + 1], m = (l.c + n.c) / 2, r = Math.abs(n.c - l.c) / 2;
+                    const s = up ? 1 : -1, dir = n.c > l.c ? -1 : 1;   // cosθ: von l nach n
+                    const steps = 24;
+                    for (let i = 1; i < steps; i++) {
+                        const th = Math.PI * i / steps;
+                        pts.push(mk(o, m + dir * r * Math.cos(th), t1 + s * r * Math.sin(th)));
+                    }
+                    pts.push(mk(o, n.c, t1));   // Bogenende = Start der naechsten Linie
+                    up = !up;
+                }
+            });
+            const last = lines[lines.length - 1];
+            pts.push(mk(o, last.c, up ? hi : lo));
+            return pts;
         };
 
-        const sorted = [];
-        const pool = [...inner];
-        while (pool.length) { const b = takeNearest(pool); pool.splice(pool.indexOf(b), 1); sorted.push(b); }
-        const bpool = [...border];
-        while (bpool.length) { const b = takeNearest(bpool); bpool.splice(bpool.indexOf(b), 1); sorted.push(b); }
+        const remaining = [...chains];
+        let nMeander = 0, nLines = 0;
+        while (remaining.length) {
+            let best = null;
+            remaining.forEach((ch, ci) => {
+                for (const desc of [false, true]) for (const high of [false, true]) {
+                    const { lo, hi } = unions(ch.o);
+                    const l0 = (desc ? ch.lines[ch.lines.length - 1] : ch.lines[0]);
+                    const d = dist2(pos, mk(ch.o, l0.c, high ? hi : lo));
+                    if (!best || d < best.d) best = { d, ci, desc, high };
+                }
+            });
+            const ch = remaining.splice(best.ci, 1)[0];
+            const pts = build(ch, best.desc, best.high);
+            const first = ch.lines[0].it.contour;
+            const nc = new CamContour(pts, {
+                isClosed: false, cuttingMode: 'slit', layer: first.layer || '',
+                name: `Mosaik-Maeander_${ch.o}${nMeander + 1}`,
+                quality: first.quality, kerfWidth: first.kerfWidth, overcutLength: first.overcutLength
+            });
+            nc.cuttingMode = 'slit';
+            ch.lines.forEach(l => removed.add(l.it.contour));
+            added.push(nc);
+            order.push(nc);
+            pos = pts[pts.length - 1];
+            nMeander++; nLines += ch.lines.length;
+        }
 
-        cuttable.length = 0;
-        cuttable.push(...sorted);
-        this._lastReversedContours = reversed;
-        console.log(`[SORT V6.88] Mosaik: ${inner.length} innen, ${border.length} Rand (zuletzt), ${reversed.length} umgekehrt`);
+        const b = this._mosaicNearest(border, pos, reversed);
+        b.sorted.forEach(it => order.push(it.contour));
+        return { order, added, removed, reversed, stats: { meanders: nMeander, lines: nLines, others: others.length } };
+    }
+
+    /** V6.89: Plan anwenden (ein Undo-Schritt: Konturen ersetzen + Reihenfolge + Richtungsumkehrungen). */
+    applyMosaicMeander(cuttable) {
+        const plan = this._planMosaicMeander(cuttable);
+        if (!plan) {
+            this.showToast('Mäander nicht möglich — keine durchgehenden, parallelen Innenlinien/Randkontur gefunden', 'warning');
+            return;
+        }
+        const oldContours = [...this.contours];
+        const oldOrder = [...this.cutOrder];
+        const newContours = oldContours.filter(c => !plan.removed.has(c)).concat(plan.added);
+        const newOrder = plan.order.map(c => newContours.indexOf(c));
+        const reversed = [...plan.reversed];
+        const app = this;
+        const refresh = () => {
+            app.renderer?.setContours(app.contours);
+            app.updateContourPanel?.(); app.updateCutOrderList(); app.updateOrderStats(); app.renderer?.render();
+        };
+        const apply = () => {
+            reversed.forEach(c => { if (c?.points) { c.points.reverse(); c.invalidate?.(); } });
+            this.contours.splice(0, this.contours.length, ...newContours);
+            app.cutOrder = [...newOrder]; refresh();
+        };
+        const revert = () => {
+            reversed.forEach(c => { if (c?.points) { c.points.reverse(); c.invalidate?.(); } });
+            this.contours.splice(0, this.contours.length, ...oldContours);
+            app.cutOrder = [...oldOrder]; refresh();
+        };
+        // Umkehrungen wurden bereits beim Planen angewendet -> erst zurueck, dann sauber ueber apply()
+        reversed.forEach(c => { c.points.reverse(); c.invalidate?.(); });
+        apply();
+        this._lastReversedContours = [];
+        const cmd = new FunctionCommand(`Sortierung: Mosaik-Mäander`, apply, revert);
+        this.undoManager.pushExecuted(cmd);
+        this.undoManager.redoStack.length = 0;
+        this.undoManager._notifyStateChange();
+        const st = plan.stats;
+        this.showToast(`🔄 Mäander: ${st.lines} Linien → ${st.meanders} Konturen, Rand zuletzt (STRG+Z = Rückgängig)`, 'success');
+        console.log('[SORT V6.89] Mosaik-Mäander', st);
     }
 
     sortByShortestPath(cuttable, startItem = null) {

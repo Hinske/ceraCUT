@@ -354,3 +354,9 @@
 - **Fehler:** Sockel-Name bei quadratischer Fliese als `...A600X600` erzeugt (aus anderer Dateifamilie `Sockel610X58A610X610` verallgemeinert).
 - **Regel:** Namenskonventionen pro Dateifamilie (W, R, Sockel) getrennt festlegen und vom User bestätigen lassen; Quadratisch = `Sockel600X50A600`.
 - **Betroffene Module:** `mosaic-generator.js` (computeSockel, V1.3)
+
+### [2026-11-05] ArcFitting machte aus jeder scharfen Ecke einen Riesenbogen (3-Punkte-Kreis)
+- **Fehler:** Beim Test des Mosaik-Maeanders gab der Postprozessor fuer die Randkontur `G02 ... I150 J101.5` statt vier G01 aus; ein Rechteck (5 Punkte) wurde zu EINEM Bogen (R~180).
+- **Root Cause:** `_tryFitArc` legt einen Kreis durch die ersten 3 Punkte; 3 Punkte liegen immer auf einem Kreis, und nur WEITERE Punkte wurden gegen Toleranz geprueft. Eine Ecke mit langen Seiten wurde daher akzeptiert.
+- **Regel:** Geometrie-Fitter nie nur auf die Mindestpunktzahl vertrauen; Plausibilitaet erzwingen (Schrittwinkel je Punkt <= 60 Grad). Postprozessor-Ausgabe neuer Pfadtypen immer im G-Code ansehen (G02/G03 vs. G01), nicht nur die Punktliste. Bereits exportierte CNC-Dateien mit Rechteck-/Randkonturen vor V6.89 koennen betroffen sein.
+- **Betroffene Module:** `arc-fitting.js` (V3.4), `app.js` (V6.45)

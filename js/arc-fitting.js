@@ -1,5 +1,6 @@
 /**
- * CeraCUT V3.3 - Arc Fitting Module
+ * CeraCUT V3.4 - Arc Fitting Module
+ * V3.4: Fix — 3 Punkte liegen immer auf einem Kreis: scharfe Ecken (Rechteck, Randkontur) wurden zu Riesenbogen (G02/G03 R~180). Jetzt max. 60 Grad Mittelpunktswinkel je Punktschritt, sonst Linie.
  * Konvertiert Splines/Polylines zu Bögen und Linien
  *
  * Algorithmen:
@@ -12,12 +13,12 @@
  *       (Schriften) 100+ einzelne 0.1–0.15mm G01-Blöcke → Sinumerik "Bahnkomponente = Null".
  *       Neu: else-Zweig sucht weitesten Punkt innerhalb tolerance und erzeugt EINEN langen G01.
  *
- * Last Modified: 2026-11-04
+ * Last Modified: 2026-11-05
  */
 
 const ArcFitting = {
 
-  VERSION: 'V3.2',
+  VERSION: 'V3.4',
 
   /**
    * Logging-Level: 'silent' | 'info' | 'verbose' | 'debug'
@@ -287,6 +288,16 @@ const ArcFitting = {
       return null;
     }
 
+    // V3.3: Drei Punkte liegen IMMER auf einem Kreis (auch eine scharfe Rechteckecke). Ein echter,
+    // diskretisierter Bogen hat kleine Schrittwinkel; ueber MAX_STEP_ANGLE ist es eine Ecke -> Linie.
+    const stepAngle = (a, b) => {
+      let d = Math.abs(Math.atan2(b.y - center.y, b.x - center.x) - Math.atan2(a.y - center.y, a.x - center.x));
+      if (d > Math.PI) d = 2 * Math.PI - d;
+      return d;
+    };
+    const MAX_STEP = Math.PI / 3;
+    if (stepAngle(p0, p1) > MAX_STEP || stepAngle(p1, p2) > MAX_STEP) return null;
+
     // Erweitere Bogen solange Punkte innerhalb Toleranz
     let endIdx = startIdx + 2;
 
@@ -297,6 +308,7 @@ const ArcFitting = {
       if (Math.abs(distToCenter - radius) > tolerance) {
         break;
       }
+      if (stepAngle(points[endIdx], nextPt) > MAX_STEP) break;
 
       endIdx++;
     }
