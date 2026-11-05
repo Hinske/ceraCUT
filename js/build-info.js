@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.80
- * Version: V6.80
+ * CeraCUT Build Info V6.81
+ * Version: V6.81
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-printnolink
+ * Build: 20261105-printcolor
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.80',
-    build: '20261105-printnolink',
+    version: '6.81',
+    build: '20261105-printcolor',
     date: '2026-11-05',
     time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'bd26068',
-        date: '2026-11-05 07:22:24 +0100',
-        message: 'fix: Druck ohne Browser-Kopf-/Fusszeile (URL) — @page margin 0, Rand per Padding (V6.80)'
+        hash: '2228caf',
+        date: '2026-11-05 07:27:04 +0100',
+        message: 'feat: Druck uebernimmt Layerfarben, helle Farben werden abgedunkelt (V6.81)'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.39', build: '20261105-printarea' },
+        'app':                { version: '6.40', build: '20261105-printcolor' },
         'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },

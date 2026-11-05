@@ -1,9 +1,10 @@
 /**
- * CeraCUT V6.39 - Main Application
+ * CeraCUT V6.40 - Main Application
+ * V6.40: Feat — Druck/Bereichsdruck uebernimmt Layerfarben (helle Farben werden abgedunkelt)
  * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
  * Last Modified: 2026-11-05
- * Build: 20261105-printarea
+ * Build: 20261105-printcolor
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -5457,7 +5458,7 @@ class CeraCutApp {
 
     /**
      * Canvas-Inhalt drucken — rendert auf ein temporäres Canvas mit weißem
-     * Hintergrund und schwarzen Konturen, skaliert auf A4 Landscape.
+     * Hintergrund und Konturen in Layerfarbe, skaliert auf A4 Landscape.
      */
     printCanvas(region = null) {
         if (!this.contours || this.contours.length === 0) {
@@ -5538,8 +5539,20 @@ class CeraCutApp {
             ctx.clip();
         }
 
-        // Alle sichtbaren Konturen in Schwarz zeichnen
-        ctx.strokeStyle = '#000000';
+        // V6.80: Layerfarben uebernehmen. Sehr helle Farben (z.B. Weiss, Gelb) sind auf
+        // weissem Papier unsichtbar -> auf Schwarz bzw. abgedunkelt zurueckfallen.
+        const printColor = (layerName) => {
+            const col = lm?.getLayer(layerName || '0')?.color;
+            const m = /^#?([0-9a-f]{6})$/i.exec((col || '').trim());
+            if (!m) return '#000000';
+            const n = parseInt(m[1], 16);
+            let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+            const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            if (lum > 0.85) return '#000000';
+            if (lum > 0.6) { r = Math.round(r * 0.6); g = Math.round(g * 0.6); b = Math.round(b * 0.6); }
+            return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+        };
+
         ctx.lineWidth = 1.5 / scale;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
@@ -5548,6 +5561,7 @@ class CeraCutApp {
             const pts = contour.points;
             if (!pts || pts.length < 2) continue;
 
+            ctx.strokeStyle = printColor(contour.layer);
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
             for (let i = 1; i < pts.length; i++) {
