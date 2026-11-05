@@ -1,5 +1,6 @@
 /**
- * CeraCUT V3.44 - Canvas Renderer
+ * CeraCUT V3.47 - Canvas Renderer
+ * V3.47: Feat — Rechteck mit gerundeten Ecken: nur 4 Kanten-Grips (Größe ändern per Ziehen + Maßeingabe, Ecken/Radius laufen mit)
  * V3.44: Feat — Tracking-Overlay (Object Snap Tracking / Polar): gestrichelte Linien, erfasste Punkte, Fadenkreuz am getrackten Punkt
  * Features: Selection, Lead-In/Out, Overcut, Micro-Joints, Travel Paths, Order Numbers,
  *           Startpunkt-Drag im Anschuss-Modus, SLIT Support
@@ -43,8 +44,8 @@
  * V3.11: Image Underlay Rendering
  * V3.5: Ghost-Preview + Window-Selection Rendering
  * V3.4: Drawing-Overlay + SnapManager-Rendering
- * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-snapcenterfix
+ * Last Modified: 2026-11-05 MEZ
+ * Build: 20261105-gripdir
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -154,7 +155,7 @@ class CanvasRenderer {
     };
 
     static MARKER_SIZE = {
-        ARROW: 8,
+        ARROW: 10,
         OVERCUT_ARROW: 4,
         PIERCE_POINT: 3,
         START_TRIANGLE: 6,
@@ -307,6 +308,73 @@ class CanvasRenderer {
         document.addEventListener('keydown', spaceKeyDown);
         document.addEventListener('keyup', spaceKeyUp);
 
+        // V3.44: Masseingabe beim Strecken/Verlaengern (AutoCAD Dynamic Input): Zahl tippen + Enter
+        document.addEventListener('keydown', (e) => {
+            // Esc bricht Klick-Modus / Drag ab (Rollback)
+            if (e.key === 'Escape' && isDraggingGrip && dragContourRef && dragOldPoints) {
+                dragContourRef.points = dragOldPoints.map(p => ({x: p.x, y: p.y}));
+                if (dragOldFit) dragContourRef._fitPoints = dragOldFit.map(p => ({x: p.x, y: p.y}));
+                if (typeof ModificationTool !== 'undefined') ModificationTool.invalidateCache?.(dragContourRef);
+                isDraggingGrip = false; gripSticky = false; gripForceCommit = false;
+                dragGrip = null; this._draggedGrip = null; dragOldPoints = null; dragOldFit = null; dragContourRef = null;
+                this._gripLenBuf = ''; this._gripDirty = true;
+                this.canvas.style.cursor = 'default';
+                e.preventDefault(); e.stopPropagation();
+                this.render();
+                return;
+            }
+            if (!this._draggedGrip || (this._draggedGrip.type !== 'vertex' && this._draggedGrip.type !== 'rr_edge')) return;
+            const buf0 = this._gripLenBuf || '';
+            if (/^[0-9.,]$/.test(e.key)) {
+                this._gripLenBuf = buf0 + (e.key === ',' ? '.' : e.key);
+            } else if ((e.key === '-' || e.key === '=') && buf0 === '') {
+                this._gripLenBuf = e.key;   // '-' = verkuerzen, '=' = absolute Laenge
+            } else if (e.key === 'Backspace') {
+                this._gripLenBuf = (this._gripLenBuf || '').slice(0, -1);
+            } else if (e.key === 'Enter' && this._gripLenBuf) {
+                // V3.44: Standard = Aenderung um x (Delta zur Ausgangslaenge); '-x' kuerzt; '=x' absolute Laenge
+                const raw = this._gripLenBuf;
+                const grip = this._draggedGrip;
+                if (grip.type === 'rr_edge') {
+                    // V3.47: Masseingabe Rechteck: Standard = Aenderung (Zugrichtung), '-x' kuerzt, '=x' absolut
+                    const dm = this._rrDims(grip);
+                    const num = parseFloat(raw.replace(/^[-=]/, ''));
+                    const sg = raw[0] === '-' ? -1 : (dm.cur >= dm.orig ? 1 : -1);
+                    const dim = raw[0] === '=' ? num : dm.orig + sg * num;
+                    if (isFinite(dim) && dim > 0) this._applyGripDrag(grip, this._rrPosForDim(grip, dim), grip.contour);
+                    this._gripLenBuf = '';
+                    gripForceCommit = true;
+                    e.preventDefault(); e.stopPropagation();
+                    this.canvas.dispatchEvent(new MouseEvent('mouseup', { button: 0, bubbles: true }));
+                    return;
+                }
+                const ref = this._gripRef(grip);
+                let len = NaN;
+                if (ref) {
+                    const num = parseFloat(raw.replace(/^[-=]/, ''));
+                    len = raw[0] === '=' ? num : ref.length + this._gripDeltaSign(raw, ref, grip) * num;
+                }
+                if (ref && isFinite(len) && len > 0) {
+                    let dir = ref.dir;
+                    const cur = grip.contour.points[ref.idx];
+                    if (!(ref.endpoint && this.app?.snapManager?.effectiveOrtho?.())) {
+                        const dx = cur.x - ref.fixed.x, dy = cur.y - ref.fixed.y, dl = Math.hypot(dx, dy);
+                        if (dl > 1e-9) dir = { x: dx / dl, y: dy / dl };
+                    }
+                    this._applyGripDrag(grip, { x: ref.fixed.x + dir.x * len, y: ref.fixed.y + dir.y * len }, grip.contour);
+                }
+                this._gripLenBuf = '';
+                gripForceCommit = true;
+                e.preventDefault(); e.stopPropagation();
+                this.canvas.dispatchEvent(new MouseEvent('mouseup', { button: 0, bubbles: true }));
+                return;
+            } else {
+                return;
+            }
+            e.preventDefault(); e.stopPropagation();
+            this.render();
+        }, true);
+
         // Startpunkt-Drag State
         let isDraggingStartPoint = false;
         let dragContour = null;
@@ -318,6 +386,8 @@ class CanvasRenderer {
         let dragOldFit = null;     // Snapshot _fitPoints (Spline) für Undo
         let dragContourRef = null; // Referenz auf Kontur
         let gripDragJustEnded = false; // Guard gegen Click nach Drag
+        // V3.45: AutoCAD-Klick-Modus: Klick auf Grip (ohne Ziehen) -> Strecken bis 2. Klick/Enter, Masseingabe moeglich
+        let gripSticky = false, gripMoved = false, gripForceCommit = false, gripDownPos = null;
 
         // V3.5: Window-Selection State
         let isWindowSelecting = false;
@@ -325,6 +395,12 @@ class CanvasRenderer {
         let windowSelectJustEnded = false;  // V3.11: Guard gegen Click nach Window-Selection
 
         this.canvas.addEventListener('mousedown', (e) => {
+            // V3.45: 2. Klick im Klick-Modus setzt den Grip ab
+            if (isDraggingGrip && gripSticky && e.button === 0) {
+                gripForceCommit = true;
+                this.canvas.dispatchEvent(new MouseEvent('mouseup', { button: 0, bubbles: true }));
+                return;
+            }
             // V2.4: External pre-handler (Dimension-Grip-Drag etc.)
             if (this.onBeforeMouseDown) {
                 const worldPos = this.screenToWorld(e.offsetX, e.offsetY);
@@ -343,6 +419,10 @@ class CanvasRenderer {
                         this._draggedGrip = hitGrip; // V3.37: Hot-State für Rendering
                         dragContourRef = hitGrip.contour;
                         dragOldPoints = dragContourRef.points.map(p => ({x: p.x, y: p.y}));
+                        hitGrip._oldPts = dragOldPoints;   // V3.44: Referenz fuer Ortho-Verlaengerung / Laengeneingabe
+                        this._gripLenBuf = '';
+                        gripSticky = false; gripMoved = false; gripForceCommit = false;
+                        gripDownPos = { x: e.offsetX, y: e.offsetY };
                         dragOldFit = Array.isArray(dragContourRef._fitPoints)
                             ? dragContourRef._fitPoints.map(p => ({x: p.x, y: p.y})) : null;
                         this.canvas.style.cursor = 'crosshair';
@@ -414,7 +494,12 @@ class CanvasRenderer {
                 if (this.app?.snapManager) {
                     const snap = this.app.snapManager.findSnap(worldPos.x, worldPos.y, this.scale);
                     if (snap) snapPt = snap.point;
+                    // V3.45: waehrend Grip-Drag denselben AutoCAD-Marker zeigen (statt altem Ring)
+                    this.app.snapManager.currentSnap = snap || null;
+                    this.app.currentSnapPoint = null;
                 }
+                if (gripDownPos && Math.hypot(e.offsetX - gripDownPos.x, e.offsetY - gripDownPos.y) > 4) gripMoved = true;
+                snapPt = this._constrainGripDrag(dragGrip, snapPt);
                 this._applyGripDrag(dragGrip, snapPt, dragContourRef);
                 // Grips NICHT neu berechnen während Drag (Performance!)
                 this.render();
@@ -520,8 +605,15 @@ class CanvasRenderer {
             }
             windowSelectStartScreen = null;
 
+            // V3.45: Klick ohne Ziehen -> Klick-Modus (Grip bleibt "hot" bis 2. Klick / Enter / Esc)
+            if (isDraggingGrip && !gripMoved && !gripSticky && !gripForceCommit) {
+                gripSticky = true;
+                this.render();
+                return;
+            }
             // V3.10: Grip-Drag beenden + Undo-Command registrieren
             if (isDraggingGrip && dragContourRef && dragOldPoints) {
+                gripSticky = false; gripForceCommit = false;
                 const contour = dragContourRef;
                 const oldPts = dragOldPoints;
                 const newPts = contour.points.map(p => ({x: p.x, y: p.y}));
@@ -611,8 +703,8 @@ class CanvasRenderer {
             if (this.app) { this.app.currentSnapPoint = null; this.app.currentTrackPoint = null; }
             const snapEl = document.getElementById('snap-indicator');
             if (snapEl) snapEl.style.display = 'none';
-            // V3.10: Grip-Drag abbrechen (ohne Commit)
-            if (isDraggingGrip && dragContourRef && dragOldPoints) {
+            // V3.10: Grip-Drag abbrechen (ohne Commit) — Klick-Modus bleibt beim Verlassen des Canvas bestehen
+            if (isDraggingGrip && !gripSticky && dragContourRef && dragOldPoints) {
                 dragContourRef.points = dragOldPoints.map(p => ({x: p.x, y: p.y}));
                 if (dragOldFit) dragContourRef._fitPoints = dragOldFit.map(p => ({x: p.x, y: p.y}));
                 // BUG 21 Fix: Cache nach Rollback invalidieren
@@ -848,9 +940,15 @@ class CanvasRenderer {
             }
             // Snap-Symbol + Label immer
             this.app.snapManager.drawSnapIndicator(ctx, scr.x, scr.y);
+            // V3.44: Verweilen auf End-/Mittelpunkt -> Laengen der angrenzenden Konturen
+            this._updateSnapDwell(snap);
+            if (this._dwellShow) this._drawSnapDwellLengths(ctx, snap);
         } else if (this.app?.currentSnapPoint) {
             this.drawSnapIndicator(this.app.currentSnapPoint);
         }
+
+        if (!snapActive) this._updateSnapDwell(null);
+        this._drawGripDragHud(ctx);
 
         // V3.44: Tracking-Overlay (Object Snap Tracking / Polar) — Linien, erfasste Punkte, Label
         let trackedDrawn = false;
@@ -1260,32 +1358,65 @@ class CanvasRenderer {
         ctx.stroke();
     }
 
+    /**
+     * V3.43: Schnittrichtung nach CAD/CAM-Standard (Mastercam/SigmaNEST/Lantek):
+     * mehrere gefuellte Pfeilspitzen in gleichem BILDSCHIRM-Abstand entlang der Kontur
+     * (konstante Pixelgroesse, zoom-unabhaengig), Tangente ueber ein Fenster gemittelt
+     * (stabil auf Kreisen/Splines), dunkler Halo + heller Kern fuer Kontrast auf jedem Hintergrund.
+     */
     drawSingleDirectionArrow(ctx, points) {
-        if (!points || points.length < 3) return;
+        if (!points || points.length < 2) return;
 
-        let totalLength = 0;
+        const cum = [0];
         for (let i = 1; i < points.length; i++) {
-            totalLength += Math.hypot(points[i].x - points[i-1].x, points[i].y - points[i-1].y);
+            cum.push(cum[i-1] + Math.hypot(points[i].x - points[i-1].x, points[i].y - points[i-1].y));
         }
+        const total = cum[cum.length - 1];
+        if (total <= 0) return;
 
-        const targetDist = totalLength * 0.25;
-        let accumulated = 0;
+        const px = 1 / this.scale;                       // 1 Bildschirm-Pixel in mm
+        const screenLen = total / px;
+        if (screenLen < 24) return;                      // zu klein fuer einen Pfeil
 
-        for (let i = 1; i < points.length; i++) {
-            const dx = points[i].x - points[i-1].x;
-            const dy = points[i].y - points[i-1].y;
-            const segLen = Math.hypot(dx, dy);
+        const pointAt = (d) => {
+            d = Math.max(0, Math.min(total, d));
+            let lo = 1;
+            while (lo < cum.length - 1 && cum[lo] < d) lo++;
+            const segLen = cum[lo] - cum[lo-1] || 1;
+            const t = (d - cum[lo-1]) / segLen;
+            return { x: points[lo-1].x + (points[lo].x - points[lo-1].x) * t,
+                     y: points[lo-1].y + (points[lo].y - points[lo-1].y) * t };
+        };
 
-            if (accumulated + segLen >= targetDist) {
-                const t = (targetDist - accumulated) / segLen;
-                const ax = points[i-1].x + dx * t;
-                const ay = points[i-1].y + dy * t;
-                const angle = Math.atan2(dy, dx);
-                this.drawSmallArrow(ctx, ax, ay, angle, '#ffffff');
-                break;
-            }
-            accumulated += segLen;
+        const n = Math.max(1, Math.min(16, Math.round(screenLen / 140)));
+        const win = 7 * px;
+        for (let k = 0; k < n; k++) {
+            const d = total * (k + 0.5) / n;
+            const a = pointAt(d - win), b = pointAt(d + win), c = pointAt(d);
+            if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-9) continue;
+            this._drawDirectionChevron(ctx, c.x, c.y, Math.atan2(b.y - a.y, b.x - a.x));
         }
+    }
+
+    _drawDirectionChevron(ctx, x, y, angle) {
+        const px = 1 / this.scale;
+        const L = 16 * px, W = 7 * px;                   // Laenge / halbe Breite in Pixeln
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(L * 0.6, 0);                          // Spitze
+        ctx.lineTo(-L * 0.4, W);
+        ctx.lineTo(-L * 0.15, 0);                        // Einzug (Pfeil-Heck)
+        ctx.lineTo(-L * 0.4, -W);
+        ctx.closePath();
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';            // Halo
+        ctx.lineWidth = 3.5 * px;
+        ctx.stroke();
+        ctx.fillStyle = '#ffe94d';                       // leuchtendes Gelb, hebt sich von Layerfarben ab
+        ctx.fill();
+        ctx.restore();
     }
 
     drawSmallArrow(ctx, x, y, angle, color) {
@@ -2233,6 +2364,13 @@ class CanvasRenderer {
                 continue;
             }
 
+            // V3.47: Rechteck mit gerundeten Ecken -> nur 4 Kanten-Grips (Groesse aendern, Ecken laufen mit)
+            const rr = this._detectRoundedRect(contour);
+            if (rr) {
+                this._addRoundedRectGrips(contour, rr);
+                continue;
+            }
+
             // Segment-Anzahl (bei geschlossener Kontur: letzter Punkt = erster)
             const segCount = pts.length - 1;
             const vertCount = contour.isClosed ? pts.length - 1 : pts.length;
@@ -2274,6 +2412,170 @@ class CanvasRenderer {
             }
         }
         this._gripDirty = false;
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // V3.47: Rechteck mit gerundeten Ecken (Polylinie aus Geraden + Bogen-Stuetzpunkten)
+    // ════════════════════════════════════════════════════════════════
+
+    /** Erkennt rein geometrisch ein (ggf. gedrehtes) Rechteck mit gleichen Eckradien. */
+    _detectRoundedRect(contour) {
+        if (!contour.isClosed) return null;
+        const pts = contour.points;
+        if (!pts || pts.length < 10) return null;
+        const n = pts.length - 1;
+        let li = 0, ll = 0;
+        for (let i = 0; i < n; i++) {
+            const l = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+            if (l > ll) { ll = l; li = i; }
+        }
+        if (ll < 1e-6) return null;
+        const angs = [Math.atan2(pts[li + 1].y - pts[li].y, pts[li + 1].x - pts[li].x), 0];
+        for (const a of angs) {
+            const rr = this._fitRoundedRect(pts, n, { x: Math.cos(a), y: Math.sin(a) }, { x: -Math.sin(a), y: Math.cos(a) });
+            if (rr) return rr;
+        }
+        return null;
+    }
+
+    _fitRoundedRect(pts, n, u, v) {
+        let smin = Infinity, smax = -Infinity, tmin = Infinity, tmax = -Infinity;
+        const S = [], T = [];
+        for (let i = 0; i < n; i++) {
+            const s = pts[i].x * u.x + pts[i].y * u.y, t = pts[i].x * v.x + pts[i].y * v.y;
+            S.push(s); T.push(t);
+            if (s < smin) smin = s; if (s > smax) smax = s;
+            if (t < tmin) tmin = t; if (t > tmax) tmax = t;
+        }
+        const w = smax - smin, h = tmax - tmin;
+        if (w < 0.1 || h < 0.1) return null;
+        const tol = 0.01 + 1e-4 * Math.max(w, h);
+        // Radius: laengstes gerades Segment auf irgendeiner der 4 Kanten (= Strecke zwischen den Tangentenpunkten).
+        // Langlochform (R = halbe Kurzseite): Kurzseite hat kein gerades Stueck -> Langseite liefert r.
+        let r = NaN, eLen = 0;
+        for (let i = 0; i < n; i++) {
+            const j = (i + 1) % n;
+            const cand = [
+                [Math.abs(S[i] - smin) < tol && Math.abs(S[j] - smin) < tol, Math.abs(T[j] - T[i]), Math.min(T[i], T[j]) - tmin],
+                [Math.abs(S[i] - smax) < tol && Math.abs(S[j] - smax) < tol, Math.abs(T[j] - T[i]), tmax - Math.max(T[i], T[j])],
+                [Math.abs(T[i] - tmin) < tol && Math.abs(T[j] - tmin) < tol, Math.abs(S[j] - S[i]), Math.min(S[i], S[j]) - smin],
+                [Math.abs(T[i] - tmax) < tol && Math.abs(T[j] - tmax) < tol, Math.abs(S[j] - S[i]), smax - Math.max(S[i], S[j])]
+            ];
+            for (const [on, l, rc] of cand) if (on && l > eLen) { eLen = l; r = rc; }
+        }
+        if (!(r > tol * 2) || 2 * r > Math.min(w, h) + tol) return null;
+        let q = 0; // je ein Bit pro Ecke mit mindestens einem echten Bogenpunkt
+        for (let i = 0; i < n; i++) {
+            const s = S[i], t = T[i];
+            const cs = s < smin + r ? smin + r : (s > smax - r ? smax - r : s);
+            const ct = t < tmin + r ? tmin + r : (t > tmax - r ? tmax - r : t);
+            if (cs === s && ct === t) {
+                if (Math.min(Math.abs(s - smin), Math.abs(s - smax), Math.abs(t - tmin), Math.abs(t - tmax)) > tol) return null;
+            } else {
+                if (Math.abs(Math.hypot(s - cs, t - ct) - r) > tol) return null;
+                if (cs !== s && ct !== t && Math.abs(s - cs) > tol && Math.abs(t - ct) > tol) q |= (s < cs ? 1 : 2) << (t < ct ? 0 : 2);
+            }
+        }
+        if (q !== 15) return null; // jede der 4 Ecken braucht echte Bogenpunkte
+        const rr = { u, v, smin, smax, tmin, tmax, r, tol };
+        // Startpunkt-Klassifikation + Umlaufsinn merken
+        let area = 0;
+        for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n]; area += a.x * b.y - b.x * a.y; }
+        rr.ccw = area > 0;
+        rr.startCls = this._rrClass(S[0], T[0], rr);
+        rr.start = { x: pts[0].x, y: pts[0].y };
+        return rr;
+    }
+
+    _rrClass(s, t, b) {
+        const tol = b.tol;
+        return {
+            sx: (s - b.smin < b.smax - s) ? 0 : 1, tx: (t - b.tmin < b.tmax - t) ? 0 : 1,
+            onS: Math.min(Math.abs(s - b.smin), Math.abs(s - b.smax)) < tol,
+            onT: Math.min(Math.abs(t - b.tmin), Math.abs(t - b.tmax)) < tol
+        };
+    }
+
+    /** Baut die Kontur aus Rahmen-Grenzen b neu auf (gleicher Radius, gleiche Punktzahl, gleicher Startpunkt-Typ). */
+    _buildRoundedRect(rr, b) {
+        const { u, v, r } = rr;
+        const W = (s, t) => ({ x: s * u.x + t * v.x, y: s * u.y + t * v.y });
+        let c = [W(b.smin, b.tmin), W(b.smax, b.tmin), W(b.smax, b.tmax), W(b.smin, b.tmax)];
+        if (!rr.ccw) c = [c[0], c[3], c[2], c[1]];
+        const pts = GeometryOps.filletPolyline([...c, { x: c[0].x, y: c[0].y }], true, r);
+        const body = pts.slice(0, -1);
+        const nb = { smin: b.smin, smax: b.smax, tmin: b.tmin, tmax: b.tmax, tol: rr.tol };
+        const k = rr.startCls;
+        let best = -1, bd = Infinity;
+        for (let i = 0; i < body.length; i++) {
+            const s = body[i].x * u.x + body[i].y * u.y, t = body[i].x * v.x + body[i].y * v.y;
+            const cl = this._rrClass(s, t, nb);
+            if (cl.sx !== k.sx || cl.tx !== k.tx || cl.onS !== k.onS || cl.onT !== k.onT) continue;
+            const d = Math.hypot(body[i].x - rr.start.x, body[i].y - rr.start.y);
+            if (d < bd) { bd = d; best = i; }
+        }
+        const out = best > 0 ? body.slice(best).concat(body.slice(0, best)) : body;
+        out.push({ x: out[0].x, y: out[0].y });
+        return out;
+    }
+
+    _rrEdgeMid(rr, side, b) {
+        const { u, v } = rr;
+        const sm = (b.smin + b.smax) / 2, tm = (b.tmin + b.tmax) / 2;
+        const s = side === 'smin' ? b.smin : side === 'smax' ? b.smax : sm;
+        const t = side === 'tmin' ? b.tmin : side === 'tmax' ? b.tmax : tm;
+        return { x: s * u.x + t * v.x, y: s * u.y + t * v.y };
+    }
+
+    _addRoundedRectGrips(contour, rr) {
+        for (const side of ['smin', 'smax', 'tmin', 'tmax']) {
+            const m = this._rrEdgeMid(rr, side, rr);
+            this._grips.push({
+                type: 'rr_edge', side, x: m.x, y: m.y, contour, indices: [],
+                _rr: rr, label: 'E-' + side
+            });
+        }
+    }
+
+    /** Masse (Breite/Hoehe) der gezogenen Kante: {orig, cur, name} */
+    _rrDims(grip) {
+        const rr = grip._rr, b = grip._rrCur || rr, isS = grip.side[0] === 's';
+        return {
+            name: isS ? 'Breite' : 'Höhe',
+            orig: isS ? rr.smax - rr.smin : rr.tmax - rr.tmin,
+            cur: isS ? b.smax - b.smin : b.tmax - b.tmin
+        };
+    }
+
+    /** Weltpunkt, der die bewegte Kante auf Masz dim setzt (gegenueberliegende Kante bleibt stehen) */
+    _rrPosForDim(grip, dim) {
+        const rr = grip._rr, { u, v } = rr;
+        let s = (rr.smin + rr.smax) / 2, t = (rr.tmin + rr.tmax) / 2;
+        switch (grip.side) {
+            case 'smax': s = rr.smin + dim; break;
+            case 'smin': s = rr.smax - dim; break;
+            case 'tmax': t = rr.tmin + dim; break;
+            case 'tmin': t = rr.tmax - dim; break;
+        }
+        return { x: s * u.x + t * v.x, y: s * u.y + t * v.y };
+    }
+
+    _applyRoundedRectDrag(grip, newPos, contour) {
+        const rr = grip._rr, { u, v, r } = rr;
+        const isS = grip.side[0] === 's';
+        const c = isS ? newPos.x * u.x + newPos.y * u.y : newPos.x * v.x + newPos.y * v.y;
+        const b = { smin: rr.smin, smax: rr.smax, tmin: rr.tmin, tmax: rr.tmax };
+        const minSize = 2 * r + 1;   // mind. 1 mm gerades Stueck, damit die Kontur erkennbar bleibt
+        switch (grip.side) {
+            case 'smin': b.smin = Math.min(c, b.smax - minSize); break;
+            case 'smax': b.smax = Math.max(c, b.smin + minSize); break;
+            case 'tmin': b.tmin = Math.min(c, b.tmax - minSize); break;
+            case 'tmax': b.tmax = Math.max(c, b.tmin + minSize); break;
+        }
+        grip._rrCur = b;
+        contour.points = this._buildRoundedRect(rr, b);
+        const m = this._rrEdgeMid(rr, grip.side, b);
+        grip.x = m.x; grip.y = m.y;
     }
 
     /**
@@ -2350,6 +2652,187 @@ class CanvasRenderer {
                 label: 'Q' + q.angle
             });
         }
+    }
+
+    /**
+     * V3.44: Referenz fuer Vertex-Grip: festes Nachbar-Ende, Originalrichtung, Endpunkt-Flag.
+     * Bei Endpunkten offener Konturen = Verlaengern/Strecken auf derselben Linie.
+     */
+    _gripRef(grip) {
+        const old = grip && grip._oldPts;
+        if (!grip || grip.type !== 'vertex' || !old || old.length < 2) return null;
+        const idx = grip.indices[0];
+        const n = old.length;
+        const open = !grip.contour.isClosed;
+        const isEnd = open && (idx === 0 || idx === n - 1);
+        const nb = idx === 0 ? 1 : idx - 1;
+        const fixed = old[nb];
+        const dx = old[idx].x - fixed.x, dy = old[idx].y - fixed.y, dl = Math.hypot(dx, dy);
+        if (dl < 1e-9) return { idx, fixed, dir: { x: 1, y: 0 }, endpoint: isEnd, length: 0 };
+        return { idx, fixed, dir: { x: dx / dl, y: dy / dl }, endpoint: isEnd, length: dl };
+    }
+
+    /** V3.46: Vorzeichen der Aenderung: Maus jenseits der Ausgangslaenge = verlaengern, davor = kuerzen ('-' erzwingt kuerzen) */
+    _gripDeltaSign(raw, ref, grip) {
+        if (raw && raw[0] === '-') return -1;
+        const cur = grip.contour.points[ref.idx];
+        const curLen = Math.hypot(cur.x - ref.fixed.x, cur.y - ref.fixed.y);
+        return curLen >= ref.length ? 1 : -1;
+    }
+
+    /** V3.44: Ortho beim Endpunkt-Strecken => Punkt bleibt auf der Linie (Verlaengerung kollinear) */
+    _constrainGripDrag(grip, pos) {
+        if (!this.app?.snapManager?.effectiveOrtho?.()) return pos;
+        const ref = this._gripRef(grip);
+        if (!ref || !ref.endpoint) return pos;
+        const t = (pos.x - ref.fixed.x) * ref.dir.x + (pos.y - ref.fixed.y) * ref.dir.y;
+        return { x: ref.fixed.x + ref.dir.x * t, y: ref.fixed.y + ref.dir.y * t };
+    }
+
+    /** V3.44: HUD waehrend Grip-Drag: Laenge / Winkel / Masseingabe */
+    _drawGripDragHud(ctx) {
+        const grip = this._draggedGrip;
+        if (grip && grip.type === 'rr_edge' && this._lastMouseScreen) { this._drawRrHud(ctx, grip); return; }
+        if (!grip || grip.type !== 'vertex' || !this._lastMouseScreen) return;
+        const ref = this._gripRef(grip);
+        if (!ref) return;
+        const cur = grip.contour.points[ref.idx];
+        const len = Math.hypot(cur.x - ref.fixed.x, cur.y - ref.fixed.y);
+        const ang = Math.atan2(cur.y - ref.fixed.y, cur.x - ref.fixed.x) * 180 / Math.PI;
+        const typing = this._gripLenBuf;
+        const kind = typing ? (typing[0] === '=' ? 'Länge =' : 'Änderung') : '';
+        const num = typing ? typing.replace(/^[-=]/, '') : '';
+        const sg = typing && typing[0] !== '=' ? this._gripDeltaSign(typing, ref, grip) : 0;
+        const l1 = typing ? `${kind}: ${typing[0] === '=' ? '' : (sg < 0 ? '−' : '+')}${num}\u2588  → ${(typing[0] === '=' ? parseFloat(num) : ref.length + sg * parseFloat(num || 0)).toFixed(2)}`
+                            : `Länge: ${len.toFixed(2)}  (tippen: Δ in Zugrichtung, =abs.)`;
+        const l2 = `Winkel: ${ang.toFixed(1)}°` + (ref.endpoint && this.app?.snapManager?.effectiveOrtho?.() ? '  Ortho' : '');
+        ctx.save();
+        ctx.font = '12px Consolas, monospace';
+        const w = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width) + 12;
+        const x = this._lastMouseScreen.x + 18, y = this._lastMouseScreen.y + 18;
+        ctx.fillStyle = 'rgba(40,40,40,0.92)';
+        ctx.strokeStyle = typing ? '#ffe94d' : '#888';
+        ctx.fillRect(x, y, w, 38);
+        ctx.strokeRect(x + 0.5, y + 0.5, w, 38);
+        ctx.fillStyle = typing ? '#ffe94d' : '#e0e0e0';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(l1, x + 6, y + 11);
+        ctx.fillStyle = '#e0e0e0';
+        ctx.fillText(l2, x + 6, y + 28);
+        ctx.restore();
+    }
+
+    /** V3.47: HUD beim Gross-/Kleinziehen eines gerundeten Rechtecks */
+    _drawRrHud(ctx, grip) {
+        const dm = this._rrDims(grip), rr = grip._rr;
+        const typing = this._gripLenBuf;
+        const isS = grip.side[0] === 's';
+        const b = grip._rrCur || rr;
+        const wv = b.smax - b.smin, hv = b.tmax - b.tmin;
+        let l1;
+        if (typing) {
+            const num = typing.replace(/^[-=]/, '');
+            const sg = typing[0] === '-' ? -1 : (dm.cur >= dm.orig ? 1 : -1);
+            const res = typing[0] === '=' ? parseFloat(num) : dm.orig + sg * parseFloat(num || 0);
+            l1 = `${dm.name} ${typing[0] === '=' ? '=' : (sg < 0 ? '−' : '+')}${num}\u2588  → ${isFinite(res) ? res.toFixed(2) : '?'}`;
+        } else {
+            l1 = `${dm.name}: ${dm.cur.toFixed(2)}  (tippen: Δ, =abs.)`;
+        }
+        const l2 = `${wv.toFixed(2)} × ${hv.toFixed(2)}  R${rr.r.toFixed(2)}`;
+        ctx.save();
+        ctx.font = '12px Consolas, monospace';
+        const w = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width) + 12;
+        const x = this._lastMouseScreen.x + 18, y = this._lastMouseScreen.y + 18;
+        ctx.fillStyle = 'rgba(40,40,40,0.92)';
+        ctx.strokeStyle = typing ? '#ffe94d' : '#888';
+        ctx.fillRect(x, y, w, 38);
+        ctx.strokeRect(x + 0.5, y + 0.5, w, 38);
+        ctx.fillStyle = typing ? '#ffe94d' : '#e0e0e0';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(l1, x + 6, y + 11);
+        ctx.fillStyle = '#e0e0e0';
+        ctx.fillText(l2, x + 6, y + 28);
+        ctx.restore();
+    }
+
+    /** V3.44: Verweil-Timer: nach ~0,65s auf End-/Mittelpunkt werden Laengen angezeigt */
+    _updateSnapDwell(snap) {
+        const key = snap ? `${snap.type}:${snap.point.x.toFixed(3)}:${snap.point.y.toFixed(3)}` : null;
+        if (key === this._dwellKey) return;
+        this._dwellKey = key;
+        this._dwellShow = false;
+        clearTimeout(this._dwellTimer);
+        if (key && (snap.type === 'endpoint' || snap.type === 'midpoint')) {
+            this._dwellTimer = setTimeout(() => {
+                if (this._dwellKey === key) { this._dwellShow = true; this.render(); }
+            }, 650);
+        }
+    }
+
+    _drawSnapDwellLengths(ctx, snap) {
+        if (this._draggedGrip || !this.contours) return;
+        const p = snap.point, tol = 0.05;
+        const items = [];
+        const seen = new Set();
+        const segLen = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+        for (const c of this.contours) {
+            const pts = c.points;
+            if (!pts || pts.length < 2 || c.isHatchContour) continue;
+            const nSeg = pts.length - 1;
+            let total = 0;
+            for (let i = 0; i < nSeg; i++) total += segLen(pts[i], pts[i + 1]);
+            if (c.isClosed && segLen(pts[0], pts[nSeg]) > 1e-6) total += segLen(pts[nSeg], pts[0]);
+            const segs = [];
+            if (snap.type === 'endpoint') {
+                for (let i = 0; i <= nSeg; i++) {
+                    if (Math.hypot(pts[i].x - p.x, pts[i].y - p.y) > tol) continue;
+                    if (i > 0) segs.push(i - 1);
+                    if (i < nSeg) segs.push(i);
+                    if (c.isClosed && i === 0) segs.push(nSeg - 1);
+                    if (c.isClosed && i === nSeg) segs.push(0);
+                }
+            } else {
+                for (let i = 0; i < nSeg; i++) {
+                    const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2;
+                    if (Math.hypot(mx - p.x, my - p.y) <= tol) segs.push(i);
+                }
+            }
+            if (segs.length === 0) continue;
+            const detailed = nSeg <= 4;   // Polylinien/Boegen mit vielen Stuetzpunkten: nur Gesamtlaenge
+            for (const i of [...new Set(segs)]) {
+                const a = pts[i], b = pts[i + 1];
+                const key = `${c.name}:${detailed ? i : 'all'}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                items.push({
+                    mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+                    ang: Math.atan2(b.y - a.y, b.x - a.x),
+                    text: detailed ? segLen(a, b).toFixed(2) + ' mm' + (nSeg > 1 ? `  (Σ ${total.toFixed(2)})` : '')
+                                   : 'Σ ' + total.toFixed(2) + ' mm'
+                });
+            }
+        }
+        if (items.length === 0) return;
+        ctx.save();
+        ctx.font = '12px Consolas, monospace';
+        ctx.textBaseline = 'middle';
+        for (const it of items.slice(0, 12)) {
+            const s = this.worldToScreen(it.mid.x, it.mid.y);
+            // Label seitlich versetzt (senkrecht zur Linie, bildschirmseitig oben)
+            let nx = Math.sin(it.ang), ny = -Math.cos(it.ang);   // Weltnormale -> Bildschirm (y gespiegelt)
+            if (ny > 0) { nx = -nx; ny = -ny; }
+            const lx = s.x + nx * 16, ly = s.y + ny * 16;
+            const w = ctx.measureText(it.text).width + 10;
+            ctx.strokeStyle = '#ffe94d'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(lx, ly); ctx.stroke();
+            ctx.fillStyle = 'rgba(40,40,40,0.92)';
+            ctx.fillRect(lx - w / 2, ly - 9, w, 18);
+            ctx.strokeRect(lx - w / 2 + 0.5, ly - 8.5, w, 18);
+            ctx.fillStyle = '#ffe94d';
+            ctx.textAlign = 'center';
+            ctx.fillText(it.text, lx, ly + 0.5);
+        }
+        ctx.restore();
     }
 
     /**
@@ -2435,6 +2918,10 @@ class CanvasRenderer {
                 grip.y = cy + newR * Math.sin(angleRad);
                 break;
             }
+            case 'rr_edge': {
+                this._applyRoundedRectDrag(grip, newPos, contour);
+                break;
+            }
             case 'spline_fit': {
                 // V3.33: Fit-Point verschieben → Spline re-tessellieren
                 contour._fitPoints[grip.fitIndex].x = newPos.x;
@@ -2516,20 +3003,17 @@ class CanvasRenderer {
             }
         }
 
-        // V3.37: AutoCAD-Grip-Stil — hohle Quadrate (Cold), gefüllt nur bei Hover/Drag (Warm/Hot)
+        // V3.45: AutoCAD-2013-Stil — GEFUELLTE Quadrate: kalt = blau, Hover = gruen, aktiv (hot) = rot,
+        // duenner dunkler Rand, ca. 9 px
+        const half = 4.5 / this.scale;
         ctx.lineWidth = 1 / this.scale;
+        ctx.strokeStyle = '#101830';
         for (const grip of this._grips) {
             const isDragged = grip === this._draggedGrip;
             const isHovered = grip === this._hoveredGrip;
-            const borderColor = (isDragged || isHovered) ? this.colors.gripHover : this.colors.grip;
-
-            ctx.strokeStyle = borderColor;
-            if (isDragged || isHovered) {
-                ctx.fillStyle = isDragged ? this.colors.gripHot : this.colors.gripHover;
-                ctx.fillRect(grip.x - size, grip.y - size, size * 2, size * 2);
-            }
-            // Quadrat zentriert auf Grip-Position
-            ctx.strokeRect(grip.x - size, grip.y - size, size * 2, size * 2);
+            ctx.fillStyle = isDragged ? '#ff2a2a' : (isHovered ? '#27c43a' : '#2a56ff');
+            ctx.fillRect(grip.x - half, grip.y - half, half * 2, half * 2);
+            ctx.strokeRect(grip.x - half, grip.y - half, half * 2, half * 2);
         }
     }
 

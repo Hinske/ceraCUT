@@ -206,3 +206,19 @@ Fixes wurden von 9 parallelen Agenten pro Dateigruppe umgesetzt, nur Syntaxprüf
 und vereinzelte Node-Tests — kein Browser-/Maschinentest. Bekannte Verhaltensänderungen:
 Nesting hält echten Mindestabstand ein, Angebote/Simulation nutzen korrigierten Vorschub-Index,
 Schrifthöhe = Versalhöhe (bestehende DXF-Texte ~30 % größer), Hatch-Shortcut jetzt `HT`, Zoll-DXF werden auf mm skaliert.
+
+---
+
+# Mosaik-Generator (CAD-Tab, Gruppe "Mosaik" nach CAM-Tools)
+
+**Phase 0/1 (Entscheidungen mit User):** Fliese per Maßeingabe, Würfel oder Rechteck, immer +0,8 mm Schnittaufmaß je Stückmaß
+(Teilung = Stück + 0,8, Schnittlinien = Sägemittellinie). Randabstand Standard 3 mm. Dekorrichtung wählbar (nicht drehen).
+Überlauf der Schnittlinien optional, nur soweit Platz ist (max. 5 mm, nie über Fliesenkante/fremde Stücke).
+Rechteck: Verschnittprüfung beider Lagen (Auto), Mischlage (Reststreifen gedreht) als Option.
+
+- [x] `js/mosaic-generator.js` — Kern (Raster, Lagenwahl, Mischlage, Überlauf, DXF-R12) + Dialog mit Live-Vorschau + Tools MOSW/MOSR/MOS
+- [x] Ribbon-Gruppe "Mosaik" (index.html), TOOL_TOOLTIPS (constants.js)
+- [x] Node-Test: Raster/Überlappung/Rand/Linien, 1438 Zufallsfälle (0 Fehler), Parser-Roundtrip (DXFParser), Vergleich mit W48A900X320
+- [x] Browser-Test (Chromium/Playwright): Flyout, Dialog, Vorschau, Erzeugen → Tab, DXF-Download, Esc/Hintergrund, ungültige Eingabe
+- [ ] Praxistest: erzeugtes DXF in WARICAM/Säge laden, Überlauf-Länge und Randabstand mit Bediener abstimmen
+- [x] Versions-Bump V6.83 (build-info.js, CLAUDE.md-Sync), Commit/Push — zusammen mit der V6.83-Arbeit (app.js/canvas-renderer/snap-manager)

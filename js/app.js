@@ -1,11 +1,12 @@
 /**
- * CeraCUT V6.41 - Main Application
+ * CeraCUT V6.42 - Main Application
+ * V6.42: Fix — Offene Linien gelten immer als Slit (Reihenfolge fand 'keine schneidbaren Konturen'); Auto-Referenz verkettet Einzellinien zu geschlossener Fliese
  * V6.41: Feat — Druckdialog: Farbe / Schwarz-Weiss waehlbar (Wahl wird gemerkt)
  * V6.40: Feat — Druck/Bereichsdruck uebernimmt Layerfarben (helle Farben werden abgedunkelt)
  * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
  * Last Modified: 2026-11-05
- * Build: 20261105-printmode
+ * Build: 20261105-joinlines2
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -1753,7 +1754,23 @@ class CeraCutApp {
         });
     }
     
+    /**
+     * V6.83: Offene Konturen (z.B. Fliese aus Einzellinien, oder Kontur nach Trim/Loeschen einer
+     * Seite) behalten sonst ein veraltetes cuttingMode 'disc'/'hole'/null und fallen aus allen
+     * "schneidbar"-Filtern. Offene, nicht-Hatch, nicht-Referenz-Konturen sind immer Slits.
+     */
+    _normalizeOpenContours() {
+        for (const c of this.contours) {
+            if (!c.isClosed && !c.isHatchContour && !c.isReference
+                && c.cuttingMode !== 'none' && c.cuttingMode !== 'slit') {
+                c.cuttingMode = 'slit';
+                if (typeof ModificationTool !== 'undefined') ModificationTool.invalidateCache?.(c);
+            }
+        }
+    }
+
     rebuildCutOrder() {
+        this._normalizeOpenContours();
         const cuttable = [];
         this.contours.forEach((c, i) => {
             if (!c.isReference && (c.isClosed || c.cuttingMode === 'slit')) {
@@ -1769,6 +1786,7 @@ class CeraCutApp {
         const method = document.getElementById('sort-method')?.value || 'inside-out';
         
         // Nur schneidbare Konturen
+        this._normalizeOpenContours();
         const cuttable = this.contours
             .map((c, i) => ({ contour: c, index: i }))
             .filter(item => !item.contour.isReference && (item.contour.isClosed || item.contour.cuttingMode === 'slit'));
@@ -3558,6 +3576,88 @@ class CeraCutApp {
         });
     }
     
+    /**
+     * V6.83: Verkettet offene Konturen (Einzellinien) per Endpunkt-Abgleich. Entstehen dabei
+     * geschlossene Schleifen, ersetzen sie die Quell-Linien (Undo-bar). Offene Reste bleiben.
+     */
+    _joinOpenContoursIntoClosed() {
+        if (typeof DXFParser === 'undefined' || !DXFParser.chainContours || typeof CamContour === 'undefined') return;
+        // Nur Linien EINES Layers verketten (Linien anderer Layer duerfen nie verbraucht werden)
+        const allOpen = this.contours.filter(c => !c.isClosed && !c.isHatchContour && !c.isReference
+            && c.points && c.points.length >= 2);
+        const layers = [...new Set(allOpen.map(c => c.layer || ''))];
+        for (const layer of layers) this._joinOpenLayer(allOpen.filter(c => (c.layer || '') === layer));
+    }
+
+    _joinOpenLayer(open) {
+        if (open.length < 2) return;
+
+        const tol = Math.max(this.settings.chainingTolerance || 0.1, 0.5);
+        const entities = open.map(c => ({ points: c.points.map(p => ({ x: p.x, y: p.y })), layer: c.layer || '', isClosed: false, type: 'LINE' }));
+        let chained;
+        try { chained = DXFParser.chainContours(entities, tol); } catch (e) { console.warn('[V6.83] Join fehlgeschlagen', e); return; }
+
+        const closedNew = (chained || []).filter(c => c.isClosed && c.points.length >= 3);
+        if (closedNew.length === 0) return;
+
+        // Quell-Linien je neuer Kontur: alle offenen, deren Punkte (Endpunkte) auf der neuen Kontur liegen
+        const onContour = (pt, poly) => {
+            for (let i = 0; i < poly.length; i++) {
+                const a = poly[i], b = poly[(i + 1) % poly.length];
+                const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+                let t = l2 > 0 ? ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / l2 : 0;
+                t = Math.max(0, Math.min(1, t));
+                if (Math.hypot(pt.x - (a.x + t * dx), pt.y - (a.y + t * dy)) <= tol) return true;
+            }
+            return false;
+        };
+        const consumed = new Set();
+        const created = [];
+        for (const nc of closedNew) {
+            const cam = new CamContour(nc.points, { layer: open[0].layer || 'DRAW', name: nc.name, isClosed: true });
+            cam.sourceType = nc.sourceType;
+            const sources = open.filter(o => !consumed.has(o) && o.points.every(p => onContour(p, nc.points)));
+            if (sources.length < 2) continue;
+            sources.forEach(o => consumed.add(o));
+            // Klassifizierung (disc/hole) ueber Nesting
+            let level = 0;
+            const tp = Geometry.interiorPoint(cam.points);
+            for (const ex of this.contours) {
+                if (ex.isClosed && !ex.isReference && !consumed.has(ex) && ex.points?.length >= 3
+                    && CeraCutPipeline._pointInPolygon(tp, ex.points)) level++;
+            }
+            cam.cuttingMode = level % 2 === 0 ? 'disc' : 'hole';
+            cam.nestingLevel = level;
+            cam.type = level % 2 === 0 ? 'OUTER' : 'INNER';
+            created.push({ cam, sources });
+        }
+        if (created.length === 0) return;
+
+        const app = this;
+        const removed = created.flatMap(c => c.sources);
+        const added = created.map(c => c.cam);
+        const positions = removed.map(c => this.contours.indexOf(c));
+        const cmd = new FunctionCommand(
+            `${removed.length} Linien zu ${added.length} geschlossener Kontur verbunden`,
+            () => {
+                removed.forEach(c => { const i = app.contours.indexOf(c); if (i >= 0) app.contours.splice(i, 1); });
+                app.contours.push(...added);
+                app.rebuildCutOrder(); app.updateContourPanel(); app.renderer?.setContours?.(app.contours);
+            },
+            () => {
+                added.forEach(c => { const i = app.contours.indexOf(c); if (i >= 0) app.contours.splice(i, 1); });
+                removed.forEach((c, k) => app.contours.splice(Math.min(positions[k], app.contours.length), 0, c));
+                app.rebuildCutOrder(); app.updateContourPanel(); app.renderer?.setContours?.(app.contours);
+            }
+        );
+        cmd.execute?.();
+        this.undoManager.pushExecuted(cmd);
+        this.undoManager.redoStack.length = 0;
+        this.undoManager._notifyStateChange();
+        this.snapManager?.invalidatePointsCache?.();
+        this.showToast(`🔗 ${removed.length} Linien zu ${added.length} geschlossener Kontur verbunden`, 'success');
+    }
+
     autoDetectReference() {
         const mode = document.getElementById('reference-contour-select')?.value || 'auto';
         
@@ -3567,6 +3667,8 @@ class CeraCutApp {
         this.contours.forEach(c => { c.isReference = false; });
         
         let referenceContour = null;
+        // V6.83: Fliese aus Einzellinien -> offene Konturen zu geschlossener Kontur verketten
+        this._joinOpenContoursIntoClosed();
         const closedContours = this.contours.filter(c => c.isClosed === true);
         
         if (closedContours.length === 0) {

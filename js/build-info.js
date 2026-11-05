@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.82
- * Version: V6.82
+ * CeraCUT Build Info V6.83
+ * Version: V6.83
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-printmode
+ * Build: 20261105-zuschnitt
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.82',
-    build: '20261105-printmode',
+    version: '6.83',
+    build: '20261105-zuschnitt',
     date: '2026-11-05',
-    time: '10:00 MEZ',
+    time: '16:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'c2e1277',
-        date: '2026-11-05 07:28:35 +0100',
-        message: 'feat: Druckdialog Farbe / Schwarz-Weiss mit gemerkter Wahl (V6.82)'
+        hash: '0a376d3',
+        date: '2026-11-05 15:51:43 +0100',
+        message: 'feat: CAD-Tools-Menue mit Zuschnitt-Generator (Mosaik Wuerfel/Rechteck, Sockel) + Auto-Ref/Grips/Fangmarker (V6.83)'
     },
 
     modules: {
@@ -25,11 +25,11 @@ const CERACUT_BUILD = {
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.10', build: '20261104-reviewfix' },
         'cam-contour':        { version: '5.23', build: '20261104-pushexecuted' },
-        'canvas-renderer':    { version: '3.44', build: '20261105-otrack' },
+        'canvas-renderer':    { version: '3.47', build: '20261105-gripdir' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.5', build: '20261104-reviewfix' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
-        'snap-manager':       { version: '1.8', build: '20261105-perptan' },
+        'snap-manager':       { version: '1.9', build: '20261105-acmarker' },
         'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },
         'drawing-tools':      { version: '2.21', build: '20261105-otrack' },
         'drawing-tools-ext':  { version: '1.11', build: '20261104-reviewfix' },
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.41', build: '20261105-printmode' },
+        'app':                { version: '6.42', build: '20261105-joinlines2' },
         'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -59,7 +59,8 @@ const CERACUT_BUILD = {
         'server':             { version: '1.8', build: '20261104-pushexecuted' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
-        'constants': { version: '2.13', build: '20261105-printarea' },
+        'constants': { version: '2.14', build: '20261105-zuschnitt' },
+        'mosaic-generator': { version: '1.3', build: '20261105-zuschnitt' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },
@@ -68,6 +69,9 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.83: Feat — CAD-Tools-Menue (Ribbon CAD, nach CAM-Tools) mit Zuschnitt-Generator (mosaic-generator V1.3): Mosaik Wuerfel (MOSW), Mosaik Rechteck (MOSR), Sockel (MOSS). Fliese per Masseingabe, Teilung = Stueckmass + 0,8 mm Schnittaufmass, Randabstand 3 mm, Rechteck mit Verschnittpruefung beider Lagen, Dekor-Lage fest waehlbar, Mischlage (Reststreifen gedreht) optional, Ueberlauf der Schnittlinien nur soweit Platz ist, Aussenkontur als eine Kontur (Ueberschnitt nur an einer Ecke, wie Musterdateien), Sockel = Streifen ueber volle Fliesenseite nur mit Parallelschnitten. Live-Vorschau, Erzeugen oeffnet neuen Tab (loadDXFContent), DXF-Download.',
+        'V6.83: Feat — Auto-Referenz/Join: offene Einzellinien werden per Endpunkt-Abgleich zu geschlossener Fliese verkettet; offene Linien gelten immer als Slit (app V6.42).',
+        'V6.83: Feat — AutoCAD-Grips fuer Rechteck mit gerundeten Ecken (4 Kanten-Grips), Klick-Modus und Masseingabe beim Strecken (canvas-renderer V3.45-V3.47); Fangmarker im AutoCAD-Stil (snap-manager V1.9).',
         'V6.78: Fix — Perpendicular-/Tangent-Fang aktiv (snap-manager V1.8): SnapManager.resolve() uebergibt den letzten Tool-Punkt an findSnap(); vorher war lastPoint immer null.',
         'V6.78: Feat — Object Snap Tracking (F11, AutoCAD-Stil: Erfassen per Hover, Tracking-Linien, Schnitt zweier Linien), Polar Tracking (F10), Rasterfang F9 verdrahtet, Shift = Ortho temporaer umkehren, Ortho/Polar schliessen sich aus, zentrale SnapManager.resolve() fuer alle Tools.',
         'V6.77: Fix — Review-Rest: Undo-Pushes ueber pushExecuted (Gruppen/Trim/Redo-Reset), Auto-Save fuer alle ungesicherten Tabs, listUsers-Fehlerpfad, getLeadSetInfo nutzt _isEffectivelyHole',

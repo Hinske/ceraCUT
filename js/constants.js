@@ -1,12 +1,13 @@
 /**
- * CeraCUT V2.13 Constants
+ * CeraCUT V2.14 Constants
+ * V2.14: TOOL_TOOLTIPS — Zuschnitt-Generator (MOSW Mosaik-Wuerfel, MOSR Rechteck, MOSS Sockel)
  * V2.13: GENERAL_SHORTCUTS — Strg+Shift+P Bereich drucken
  * V2.12: GENERAL_SHORTCUTS — F9/F10/F11 + Shift-Ortho-Override
  * Blaues Farbschema
  * V2.10: TOOL_ECHO_NAMES — AutoCAD-Style Command-Echo-Tabelle (_LINE, _CIRCLE, ...)
  * V2.9: TOOL_TOOLTIPS — alle 7 CAM-Tools (EF, REP, AN, BT, PJ, VZ, HULL) eingetragen
  * V2.8: INTARSIA_MATERIALS — 5 Materialgruppen mit Farben
- * Build: 20261105-printarea
+ * Build: 20261105-zuschnitt
  * V2.11: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
@@ -162,6 +163,9 @@ const TOOL_TOOLTIPS = {
     'PJ':    { label: 'Poly Joint',  tip: 'Geschlossene Polylinien verbinden oder aufteilen', shortcut: 'PJ', group: 'cam' },
     'VZ':    { label: 'Vectorize',   tip: 'Kurven/Arcs in Liniensegmente umwandeln', shortcut: 'VZ',    group: 'cam' },
     'HULL':  { label: 'Convex Hull', tip: 'Konvexes Huellpolygon um Objekte',        shortcut: 'HULL',  group: 'cam' },
+    'MOSW':  { label: 'Zuschnitt Mosaik Wuerfel',  tip: 'Zuschnitt-Programm Mosaik Wuerfel aus Fliese + Wuerfelmass (+0,8 mm Aufmass)', shortcut: 'MOSW', group: 'cam' },
+    'MOSR':  { label: 'Zuschnitt Rechteck', tip: 'Zuschnitt-Programm Rechteck mit Verschnittpruefung, Dekor, Mischlage',   shortcut: 'MOSR', group: 'cam' },
+    'MOSS':  { label: 'Zuschnitt Sockel',   tip: 'Sockel-Zuschnitt: Streifen ueber volle Fliesenseite, Raster Hoehe + 0,8 mm', shortcut: 'MOSS', group: 'cam' },
 };
 
 // V1.0: AutoCAD-Style Command-Echo (Unterstrich-Praefix in Command-Line, z.B. "_LINE")

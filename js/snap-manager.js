@@ -1,5 +1,6 @@
 /**
- * CeraCUT Snap Manager V1.8
+ * CeraCUT Snap Manager V1.9
+ * V1.9: Feat — Fangmarker im AutoCAD-Stil (gelb, hohl, dunkler Halo, Sanduhr fuer Nearest, Tooltip-Kaestchen mit deutschem Namen)
  * V1.5: Fix — contour._center/_radius (DXF-Parser Unterstrich-Properties) unterstützt;
  *        Endpoint-Spam für Kreiskonturen unterdrückt (AutoCAD-konform: nur Center+Quadrant);
  *        invalidatePointsCache() Methode für externe Cache-Invalidierung (nach Grip-Editing etc.)
@@ -13,7 +14,7 @@
  * - Visuelle Snap-Marker (verschiedene Symbole pro Typ)
  * Created: 2026-02-13 MEZ
  * Last Modified: 2026-11-05
- * Build: 20261105-perptan
+ * Build: 20261105-acmarker
  * V1.8: Fix — resolve() uebergibt basePoint an findSnap(): Perpendicular-/Tangent-Fang waren in der App nie aktiv (lastPoint war immer null)
  * V1.7: Feat — Object Snap Tracking (F11, AutoCAD-Stil: Erfassen per Hover, orthogonale Tracking-Linien,
  *        Schnitt zweier Linien), Polar Tracking (F10), Shift = Ortho temporaer umkehren,
@@ -698,13 +699,16 @@ class SnapManager {
         if (!this.currentSnap) return;
 
         const snap = this.currentSnap;
-        const size = 8;
-        const color = snap.typeDef.color;
+        const size = 6;   // AutoCAD: ~10-12px Marker-Box
+        const color = '#FFFF00';   // AutoCAD 2013: gelbe, HOHLE Marker (Autosnap-Marker-Farbe)
 
+        // Zwei Durchgaenge: dunkler Halo (Kontrast auf hellem Grund), dann gelbe Kontur
+        for (const pass of [0, 1]) {
         ctx.save();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = color;
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.lineJoin = 'miter';
+        ctx.lineWidth = pass === 0 ? 4.5 : 2;
+        ctx.strokeStyle = pass === 0 ? 'rgba(0,0,0,0.75)' : color;
+        ctx.fillStyle = 'rgba(0,0,0,0)';   // hohl
 
         switch (snap.typeDef.symbol) {
             case 'square': // Endpoint
@@ -738,14 +742,13 @@ class SnapManager {
                 ctx.stroke();
                 break;
 
-            case 'diamond': // Nearest
+            case 'diamond': // Nearest — Sanduhr (AutoCAD)
                 ctx.beginPath();
-                ctx.moveTo(screenX, screenY - size);
-                ctx.lineTo(screenX + size, screenY);
-                ctx.lineTo(screenX, screenY + size);
-                ctx.lineTo(screenX - size, screenY);
+                ctx.moveTo(screenX - size, screenY - size);
+                ctx.lineTo(screenX + size, screenY - size);
+                ctx.lineTo(screenX - size, screenY + size);
+                ctx.lineTo(screenX + size, screenY + size);
                 ctx.closePath();
-                ctx.fill();
                 ctx.stroke();
                 break;
 
@@ -810,12 +813,27 @@ class SnapManager {
                 break;
         }
 
-        // Snap-Type Label
-        ctx.font = 'bold 10px monospace';
-        ctx.fillStyle = color;
-        ctx.textAlign = 'left';
-        ctx.fillText(snap.typeDef.name, screenX + size + 4, screenY - 4);
+        ctx.restore();
+        }
 
+        // AutoCAD-Tooltip: hellgelbes Kaestchen mit deutschem Namen unter dem Marker
+        const NAMES = { endpoint: 'Endpunkt', midpoint: 'Mittelpunkt', center: 'Zentrum', geocenter: 'Geometrisches Zentrum',
+            quadrant: 'Quadrant', intersection: 'Schnittpunkt', perpendicular: 'Lotrecht', tangent: 'Tangente',
+            nearest: 'Nächster Punkt', grid: 'Raster' };
+        const label = NAMES[snap.type] || snap.typeDef.name;
+        ctx.save();
+        ctx.font = '12px Segoe UI, Arial, sans-serif';
+        const tw = ctx.measureText(label).width;
+        const bx = screenX + size + 8, by = screenY + size + 6, bw = tw + 10, bh = 18;
+        ctx.fillStyle = '#ffffe1';
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeRect(bx + 0.5, by + 0.5, bw, bh);
+        ctx.fillStyle = '#000';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, bx + 5, by + bh / 2 + 0.5);
         ctx.restore();
     }
 

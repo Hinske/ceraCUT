@@ -343,3 +343,14 @@
 ### [2026-11-04] Review-Fixes ohne Laufzeittest — nur `node --check`
 - **Fehler:** ~80 Fixes in einem Rutsch, geprüft nur per Syntaxcheck und vereinzelten Node-Tests.
 - **Regel:** Behobene Funde in sicherheits-/maschinenkritischen Bereichen (Postprozessor, Export, Nesting) erst nach Praxistest als erledigt werten; offene Tests stehen in `tasks/todo.md`.
+
+### [2026-11-05] Mosaik-/Zuschnitt-Generator: Musterdateien nur auf Linien-Raster ausgewertet, Außenkontur-Regel übersehen
+- **Fehler:** Erste Version des Generators ließ ALLE Schnittlinien (auch die vier Außenlinien) an beiden Enden überlaufen. User: "die äußere Kontur hat immer nur in einer Ecke Überschnitte — wir schneiden diese Kontur als eine."
+- **Root Cause:** Muster nur auf Raster/Teilung/Rand verglichen, nicht die Linienenden der Außenlinien einzeln. In den Mustern (W48, W21, W19, W58, R98) treffen drei Ecken der Außenkontur exakt aufeinander (kettet der Parser zu EINER Kontur), nur an einer Ecke stehen die zwei Enden über. Die Anzahl Konturen im Parser (24 statt 27) hätte den Unterschied sofort gezeigt.
+- **Regel:** Beim Nachbauen von Muster-Dateien das Ergebnis durch denselben Parser jagen und die Kontur-/Kettenstruktur (Anzahl, Punktzahl, offen/geschlossen) mit dem Original vergleichen — nicht nur Maße. Linienenden pro Linie (Über-/Unterstand relativ zum Raster) auswerten. Mehrdeutige Orientierung (Datei- vs. Maschinenkoordinaten, 90°-Drehung) als wählbare Option anbieten statt zu raten.
+- **Betroffene Module:** `mosaic-generator.js` (buildLines, V1.1)
+
+### [2026-11-05] Sockel-Dateiname bei quadratischer Fliese
+- **Fehler:** Sockel-Name bei quadratischer Fliese als `...A600X600` erzeugt (aus anderer Dateifamilie `Sockel610X58A610X610` verallgemeinert).
+- **Regel:** Namenskonventionen pro Dateifamilie (W, R, Sockel) getrennt festlegen und vom User bestätigen lassen; Quadratisch = `Sockel600X50A600`.
+- **Betroffene Module:** `mosaic-generator.js` (computeSockel, V1.3)
