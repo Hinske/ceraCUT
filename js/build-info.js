@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.77
- * Version: V6.77
- * Last Modified: 2026-11-04 MEZ
- * Build: 20261104-pushexecuted
+ * CeraCUT Build Info V6.78
+ * Version: V6.78
+ * Last Modified: 2026-11-05 MEZ
+ * Build: 20261105-otrack
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.77',
-    build: '20261104-pushexecuted',
-    date: '2026-11-04',
+    version: '6.78',
+    build: '20261105-otrack',
+    date: '2026-11-05',
     time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'a7872e7',
-        date: '2026-11-04 20:11:39 +0100',
-        message: 'fix: Review-Rest — pushExecuted statt undoStack.push, Auto-Save aller ungesicherten Tabs, listUsers-Fehlerpfad (V6.77)'
+        hash: '070a1a0',
+        date: '2026-11-05 07:09:40 +0100',
+        message: 'feat: Object Snap Tracking (F11), Polar Tracking (F10), Shift-Ortho-Override, Perpendicular-/Tangent-Fang (V6.78)'
     },
 
     modules: {
@@ -25,13 +25,13 @@ const CERACUT_BUILD = {
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.10', build: '20261104-reviewfix' },
         'cam-contour':        { version: '5.23', build: '20261104-pushexecuted' },
-        'canvas-renderer':    { version: '3.43', build: '20261104-reviewfix' },
+        'canvas-renderer':    { version: '3.44', build: '20261105-otrack' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.5', build: '20261104-reviewfix' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
-        'snap-manager':       { version: '1.6', build: '20261104-reviewfix' },
+        'snap-manager':       { version: '1.8', build: '20261105-perptan' },
         'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },
-        'drawing-tools':      { version: '2.20', build: '20261104-pushexecuted' },
+        'drawing-tools':      { version: '2.21', build: '20261105-otrack' },
         'drawing-tools-ext':  { version: '1.11', build: '20261104-reviewfix' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.37', build: '20261104-pushexecuted' },
+        'app':                { version: '6.38', build: '20261105-otrack' },
         'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -59,7 +59,7 @@ const CERACUT_BUILD = {
         'server':             { version: '1.8', build: '20261104-pushexecuted' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
-        'constants': { version: '2.11', build: '20261104-reviewfix' },
+        'constants': { version: '2.12', build: '20261105-otrack' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },
@@ -68,6 +68,8 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.78: Fix — Perpendicular-/Tangent-Fang aktiv (snap-manager V1.8): SnapManager.resolve() uebergibt den letzten Tool-Punkt an findSnap(); vorher war lastPoint immer null.',
+        'V6.78: Feat — Object Snap Tracking (F11, AutoCAD-Stil: Erfassen per Hover, Tracking-Linien, Schnitt zweier Linien), Polar Tracking (F10), Rasterfang F9 verdrahtet, Shift = Ortho temporaer umkehren, Ortho/Polar schliessen sich aus, zentrale SnapManager.resolve() fuer alle Tools.',
         'V6.77: Fix — Review-Rest: Undo-Pushes ueber pushExecuted (Gruppen/Trim/Redo-Reset), Auto-Save fuer alle ungesicherten Tabs, listUsers-Fehlerpfad, getLeadSetInfo nutzt _isEffectivelyHole',
         'V6.77: Fix — Komplett-Code-Review 2026-11-04 (91 Funde): Server-Haertung (Static-Blockliste, Cookie/Login/Pfad-Crashes, atomares users.json, Session-Sweep), Strg+S-Handle-Swap, cut()-Tracking, Multi-Material-cutOrder, WRK-Anwahl im Linearsatz, Nesting-Mindestabstand, Qualitaets-Feed-Index, Geometrie/Boolean/Arc-Fitting, Import (SVG/DXF/CNC), Zeichen-/Mess-/Undo-/Snap-Tools. Offen: Multi-Head, kerfFlipped, NEG/POS. Details: tasks/code-review-2026-11-04.md',
         'V6.75: Fix — DXF-Export: R12-Symbolnamen-Sanitisierung (dxf-writer V1.15). ' +

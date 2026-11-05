@@ -1,7 +1,8 @@
 /**
- * CeraCUT V6.37 - Main Application
- * Last Modified: 2026-11-04
- * Build: 20261104-pushexecuted
+ * CeraCUT V6.38 - Main Application
+ * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
+ * Last Modified: 2026-11-05
+ * Build: 20261105-otrack
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -179,6 +180,7 @@ class CeraCutApp {
         this.measureStart = null;
         this.measurements = [];
         this.currentSnapPoint = null;
+        this.currentTrackPoint = null;  // V6.78: Ergebnis von Object-Snap-Tracking / Polar / Ortho (ohne Objektfang)
         
         this.startpointMode = false; // NEU: Startpunkt-Modus
 
@@ -391,8 +393,17 @@ class CeraCutApp {
                     this.contours?.length) {
                     this.snapManager.setContours(this.contours);
                 }
-                const snap = this.snapManager.findSnap(worldX, worldY, this.renderer.scale);
-                if (snap) activeSnap = { point: snap.point, type: snap.typeDef.name };
+                // V6.78: Zentrale Aufloesung — Objektfang > Object-Snap-Tracking > Polar/Ortho
+                const toolActive = !!(this.toolManager?.isToolActive() || this.measureMode);
+                let basePoint = null;
+                if (this.toolManager?.isToolActive()) basePoint = this.toolManager.activeTool?.getLastPoint?.() || null;
+                else if (this.measureMode && this.measureStart) basePoint = this.measureStart;
+                if (!toolActive) this.snapManager.clearTracking();
+                const res = this.snapManager.resolve(worldX, worldY, this.renderer.scale, basePoint, true, toolActive);
+                if (res.snap) activeSnap = { point: res.snap.point, type: res.snap.typeDef.name };
+                const tk = res.trackState?.kind;
+                this.currentTrackPoint = (!res.snap && (tk === 'otrack' || tk === 'polar' || tk === 'otrack-int' || tk === 'ortho')) ? res.point : null;
+                this._effectiveCursor = res.point;
             }
             
             const snapIndicator = document.getElementById('snap-indicator');
@@ -407,14 +418,18 @@ class CeraCutApp {
             }
             
             // Snap aktiv → nativen Cursor verstecken, Crosshair wird am Snap-Punkt gezeichnet
-            const hasSnap = !!this.snapManager?.currentSnap;
+            const tkKind = this.snapManager?.trackState?.kind;
+            const hasSnap = !!this.snapManager?.currentSnap || tkKind === 'otrack' || tkKind === 'polar' || tkKind === 'otrack-int';
             if (this.toolManager?.isToolActive() || this.measureMode) {
                 this.renderer.canvas.style.cursor = hasSnap ? 'none' : 'crosshair';
             }
             
             // Canvas bei Snap-Wechsel neu rendern (Crosshair + Indikator)
             // V1.2-fix: Auch bei Positionswechsel rendern + immer wenn Snap aktiv
-            const snapChanged = (!!prevSnap !== !!this.currentSnapPoint) ||
+            const trackSig = this.snapManager?.trackState ? (this.snapManager.trackState.kind + ':' + this.snapManager.trackState.point.x + ',' + this.snapManager.trackState.point.y) : '';
+            const trackChanged = trackSig !== this._prevTrackSig;
+            this._prevTrackSig = trackSig;
+            const snapChanged = trackChanged || (!!prevSnap !== !!this.currentSnapPoint) ||
                 (prevSnap && this.currentSnapPoint && (prevSnap.x !== this.currentSnapPoint.x || prevSnap.y !== this.currentSnapPoint.y));
             if (snapChanged) {
                 this.renderer?.render();
@@ -427,14 +442,15 @@ class CeraCutApp {
             
             // Messwerkzeug Live-Update
             if (this.measureMode && this.measureStart) {
-                const endPoint = this.currentSnapPoint || { x: worldX, y: worldY };
+                const endPoint = this.currentSnapPoint || this.currentTrackPoint || { x: worldX, y: worldY };
                 this.updateMeasureInfo(this.measureStart, endPoint);
             }
 
             // V2.3: Dynamic Input HUD — Koordinaten am Cursor
             if (typeof DynamicInput !== 'undefined' && screenX != null) {
                 const basePoint = this.toolManager?.activeTool?.getLastPoint?.() || null;
-                DynamicInput.update(screenX, screenY, worldX, worldY, basePoint);
+                const eff = this._effectiveCursor || { x: worldX, y: worldY };   // V6.78: aufgeloester Punkt (Snap/Tracking/Ortho)
+                DynamicInput.update(screenX, screenY, eff.x, eff.y, basePoint);
             }
         };
         
@@ -580,6 +596,8 @@ class CeraCutApp {
         // SnapManager
         if (typeof SnapManager !== 'undefined') {
             this.snapManager = new SnapManager();
+            this.snapManager.onTrackingChange = () => this.renderer?.render();   // V6.78: Re-Render nach Erfassen
+            this._syncTrackingToggles();
         } else {
             console.warn('[V3.5] SnapManager nicht geladen');
         }
@@ -666,8 +684,8 @@ class CeraCutApp {
         // Sidebar Ortho + Snap Checkboxen
         document.getElementById('draw-ortho-cb')?.addEventListener('change', (e) => {
             if (this.snapManager) {
-                this.snapManager.orthoEnabled = e.target.checked;
-                document.getElementById('btn-ortho-toggle')?.classList.toggle('active', e.target.checked);
+                this.snapManager.setOrtho(e.target.checked);
+                this._syncTrackingToggles();
             }
         });
         document.getElementById('draw-snap-cb')?.addEventListener('change', (e) => {
@@ -711,12 +729,59 @@ class CeraCutApp {
         document.getElementById('btn-ortho-toggle')?.addEventListener('click', () => {
             if (this.snapManager) {
                 const ortho = this.snapManager.toggleOrtho();
-                document.getElementById('btn-ortho-toggle')?.classList.toggle('active', ortho);
+                this._syncTrackingToggles();
                 this.showToast(ortho ? '⊞ Ortho-Modus EIN (0°/90°)' : '⊞ Ortho-Modus AUS', 'info');
             }
         });
+        // V6.78: Polar Tracking (F10), Object Snap Tracking (F11), Rasterfang (F9)
+        document.getElementById('btn-polar-toggle')?.addEventListener('click', () => this.togglePolarTracking());
+        document.getElementById('btn-otrack-toggle')?.addEventListener('click', () => this.toggleObjectSnapTracking());
+        document.getElementById('btn-grid-snap-toggle')?.addEventListener('click', () => this.toggleGridSnapMode());
+        if (this.snapManager) {
+            this.snapManager.onTrackingChange = () => this.renderer?.render();   // Re-Render nach Erfassen
+        }
+        this._syncTrackingToggles();
     }
     
+    /** V6.78: Statusleisten-Buttons (Ortho/Polar/OTrack/Raster) mit SnapManager synchronisieren */
+    _syncTrackingToggles() {
+        const sm = this.snapManager;
+        if (!sm) return;
+        document.getElementById('btn-ortho-toggle')?.classList.toggle('active', !!sm.orthoEnabled);
+        document.getElementById('btn-polar-toggle')?.classList.toggle('active', !!sm.polarEnabled);
+        document.getElementById('btn-otrack-toggle')?.classList.toggle('active', !!sm.otrackEnabled);
+        document.getElementById('btn-grid-snap-toggle')?.classList.toggle('active', !!sm.gridSnapEnabled);
+        const cb = document.getElementById('draw-ortho-cb');
+        if (cb) cb.checked = !!sm.orthoEnabled;
+    }
+
+    /** V6.78: Polar Tracking umschalten (F10) */
+    togglePolarTracking() {
+        if (!this.snapManager) return;
+        const on = this.snapManager.togglePolar();
+        this._syncTrackingToggles();
+        this.showToast(on ? `∠ Polar-Tracking EIN (${this.snapManager.polarIncrement}°)` : '∠ Polar-Tracking AUS', 'info');
+        this.renderer?.render();
+    }
+
+    /** V6.78: Object Snap Tracking umschalten (F11) */
+    toggleObjectSnapTracking() {
+        if (!this.snapManager) return;
+        const on = this.snapManager.toggleOtrack();
+        this._syncTrackingToggles();
+        this.showToast(on ? '⊹ Objektfang-Tracking EIN' : '⊹ Objektfang-Tracking AUS', 'info');
+        this.renderer?.render();
+    }
+
+    /** V6.78: Rasterfang umschalten (F9) */
+    toggleGridSnapMode() {
+        if (!this.snapManager) return;
+        const on = this.snapManager.toggleGridSnap();
+        this.snapManager._resolveCache = null;
+        this._syncTrackingToggles();
+        this.showToast(on ? '▦ Rasterfang EIN' : '▦ Rasterfang AUS', 'info');
+    }
+
     /** V6.10: Snap-Modi-Anzeige in Status-Bar aktualisieren */
     _updateSnapModesDisplay() {
         const el = document.getElementById('status-snap-modes');
@@ -2242,7 +2307,7 @@ class CeraCutApp {
     }
     
     handleMeasureClick(worldPoint) {
-        const point = this.currentSnapPoint || worldPoint;
+        const point = this.currentSnapPoint || this.currentTrackPoint || worldPoint;
         
         if (!this.measureStart) {
             this.measureStart = { x: point.x, y: point.y };
@@ -2283,12 +2348,17 @@ class CeraCutApp {
     // ════════════════════════════════════════════════════════════════
     
     bindKeyboardEvents() {
+        // V6.78: Shift gedrueckt = Ortho temporaer umkehren (AutoCAD)
+        document.addEventListener('keydown', (e) => { if (e.key === 'Shift' && !e.repeat) this.snapManager?.setShiftOverride(true); });
+        document.addEventListener('keyup', (e) => { if (e.key === 'Shift') this.snapManager?.setShiftOverride(false); });
+        window.addEventListener('blur', () => this.snapManager?.setShiftOverride(false));
+
         document.addEventListener('keydown', (e) => {
             // V3.5: Command-Line Input hat eigene Handler — nur ESC/F-Tasten + Ctrl-Shortcuts durchlassen
             const isCmdInput = e.target.id === 'cmd-input';
             const ctrl = e.ctrlKey || e.metaKey;
             if (!isCmdInput && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
-            if (isCmdInput && !ctrl && e.key !== 'Escape' && e.key !== 'F1' && e.key !== 'F2' && e.key !== 'F3' && e.key !== 'F8' && e.key !== 'Delete') return;
+            if (isCmdInput && !ctrl && e.key !== 'Escape' && e.key !== 'F1' && e.key !== 'F2' && e.key !== 'F3' && e.key !== 'F8' && e.key !== 'F9' && e.key !== 'F10' && e.key !== 'F11' && e.key !== 'Delete') return;
 
             const shift = e.shiftKey;
             
@@ -2358,9 +2428,23 @@ class CeraCutApp {
                     e.preventDefault();
                     if (this.snapManager) {
                         const ortho = this.snapManager.toggleOrtho();
-                        document.getElementById('btn-ortho-toggle')?.classList.toggle('active', ortho);
+                        this._syncTrackingToggles();
                         this.showToast(ortho ? '⊞ Ortho EIN' : '⊞ Ortho AUS', 'info');
                     }
+                    break;
+
+                // V6.78: AutoCAD-Standard — F9 Rasterfang, F10 Polar-Tracking, F11 Objektfang-Tracking
+                case 'F9':
+                    e.preventDefault();
+                    this.toggleGridSnapMode();
+                    break;
+                case 'F10':
+                    e.preventDefault();
+                    this.togglePolarTracking();
+                    break;
+                case 'F11':
+                    e.preventDefault();
+                    this.toggleObjectSnapTracking();
                     break;
                     
                 // V5.10: F1 = Shortcut-Hilfe
@@ -2370,6 +2454,8 @@ class CeraCutApp {
                     break;
 
                 case 'Escape':
+                    // V6.78: Erfasste Tracking-Punkte verwerfen
+                    this.snapManager?.clearTracking();
                     // V3.5: Tool abbrechen → Messmodus beenden → Selektion aufheben
                     if (this.toolManager?.isToolActive()) {
                         this.toolManager.cancelTool();

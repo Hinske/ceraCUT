@@ -102,11 +102,13 @@ CeraCUT hat 45+ Tools mit AutoCAD-konformem Workflow (Noun-Verb/Verb-Noun, Conti
 - [ ] Batch-Operationen auf Ergebnis anwenden
 - **Dateien:** `app.js`, `index.html`
 
-### 3.4 Snap-Tracking-Linien
-- [ ] Gestrichelte Referenzlinien wenn Cursor mit Snap-Punkten fluchtet
-- [ ] Horizontal + Vertikal + aus letztem Punkt
-- [ ] Visuell dezent (hellgrau, gestrichelt)
-- **Dateien:** `snap-manager.js`, `canvas-renderer.js`
+### 3.4 Snap-Tracking-Linien ✅ (V6.78)
+- [x] Object Snap Tracking (F11): Fangpunkt ~0,3 s anfahren → erfasst ("+"), erneutes Anfahren loest; max. 7 Punkte; ESC verwirft alle
+- [x] Gestrichelte Tracking-Linien (0°/90°) durch erfasste Punkte, Schnitt zweier Linien als Fangpunkt, Label "Endpoint: 40.00 < 90.0°"
+- [x] Polar Tracking (F10, 45°) aus letztem Punkt; schliesst Ortho aus (und umgekehrt)
+- [x] Shift gedrueckt = Ortho temporaer umkehren; Ortho schneidet Tracking-Linien
+- [x] F9 Rasterfang verdrahtet (Button war ohne Handler)
+- **Dateien:** `snap-manager.js` (resolve(), drawTracking()), `canvas-renderer.js`, `drawing-tools.js`, `app.js`
 
 ### 3.5 Property-Presets
 - [ ] Eigenschafts-Sets speichern: "Standard-Disc", "Fein-Loch", "Gravur"

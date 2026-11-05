@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.20
+ * CeraCUT Drawing & Modification Tools V2.21
  * AutoCAD-style CAD Tools für CeraCUT
  *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
@@ -43,8 +43,9 @@
  * V1.1: handleRawInput für Linie/Rechteck/Polylinie
  * V1.0: Initiale 5 Zeichentools
  * Created: 2026-02-13 MEZ
- * Last Modified: 2026-06-25 MEZ
- * Build: 20260625-thickerpreview
+ * Last Modified: 2026-11-05 MEZ
+ * Build: 20261105-otrack
+ * V2.21: Feat — handleClick/handleMouseMove ueber SnapManager.resolve() (Objektfang > Object-Snap-Tracking > Polar/Ortho, Shift-Override)
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -500,15 +501,22 @@ class DrawingToolManager {
     // CANVAS EVENT-HANDLER
     // ════════════════════════════════════════════════════════════════
 
+    /**
+     * V2.14: Zentrale Punkt-Aufloesung fuer Klick + Mouse-Move
+     * Prioritaet: Objektfang > Object-Snap-Tracking > Polar/Ortho (inkl. Shift-Override)
+     */
+    _resolveWorldPoint(worldPoint) {
+        const sm = this.snapManager;
+        if (!sm || !sm.resolve) return worldPoint;
+        const lastPt = this.activeTool?.getLastPoint?.() || null;
+        const scale = this.renderer?.scale || sm._lastScale || 1;
+        const r = sm.resolve(worldPoint.x, worldPoint.y, scale, lastPt, false, true);
+        return r.snap ? r.snap.point : r.point;
+    }
+
     /** Canvas-Klick — wird von App/Renderer aufgerufen */
     handleClick(worldPoint) {
-        // Snap anwenden
-        const snapped = this.snapManager?.currentSnap?.point || worldPoint;
-
-        // Ortho anwenden (nur relevant für Zeichentools)
-        const lastPt = this.activeTool?.getLastPoint?.() || null;
-        const orthoPoint = this.snapManager?.applyOrtho(snapped.x, snapped.y, lastPt) || snapped;
-        const finalPoint = this.snapManager?.currentSnap ? snapped : orthoPoint;
+        const finalPoint = this._resolveWorldPoint(worldPoint);
 
         if (this.activeTool) {
             this.activeTool.handleClick(finalPoint);
@@ -521,14 +529,7 @@ class DrawingToolManager {
     /** Mouse-Move — für Rubber-Band + Ghost-Preview */
     handleMouseMove(worldPoint) {
         if (!this.activeTool) return;
-
-        // Snap + Ortho
-        const snapped = this.snapManager?.currentSnap?.point || worldPoint;
-        const lastPt = this.activeTool?.getLastPoint?.() || null;
-        const orthoPoint = this.snapManager?.applyOrtho(snapped.x, snapped.y, lastPt) || snapped;
-        const finalPoint = this.snapManager?.currentSnap ? snapped : orthoPoint;
-
-        this.activeTool.handleMouseMove(finalPoint);
+        this.activeTool.handleMouseMove(this._resolveWorldPoint(worldPoint));
     }
 
     // ════════════════════════════════════════════════════════════════

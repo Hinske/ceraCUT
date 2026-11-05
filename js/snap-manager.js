@@ -1,5 +1,5 @@
 /**
- * CeraCUT Snap Manager V1.6
+ * CeraCUT Snap Manager V1.8
  * V1.5: Fix — contour._center/_radius (DXF-Parser Unterstrich-Properties) unterstützt;
  *        Endpoint-Spam für Kreiskonturen unterdrückt (AutoCAD-konform: nur Center+Quadrant);
  *        invalidatePointsCache() Methode für externe Cache-Invalidierung (nach Grip-Editing etc.)
@@ -12,8 +12,12 @@
  * - Grid-Snap
  * - Visuelle Snap-Marker (verschiedene Symbole pro Typ)
  * Created: 2026-02-13 MEZ
- * Last Modified: 2026-11-04
- * Build: 20261104-reviewfix
+ * Last Modified: 2026-11-05
+ * Build: 20261105-perptan
+ * V1.8: Fix — resolve() uebergibt basePoint an findSnap(): Perpendicular-/Tangent-Fang waren in der App nie aktiv (lastPoint war immer null)
+ * V1.7: Feat — Object Snap Tracking (F11, AutoCAD-Stil: Erfassen per Hover, orthogonale Tracking-Linien,
+ *        Schnitt zweier Linien), Polar Tracking (F10), Shift = Ortho temporaer umkehren,
+ *        Ortho/Polar schliessen sich aus, zentrale resolve()-Methode (Snap > Tracking > Polar/Ortho)
  * V1.6: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
@@ -49,6 +53,22 @@ class SnapManager {
         // Ortho-Modus (F8)
         this.orthoEnabled = false;
 
+        // V1.7: Polar Tracking (F10) + Object Snap Tracking (F11)
+        this.polarEnabled = false;
+        this.polarIncrement = 45;        // Grad
+        this.otrackEnabled = true;       // AutoCAD-Default: EIN (wirkt nur mit erfassten Punkten)
+        this.shiftOverride = false;      // Shift gedrueckt → Ortho temporaer umkehren
+        this.acquireDelay = 300;         // ms Hover bis Erfassen
+        this.maxAcquired = 7;            // AutoCAD: max. 7 Tracking-Punkte
+        this.trackState = null;          // Ergebnis der letzten resolve(): {point, kind, lines, text}
+        this.onTrackingChange = null;    // Callback (Re-Render nach Erfassen)
+        this._acquired = [];             // [{point:{x,y}, name}]
+        this._hover = null;
+        this._acquireTimer = null;
+        this._lastScale = 1;
+        this._resolveCache = null;
+        this._cfgVer = 0;
+
         // Grid-Snap
         this.gridSnapEnabled = false;
         this.gridSize = options.gridSize || 10;
@@ -68,7 +88,7 @@ class SnapManager {
         try {
             this._computeCentroid([{x:0,y:0},{x:10,y:0},{x:10,y:10},{x:0,y:10},{x:0,y:0}]);
             this._bulgeToArcInfo({x:0,y:0,bulge:1},{x:10,y:0}, 1);
-            console.debug('[SnapManager V1.5] ✅ Initialisiert (9 Snap-Typen: Endpoint, Midpoint, Center, GeoCenter, Quadrant, Intersection, Perpendicular, Tangent, Nearest)');
+            console.debug('[SnapManager V1.7] ✅ Initialisiert (9 Snap-Typen: Endpoint, Midpoint, Center, GeoCenter, Quadrant, Intersection, Perpendicular, Tangent, Nearest)');
         } catch(e) {
             console.error('[SnapManager V1.2] ❌ Smoke-Test FEHLER:', e);
         }
@@ -83,6 +103,7 @@ class SnapManager {
         this._contours = contours || [];
         this._segmentCache = null; // V5.0: Cache invalidieren
         this._pointsCache = null;  // V1.4: Cache invalidieren
+        this._resolveCache = null;
     }
 
     /** Zusätzliche Drawing-Entities für Snapping */
@@ -90,6 +111,7 @@ class SnapManager {
         this._drawingEntities = entities || [];
         this._segmentCache = null; // V5.0: Cache invalidieren
         this._pointsCache = null;  // V1.4: Cache invalidieren
+        this._resolveCache = null;
     }
 
     /** V1.5: Punkt-Cache invalidieren (nach Grip-Editing, Kontur-Mutation etc.) */
@@ -121,12 +143,71 @@ class SnapManager {
     invalidatePointsCache() {
         this._pointsCache = null;
         this._segmentCache = null;
+        this._resolveCache = null;
     }
 
-    /** Ortho-Modus umschalten (F8) */
+    /** Ortho-Modus umschalten (F8) — schliesst Polar aus (AutoCAD) */
     toggleOrtho() {
-        this.orthoEnabled = !this.orthoEnabled;
+        return this.setOrtho(!this.orthoEnabled);
+    }
+
+    setOrtho(on) {
+        this.orthoEnabled = !!on;
+        if (this.orthoEnabled) this.polarEnabled = false;
+        this._cfgVer++;
         return this.orthoEnabled;
+    }
+
+    /** Polar Tracking umschalten (F10) — schliesst Ortho aus (AutoCAD) */
+    togglePolar() {
+        return this.setPolar(!this.polarEnabled);
+    }
+
+    setPolar(on) {
+        this.polarEnabled = !!on;
+        if (this.polarEnabled) this.orthoEnabled = false;
+        this._cfgVer++;
+        return this.polarEnabled;
+    }
+
+    /** Object Snap Tracking umschalten (F11) */
+    toggleOtrack() {
+        this.otrackEnabled = !this.otrackEnabled;
+        if (!this.otrackEnabled) this.clearTracking();
+        this._cfgVer++;
+        return this.otrackEnabled;
+    }
+
+    /** Shift-Override setzen (temporaer Ortho umkehren) */
+    setShiftOverride(on) {
+        on = !!on;
+        if (this.shiftOverride !== on) {
+            this.shiftOverride = on;
+            this._cfgVer++;
+        }
+    }
+
+    /** Effektiver Ortho-Zustand (Modus XOR Shift) */
+    effectiveOrtho() {
+        return !!this.orthoEnabled !== !!this.shiftOverride;
+    }
+
+    /** Effektiver Polar-Zustand (Ortho hat Vorrang) */
+    effectivePolar() {
+        return !!this.polarEnabled && !this.effectiveOrtho();
+    }
+
+    /** Alle erfassten Tracking-Punkte verwerfen */
+    clearTracking() {
+        this._clearHover();
+        if (this._acquired.length) this._cfgVer++;
+        this._acquired = [];
+        this.trackState = null;
+        this._resolveCache = null;
+    }
+
+    getAcquiredPoints() {
+        return this._acquired;
     }
 
     /** Grid-Snap umschalten */
@@ -356,7 +437,7 @@ class SnapManager {
      * @returns {{x:number, y:number}}
      */
     applyOrtho(worldX, worldY, lastPoint) {
-        if (!this.orthoEnabled || !lastPoint) return { x: worldX, y: worldY };
+        if (!this.effectiveOrtho() || !lastPoint) return { x: worldX, y: worldY };
 
         const dx = Math.abs(worldX - lastPoint.x);
         const dy = Math.abs(worldY - lastPoint.y);
@@ -370,8 +451,242 @@ class SnapManager {
     }
 
     // ════════════════════════════════════════════════════════════════
+    // V1.7: ZENTRALE PUNKT-AUFLOESUNG (Snap > Tracking > Polar/Ortho)
+    // ════════════════════════════════════════════════════════════════
+
+    _clearHover() {
+        if (this._acquireTimer) clearTimeout(this._acquireTimer);
+        this._acquireTimer = null;
+        this._hover = null;
+    }
+
+    /** Hover auf Fangpunkt → nach acquireDelay erfassen (oder bei erneutem Hover wieder loesen) */
+    _updateAcquisition(snap) {
+        if (!this.otrackEnabled || !snap) { this._clearHover(); return; }
+        const p = snap.point;
+        const key = p.x + ',' + p.y;
+        if (this._hover && this._hover.key === key) return;
+        this._clearHover();
+        this._hover = { key };
+        this._acquireTimer = setTimeout(() => {
+            this._acquireTimer = null;
+            const idx = this._acquired.findIndex(a => Math.hypot(a.point.x - p.x, a.point.y - p.y) < 1e-6);
+            if (idx >= 0) {
+                this._acquired.splice(idx, 1);            // erneutes Hovern loest den Punkt
+            } else {
+                this._acquired.push({ point: { x: p.x, y: p.y }, name: snap.typeDef.name });
+                if (this._acquired.length > this.maxAcquired) this._acquired.shift();
+            }
+            this._cfgVer++;
+            this._resolveCache = null;
+            if (typeof this.onTrackingChange === 'function') this.onTrackingChange();
+        }, this.acquireDelay);
+    }
+
+    /** Schnittpunkt zweier unendlicher Linien (origin + t*dir); null wenn parallel */
+    static _lineIntersect(l1, l2) {
+        const det = l1.dx * l2.dy - l1.dy * l2.dx;
+        if (Math.abs(det) < 1e-9) return null;
+        const t = ((l2.ox - l1.ox) * l2.dy - (l2.oy - l1.oy) * l2.dx) / det;
+        return { x: l1.ox + t * l1.dx, y: l1.oy + t * l1.dy };
+    }
+
+    /** Abstand Punkt → unendliche Linie */
+    static _distToLine(px, py, l) {
+        return Math.abs((px - l.ox) * l.dy - (py - l.oy) * l.dx);
+    }
+
+    static _project(px, py, l) {
+        const t = (px - l.ox) * l.dx + (py - l.oy) * l.dy;
+        return { x: l.ox + t * l.dx, y: l.oy + t * l.dy };
+    }
+
+    /**
+     * Punkt aufloesen: Objektfang > Tracking-Linien (Schnitt/Projektion) > Polar > Ortho.
+     * @param {number} worldX
+     * @param {number} worldY
+     * @param {number} scale
+     * @param {{x,y}|null} basePoint - letzter Punkt des aktiven Tools (Ortho/Polar-Basis)
+     * @param {boolean} commit - true: Hover/Erfassen aktualisieren (nur Mouse-Move); false: Klick, reine Abfrage
+     * @param {boolean} active - false: nur Objektfang (kein Tool aktiv → kein Tracking/Ortho/Polar)
+     * @returns {{ snap: object|null, point: {x,y}, trackState: object|null }}
+     */
+    resolve(worldX, worldY, scale, basePoint = null, commit = true, active = true) {
+        this._lastScale = scale;
+        const ck = this._resolveCache;
+        if (ck && ck.x === worldX && ck.y === worldY && ck.s === scale && ck.act === active &&
+            ck.bx === (basePoint ? basePoint.x : null) && ck.by === (basePoint ? basePoint.y : null) &&
+            ck.v === this._cfgVer) {
+            if (commit) this._updateAcquisition(ck.res.snap);
+            this.currentSnap = ck.res.snap;
+            this.trackState = ck.res.trackState;
+            return ck.res;
+        }
+
+        // V1.8: letzter Punkt des Tools → aktiviert Perpendicular- und Tangent-Fang (brauchen lastPoint)
+        const snap = this.findSnap(worldX, worldY, scale, active ? basePoint : null);
+        if (commit) this._updateAcquisition(active ? snap : null);
+
+        let res;
+        if (!active) {
+            res = { snap, point: snap ? snap.point : { x: worldX, y: worldY }, trackState: null };
+        } else {
+            res = this._resolveTracking(worldX, worldY, scale, basePoint, snap);
+        }
+        this.trackState = res.trackState;
+        this._resolveCache = {
+            x: worldX, y: worldY, s: scale, act: active,
+            bx: basePoint ? basePoint.x : null, by: basePoint ? basePoint.y : null,
+            v: this._cfgVer, res
+        };
+        return res;
+    }
+
+    _resolveTracking(worldX, worldY, scale, basePoint, snap) {
+        const tol = this.tolerance / scale;
+        const ortho = !!(this.effectiveOrtho() && basePoint);
+        const polar = !!(this.effectivePolar() && basePoint);
+        const D2R = Math.PI / 180;
+
+        // Tracking-Linien sammeln
+        const lines = [];
+        if (this.otrackEnabled) {
+            for (const a of this._acquired) {
+                lines.push({ ox: a.point.x, oy: a.point.y, dx: 1, dy: 0, kind: 'otrack', name: a.name });
+                lines.push({ ox: a.point.x, oy: a.point.y, dx: 0, dy: 1, kind: 'otrack', name: a.name });
+            }
+        }
+        if (polar) {
+            const inc = Math.max(1, Math.min(180, this.polarIncrement || 45));
+            for (let ang = 0; ang < 180 - 1e-9; ang += inc) {
+                lines.push({ ox: basePoint.x, oy: basePoint.y, dx: Math.cos(ang * D2R), dy: Math.sin(ang * D2R), kind: 'polar', ang });
+            }
+        }
+
+        const labelFor = (pt, line) => {
+            const d = Math.hypot(pt.x - line.ox, pt.y - line.oy);
+            let a = Math.atan2(pt.y - line.oy, pt.x - line.ox) / D2R;
+            if (a < 0) a += 360;
+            const src = line.kind === 'polar' ? 'Polar' : (line.name || 'Tracking');
+            return `${src}: ${d.toFixed(2)} < ${a.toFixed(1)}°`;
+        };
+
+        // 1) Objektfang hat Vorrang; Tracking-Linien nur anzeigen, wenn der Snap-Punkt darauf liegt
+        if (snap) {
+            const on = lines.filter(l => SnapManager._distToLine(snap.point.x, snap.point.y, l) < tol * 0.25);
+            return { snap, point: snap.point, trackState: on.length ? { kind: 'snap', point: snap.point, lines: on, text: null } : null };
+        }
+
+        // 2) Ortho: harte Achse durch Basispunkt, Tracking-Linien schneiden die Achse
+        if (ortho) {
+            const dx = Math.abs(worldX - basePoint.x), dy = Math.abs(worldY - basePoint.y);
+            const horiz = dx >= dy;
+            const axis = { ox: basePoint.x, oy: basePoint.y, dx: horiz ? 1 : 0, dy: horiz ? 0 : 1 };
+            const c = horiz ? { x: worldX, y: basePoint.y } : { x: basePoint.x, y: worldY };
+            let best = null;
+            for (const l of lines) {
+                const I = SnapManager._lineIntersect(axis, l);
+                if (!I) continue;
+                const d = Math.hypot(I.x - c.x, I.y - c.y);
+                if (d < tol && (!best || d < best.d)) best = { l, I, d };
+            }
+            if (best) return { snap: null, point: best.I, trackState: { kind: 'otrack-int', point: best.I, lines: [best.l], text: labelFor(best.I, best.l) } };
+            return { snap: null, point: c, trackState: { kind: 'ortho', point: c, lines: [], text: null } };
+        }
+
+        // 3) Tracking-/Polar-Linien nahe am Cursor
+        const near = [];
+        for (const l of lines) {
+            const d = SnapManager._distToLine(worldX, worldY, l);
+            if (d < tol) near.push({ l, d });
+        }
+        if (!near.length) return { snap: null, point: { x: worldX, y: worldY }, trackState: null };
+        near.sort((a, b) => a.d - b.d);
+
+        // Schnitt zweier Linien (verschiedene Ursprungspunkte/Richtungen) nahe am Cursor
+        let bestI = null;
+        for (let i = 0; i < near.length; i++) {
+            for (let j = i + 1; j < near.length; j++) {
+                const a = near[i].l, b = near[j].l;
+                if (a.ox === b.ox && a.oy === b.oy) continue;
+                const I = SnapManager._lineIntersect(a, b);
+                if (!I) continue;
+                const d = Math.hypot(I.x - worldX, I.y - worldY);
+                if (d < tol * 1.5 && (!bestI || d < bestI.d)) bestI = { a, b, I, d };
+            }
+        }
+        if (bestI) {
+            return { snap: null, point: bestI.I, trackState: { kind: 'otrack-int', point: bestI.I, lines: [bestI.a, bestI.b], text: labelFor(bestI.I, bestI.a) } };
+        }
+
+        const best = near[0].l;
+        const P = SnapManager._project(worldX, worldY, best);
+        return { snap: null, point: P, trackState: { kind: best.kind, point: P, lines: [best], text: labelFor(P, best) } };
+    }
+
+    // ════════════════════════════════════════════════════════════════
     // RENDERING (wird vom Renderer aufgerufen)
     // ════════════════════════════════════════════════════════════════
+
+    /**
+     * V1.7: Tracking-Overlay zeichnen (Screen-Koordinaten): erfasste Punkte (+), gestrichelte Linien, Label
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {(x:number,y:number)=>{x:number,y:number}} worldToScreen
+     * @param {number} width - logische Canvas-Breite
+     * @param {number} height - logische Canvas-Hoehe
+     */
+    drawTracking(ctx, worldToScreen, width, height) {
+        const acquired = this._acquired;
+        const ts = this.trackState;
+        if (!acquired.length && !(ts && ts.lines && ts.lines.length)) return;
+        const ext = (width + height) * 2;
+
+        ctx.save();
+        // Linien
+        if (ts && ts.lines) {
+            ctx.strokeStyle = 'rgba(190,190,190,0.75)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 4]);
+            for (const l of ts.lines) {
+                const o = worldToScreen(l.ox, l.oy);
+                const sdx = l.dx, sdy = -l.dy;   // Y-Achse gespiegelt (Welt → Screen)
+                ctx.beginPath();
+                ctx.moveTo(o.x - sdx * ext, o.y - sdy * ext);
+                ctx.lineTo(o.x + sdx * ext, o.y + sdy * ext);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+        }
+        // Erfasste Punkte als "+"
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        for (const a of acquired) {
+            const s = worldToScreen(a.point.x, a.point.y);
+            ctx.beginPath();
+            ctx.moveTo(s.x - 5, s.y); ctx.lineTo(s.x + 5, s.y);
+            ctx.moveTo(s.x, s.y - 5); ctx.lineTo(s.x, s.y + 5);
+            ctx.stroke();
+        }
+        // Marker + Label am getrackten Punkt
+        if (ts && ts.point && (ts.kind === 'otrack' || ts.kind === 'polar' || ts.kind === 'otrack-int')) {
+            const s = worldToScreen(ts.point.x, ts.point.y);
+            ctx.strokeStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.moveTo(s.x - 4, s.y - 4); ctx.lineTo(s.x + 4, s.y + 4);
+            ctx.moveTo(s.x - 4, s.y + 4); ctx.lineTo(s.x + 4, s.y - 4);
+            ctx.stroke();
+            if (ts.text) {
+                ctx.font = '11px sans-serif';
+                const tw = ctx.measureText(ts.text).width;
+                const bx = s.x + 12, by = s.y - 24;
+                ctx.fillStyle = 'rgba(30,30,30,0.85)';
+                ctx.fillRect(bx - 3, by - 11, tw + 6, 16);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(ts.text, bx, by);
+            }
+        }
+        ctx.restore();
+    }
 
     /**
      * Snap-Indikator auf Canvas zeichnen (Screen-Koordinaten)

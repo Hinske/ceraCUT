@@ -1,5 +1,6 @@
 /**
- * CeraCUT V3.43 - Canvas Renderer
+ * CeraCUT V3.44 - Canvas Renderer
+ * V3.44: Feat — Tracking-Overlay (Object Snap Tracking / Polar): gestrichelte Linien, erfasste Punkte, Fadenkreuz am getrackten Punkt
  * Features: Selection, Lead-In/Out, Overcut, Micro-Joints, Travel Paths, Order Numbers,
  *           Startpunkt-Drag im Anschuss-Modus, SLIT Support
  * V3.41: Fix — Geometry.interiorPoint() im Disc-Fill-Hole-Cutout ohne Existenz-Check
@@ -606,8 +607,8 @@ class CanvasRenderer {
             this.hoveredContour = null;
             this._hoveredGrip = null;
             // V3.11: Snap-Indikator löschen (verhindert "Endpoint bleibt hängen")
-            if (this.app?.snapManager) this.app.snapManager.currentSnap = null;
-            if (this.app) this.app.currentSnapPoint = null;
+            if (this.app?.snapManager) { this.app.snapManager.currentSnap = null; this.app.snapManager.trackState = null; this.app.snapManager._resolveCache = null; }
+            if (this.app) { this.app.currentSnapPoint = null; this.app.currentTrackPoint = null; }
             const snapEl = document.getElementById('snap-indicator');
             if (snapEl) snapEl.style.display = 'none';
             // V3.10: Grip-Drag abbrechen (ohne Commit)
@@ -851,8 +852,21 @@ class CanvasRenderer {
             this.drawSnapIndicator(this.app.currentSnapPoint);
         }
 
+        // V3.44: Tracking-Overlay (Object Snap Tracking / Polar) — Linien, erfasste Punkte, Label
+        let trackedDrawn = false;
+        if (this.app?.snapManager?.drawTracking) {
+            this.app.snapManager.drawTracking(ctx, (x, y) => this.worldToScreen(x, y), this._logicalWidth, this._logicalHeight);
+            // Getrackter Punkt (ohne Objektfang): Fadenkreuz dort statt am nativen Cursor
+            const ts = this.app.snapManager.trackState;
+            if (!snapActive && ts && ts.point && (ts.kind === 'otrack' || ts.kind === 'polar' || ts.kind === 'otrack-int')) {
+                const sc = this.worldToScreen(ts.point.x, ts.point.y);
+                this._drawSnapCrosshair(ctx, sc.x, sc.y);
+                trackedDrawn = true;
+            }
+        }
+
         // V3.37: Vollbild-Fadenkreuz waehrend aktivem Zeichentool (nur wenn kein Snap-Fadenkreuz schon gezeichnet wurde)
-        if (!snapActive && this._lastMouseScreen) {
+        if (!snapActive && !trackedDrawn && this._lastMouseScreen) {
             const toolMgr = this.app?.drawingTools || this.app?.toolManager;
             if (toolMgr?.isToolActive?.() && !toolMgr?.activeTool?.isPanTool) {
                 this._drawToolCrosshair(ctx, this._lastMouseScreen.x, this._lastMouseScreen.y);

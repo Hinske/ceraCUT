@@ -1,5 +1,6 @@
 /**
- * CeraCUT V2.11 Constants
+ * CeraCUT V2.12 Constants
+ * V2.12: GENERAL_SHORTCUTS — F9/F10/F11 + Shift-Ortho-Override
  * Blaues Farbschema
  * V2.10: TOOL_ECHO_NAMES — AutoCAD-Style Command-Echo-Tabelle (_LINE, _CIRCLE, ...)
  * V2.9: TOOL_TOOLTIPS — alle 7 CAM-Tools (EF, REP, AN, BT, PJ, VZ, HULL) eingetragen
@@ -183,6 +184,10 @@ const GENERAL_SHORTCUTS = [
     { shortcut: 'F1',           label: 'Hilfe / Tastenkuerzel' },
     { shortcut: 'F3',           label: 'Messen' },
     { shortcut: 'F8',           label: 'Ortho-Modus' },
+    { shortcut: 'F9',           label: 'Rasterfang' },
+    { shortcut: 'F10',          label: 'Polar-Tracking (45°)' },
+    { shortcut: 'F11',          label: 'Objektfang-Tracking' },
+    { shortcut: 'Shift halten', label: 'Ortho temporaer umkehren' },
     { shortcut: 'ESC',          label: 'Abbrechen' },
     { shortcut: 'Home',         label: 'Alles zeigen' },
 ];
