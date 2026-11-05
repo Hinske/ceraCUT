@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.85
- * Version: V6.85
+ * CeraCUT Build Info V6.86
+ * Version: V6.86
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-sort2
+ * Build: 20261105-cncsave
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.85',
-    build: '20261105-sort2',
+    version: '6.86',
+    build: '20261105-cncsave',
     date: '2026-11-05',
-    time: '16:25 MEZ',
+    time: '16:50 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '3cf0dc2',
-        date: '2026-11-05 16:13:48 +0100',
-        message: 'feat: Server-DXF-Browser Sortierung nach Name/Datum, mtime in /api/dxf/list (V6.85)'
+        hash: '8b3a2cd',
+        date: '2026-11-05 16:21:13 +0100',
+        message: 'feat: CNC-Export speichert direkt auf Server (Share Wasserstrahl/CNC), POST /api/cnc/save (V6.86)'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.42', build: '20261105-joinlines2' },
+        'app':                { version: '6.43', build: '20261105-cncsave' },
         'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -55,8 +55,8 @@ const CERACUT_BUILD = {
         'arc-fitting':        { version: '3.3', build: '20261104-reviewfix' },
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
         'dimension-tool':     { version: '2.6', build: '20261104-pushexecuted' },
-        'dxf-browser':        { version: '1.3', build: '20261105-sort2' },
-        'server':             { version: '1.9', build: '20261105-sort' },
+        'dxf-browser':        { version: '1.3', build: '20261105-cncsave' },
+        'server':             { version: '1.10', build: '20261105-cncsave' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
         'constants': { version: '2.14', build: '20261105-zuschnitt' },
@@ -69,6 +69,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.86: Feat — CNC-Export (normal + Intarsien POS/NEG) speichert direkt auf dem Server in Share Wasserstrahl/CNC (/mnt/cnc, CNC_ROOT): neuer Endpunkt POST /api/cnc/save (nur *.CNC, flach, Login, 409 + Rueckfrage bei vorhandener Datei), Fallback Workspace/Download (app V6.43, server V1.10)',
         'V6.84: Fix — Menue-Beschriftung: Button unter dem Icon heisst "Zuschnitte", nur die kleine Gruppenbeschriftung darunter heisst "CAD-Tools".',
         'V6.83: Feat — CAD-Tools-Menue (Ribbon CAD, nach CAM-Tools) mit Zuschnitt-Generator (mosaic-generator V1.3): Mosaik Wuerfel (MOSW), Mosaik Rechteck (MOSR), Sockel (MOSS). Fliese per Masseingabe, Teilung = Stueckmass + 0,8 mm Schnittaufmass, Randabstand 3 mm, Rechteck mit Verschnittpruefung beider Lagen, Dekor-Lage fest waehlbar, Mischlage (Reststreifen gedreht) optional, Ueberlauf der Schnittlinien nur soweit Platz ist, Aussenkontur als eine Kontur (Ueberschnitt nur an einer Ecke, wie Musterdateien), Sockel = Streifen ueber volle Fliesenseite nur mit Parallelschnitten. Live-Vorschau, Erzeugen oeffnet neuen Tab (loadDXFContent), DXF-Download.',
         'V6.83: Feat — Auto-Referenz/Join: offene Einzellinien werden per Endpunkt-Abgleich zu geschlossener Fliese verkettet; offene Linien gelten immer als Slit (app V6.42).',

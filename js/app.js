@@ -1,12 +1,13 @@
 /**
- * CeraCUT V6.42 - Main Application
+ * CeraCUT V6.43 - Main Application
+ * V6.43: Feat — CNC-Export speichert direkt auf dem Server (POST /api/cnc/save → Share Wasserstrahl/CNC), Rueckfrage bei vorhandener Datei; Fallback Workspace/Download
  * V6.42: Fix — Offene Linien gelten immer als Slit (Reihenfolge fand 'keine schneidbaren Konturen'); Auto-Referenz verkettet Einzellinien zu geschlossener Fliese
  * V6.41: Feat — Druckdialog: Farbe / Schwarz-Weiss waehlbar (Wahl wird gemerkt)
  * V6.40: Feat — Druck/Bereichsdruck uebernimmt Layerfarben (helle Farben werden abgedunkelt)
  * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
  * Last Modified: 2026-11-05
- * Build: 20261105-joinlines2
+ * Build: 20261105-cncsave
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -4612,6 +4613,35 @@ class CeraCutApp {
         return rParams;
     }
 
+    /**
+     * V6.43: Speichert eine CNC-Datei auf dem Server (Share Wasserstrahl/CNC).
+     * @returns {Promise<'saved'|'cancelled'|'unavailable'>} unavailable → Aufrufer nutzt Fallback
+     */
+    async _saveCNCToServer(filename, code) {
+        try {
+            let overwrite = false;
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const resp = await fetch('/api/cnc/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename, content: code, overwrite })
+                });
+                if (resp.ok) return 'saved';
+                if (resp.status === 409 && !overwrite) {
+                    if (!confirm(`${filename} existiert bereits im Ordner CNC.\nUeberschreiben?`)) return 'cancelled';
+                    overwrite = true;
+                    continue;
+                }
+                const err = await resp.json().catch(() => ({}));
+                console.warn('[CNC-Server V6.43] Speichern fehlgeschlagen:', resp.status, err.error);
+                return 'unavailable';
+            }
+        } catch (e) {
+            console.warn('[CNC-Server V6.43] Server nicht erreichbar:', e);
+        }
+        return 'unavailable';
+    }
+
     async exportGCode() {
         if (!this.contours || this.contours.length === 0) {
             this.showToast('Keine Konturen zum Exportieren', 'error');
@@ -4661,6 +4691,18 @@ class CeraCutApp {
             console.warn('[EXPORT] Warnungen:', result.warnings);
             this.showToast(`Export mit ${result.warnings.length} Warnung(en)`, 'warning');
         }
+
+        // V6.43: Server-CNC-Ordner (Share Wasserstrahl/CNC) hat Vorrang
+        const serverState = await this._saveCNCToServer(result.filename, result.code);
+        if (serverState === 'saved') {
+            this.showToast(`✅ ${result.filename} → Server/CNC (${result.stats.contours} Konturen)`, 'success');
+            return;
+        }
+        if (serverState === 'cancelled') {
+            this.showToast('Export abgebrochen', 'warning');
+            return;
+        }
+        this.showToast('Server-CNC-Ordner nicht erreichbar — lokaler Export', 'warning');
 
         // V5.6: Workspace-CNC-Ordner nutzen wenn verfügbar
         if (this.projectManager?.isWorkspaceOpen && this.projectManager.cncDirHandle) {
@@ -5061,6 +5103,16 @@ class CeraCutApp {
         if (!code) return false;
         if (!this._savingFiles) this._savingFiles = new Set();
         if (this._savingFiles.has(filename)) return false;
+
+        // V6.43: Server-CNC-Ordner zuerst
+        this._savingFiles.add(filename);
+        try {
+            const st = await this._saveCNCToServer(filename, code);
+            if (st === 'saved') return true;
+            if (st === 'cancelled') return false;
+        } finally {
+            this._savingFiles.delete(filename);
+        }
 
         // FSAPI-Ordner-Export (wie normaler CNC-Export)
         if (window._cncDirHandle) {

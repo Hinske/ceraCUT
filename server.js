@@ -17,8 +17,9 @@
  * V1.3: Fix — safePath() prüft Symlink-Ziel via fs.realpathSync gegen DXF_ROOT,
  *       Content-Disposition-Header filtert CR/LF (Header-Injection)
  * V1.9: Feat — /api/dxf/list liefert mtime (Änderungsdatum) für Ordner und Dateien
+ * V1.10: Feat — POST /api/cnc/save schreibt .CNC-Dateien nach CNC_ROOT (default /mnt/cnc)
  * Last Modified: 2026-11-05
- * Build: 20261105-sort
+ * Build: 20261105-cncsave
  * V1.7: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * Statischer Dateiserver + DXF-Browse-API für Netzlaufwerk-Zugriff.
@@ -31,6 +32,7 @@
  * Umgebungsvariablen:
  *   PORT                 — Server-Port (default: 5000)
  *   DXF_ROOT             — Wurzelverzeichnis für DXF-Dateien (default: /mnt/dxf)
+ *   CNC_ROOT             — Zielordner für exportierte CNC-Dateien (default: /mnt/cnc)
  *   TLS_CERT             — Pfad zum Zertifikat (default: certs/server.crt)
  *   TLS_KEY              — Pfad zum privaten Schlüssel (default: certs/server.key)
  *   NO_HTTPS             — auf "1" setzen um HTTPS zu deaktivieren
@@ -64,6 +66,10 @@ const {
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 const DXF_ROOT = (() => {
     const r = path.resolve(process.env.DXF_ROOT || '/mnt/dxf');
+    try { return fs.realpathSync(r); } catch { return r; }
+})();
+const CNC_ROOT = (() => {
+    const r = path.resolve(process.env.CNC_ROOT || '/mnt/cnc');
     try { return fs.realpathSync(r); } catch { return r; }
 })();
 const STATIC_ROOT = __dirname;
@@ -291,6 +297,48 @@ function handleDXFList(res, queryPath) {
             });
         });
     });
+}
+
+/**
+ * API: POST /api/cnc/save  { filename, content, overwrite? }
+ * Schreibt eine .CNC-Datei flach nach CNC_ROOT (keine Unterordner).
+ * 409 {exists:true} wenn die Datei existiert und overwrite nicht gesetzt ist.
+ */
+async function handleCNCSave(req, res) {
+    let body;
+    try {
+        body = await readJSONBody(req, 8 * 1024 * 1024);
+    } catch (err) {
+        return sendJSON(res, 400, { error: err.message });
+    }
+    const filename = typeof body.filename === 'string' ? body.filename : '';
+    const content = typeof body.content === 'string' ? body.content : null;
+    if (content === null || content.length === 0) {
+        return sendJSON(res, 400, { error: 'Inhalt fehlt' });
+    }
+    // Nur einfacher Dateiname: keine Pfadtrenner, keine Steuerzeichen, Endung .cnc
+    if (!/^[^\\/\x00-\x1f<>:"|?*]{1,120}\.cnc$/i.test(filename) || filename.startsWith('.')) {
+        return sendJSON(res, 400, { error: 'Ungültiger Dateiname (nur *.CNC, ohne Pfad)' });
+    }
+    const target = safePath(CNC_ROOT, filename);
+    if (!target || path.dirname(target) !== CNC_ROOT) {
+        return sendJSON(res, 403, { error: 'Zugriff verweigert' });
+    }
+    try {
+        await fs.promises.access(CNC_ROOT, fs.constants.W_OK);
+    } catch {
+        return sendJSON(res, 500, { error: 'CNC-Ordner nicht erreichbar oder nicht beschreibbar' });
+    }
+    const exists = fs.existsSync(target);
+    if (exists && !body.overwrite) {
+        return sendJSON(res, 409, { exists: true, error: 'Datei existiert bereits' });
+    }
+    try {
+        await fs.promises.writeFile(target, content, 'utf8');
+    } catch (err) {
+        return sendJSON(res, 500, { error: 'Schreibfehler: ' + err.code });
+    }
+    sendJSON(res, 200, { ok: true, filename: path.basename(target), overwritten: exists });
 }
 
 /**
@@ -536,7 +584,7 @@ function requestHandler(req, res) {
     // Health-Check (ungated)
     if (pathname === '/api/health') {
         return sendJSON(res, 200, currentUser
-            ? { status: 'ok', dxfRoot: DXF_ROOT, https: !!tlsCreds }
+            ? { status: 'ok', dxfRoot: DXF_ROOT, cncRoot: CNC_ROOT, https: !!tlsCreds }
             : { status: 'ok' });
     }
 
@@ -555,6 +603,12 @@ function requestHandler(req, res) {
     if (pathname === '/api/dxf/file' && req.method === 'GET') {
         if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
         return handleDXFFile(res, parsed.query.path || '');
+    }
+
+    // ── CNC-Export: Login nötig ──
+    if (pathname === '/api/cnc/save' && req.method === 'POST') {
+        if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
+        return handleCNCSave(req, res);
     }
 
     // ── App-Shell: Login nötig — alle anderen statischen Assets (js/*.js, *.css,
