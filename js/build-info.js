@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.87
- * Version: V6.87
+ * CeraCUT Build Info V6.88
+ * Version: V6.88
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-simplayer
+ * Build: 20261105-mosaicsort
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.87',
-    build: '20261105-simplayer',
+    version: '6.88',
+    build: '20261105-mosaicsort',
     date: '2026-11-05',
     time: '16:50 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'ee683ab',
+        hash: 'f04e424',
         date: '2026-11-05',
-        message: 'feat: Simulation mit Player (Play/Pause, Seek, Speed, Restart) + Zoom/Pan waehrend Simulation (V6.87)'
+        message: 'feat: Sortierung Mosaik (Rand zuletzt, NN ab Nullpunkt), Standardmethode (V6.88)'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.43', build: '20261105-cncsave' },
+        'app':                { version: '6.44', build: '20261105-mosaicsort' },
         'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -69,6 +69,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.88: Feat — Sortierung "Mosaik": Fliesenrand (verkettete Randkontur) wird immer zuletzt geschnitten, alle Konturen davor per Nearest-Neighbor ab Nullpunkt (offene Linien in guenstigerer Richtung) (app V6.44)',
         'V6.87: Feat — Simulation: Player-Leiste (Play/Pause, Restart, Seek-Slider, Speed 0.2x-30x, Phasenanzeige, Leertaste/Home/Esc) + Zoom/Pan waehrend laufender Simulation (Overlay pointer-events:none, Animation folgt Live-Transform, Trail-Neuzeichnung) (toolpath-simulator V1.6)',
         'V6.86: Feat — CNC-Export (normal + Intarsien POS/NEG) speichert direkt auf dem Server in Share Wasserstrahl/CNC (/mnt/cnc, CNC_ROOT): neuer Endpunkt POST /api/cnc/save (nur *.CNC, flach, Login, 409 + Rueckfrage bei vorhandener Datei), Fallback Workspace/Download (app V6.43, server V1.10)',
         'V6.84: Fix — Menue-Beschriftung: Button unter dem Icon heisst "Zuschnitte", nur die kleine Gruppenbeschriftung darunter heisst "CAD-Tools".',

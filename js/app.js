@@ -1,5 +1,6 @@
 /**
- * CeraCUT V6.43 - Main Application
+ * CeraCUT V6.44 - Main Application
+ * V6.44: Feat — Sortiermethode 'Mosaik' (sortMosaic): Fliesenrand zuletzt, Innenkonturen Nearest-Neighbor ab Nullpunkt (Standard im Dropdown)
  * V6.43: Feat — CNC-Export speichert direkt auf dem Server (POST /api/cnc/save → Share Wasserstrahl/CNC), Rueckfrage bei vorhandener Datei; Fallback Workspace/Download
  * V6.42: Fix — Offene Linien gelten immer als Slit (Reihenfolge fand 'keine schneidbaren Konturen'); Auto-Referenz verkettet Einzellinien zu geschlossener Fliese
  * V6.41: Feat — Druckdialog: Farbe / Schwarz-Weiss waehlbar (Wahl wird gemerkt)
@@ -7,7 +8,7 @@
  * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
  * Last Modified: 2026-11-05
- * Build: 20261105-cncsave
+ * Build: 20261105-mosaicsort
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -1832,6 +1833,11 @@ class CeraCutApp {
                 // TSP ab ausgewählter Kontur
                 this.sortByShortestPath(cuttable, startContour);
                 break;
+
+            case 'mosaic':
+                // V6.88: Innenkonturen ab Nullpunkt, Fliesenrand zuletzt
+                this.sortMosaic(cuttable);
+                break;
                 
             case 'by-layer':
                 cuttable.sort((a, b) => (a.contour.layer || '').localeCompare(b.contour.layer || ''));
@@ -1847,7 +1853,7 @@ class CeraCutApp {
         }
         
         // Nur TSP-Sortierung setzt _lastReversedContours neu; sonst veraltete Refs verwerfen
-        if (method !== 'shortest-path' && method !== 'shortest-path-selected') {
+        if (method !== 'shortest-path' && method !== 'shortest-path-selected' && method !== 'mosaic') {
             this._lastReversedContours = [];
         }
         const oldOrder = [...this.cutOrder];
@@ -1885,6 +1891,88 @@ class CeraCutApp {
         this.renderer?.render();
     }
     
+    /**
+     * V6.88: Mosaik-Sortierung. Die Randkontur der Fliese (meist EINE verkettete Kontur ueber alle
+     * 4 Seiten, sonst die aeussersten Einzellinien) wird IMMER zuletzt geschnitten, damit die
+     * Mosaiksteine bis zum Schluss im Fliesenverbund gehalten werden. Alle Konturen davor werden per
+     * Nearest-Neighbor ab dem Nullpunkt angefahren (offene Linien in der naeheren Richtung, ggf.
+     * umgedreht); der Rand startet am Ende an dem Randpunkt, der der letzten Innenkontur am naechsten liegt.
+     */
+    sortMosaic(cuttable) {
+        if (cuttable.length < 2) return;
+        const bbox = (c) => {
+            let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+            for (const p of c.points) {
+                if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x;
+                if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y;
+            }
+            return { x0, x1, y0, y1, area: (x1 - x0) * (y1 - y0) };
+        };
+        const bb = new Map(cuttable.map(it => [it, bbox(it.contour)]));
+
+        // --- Randkontur(en) bestimmen ---
+        let border = [];
+        let maxArea = 0;
+        for (const it of cuttable) if (bb.get(it).area > maxArea) maxArea = bb.get(it).area;
+        if (maxArea > 0) {
+            // verkettete Randkontur: Flaeche der Bounding-Box (nahezu) maximal
+            border = cuttable.filter(it => bb.get(it).area >= maxArea * 0.98 && it.contour.points.length >= 4);
+        }
+        if (border.length === 0) {
+            // Rand als Einzellinien: je eine aeusserste Linie pro Seite (links/rechts/unten/oben)
+            const tol = 1e-3;
+            const lines = cuttable.filter(it => it.contour.points.length >= 2);
+            const pick = (axis, dir) => {
+                const val = (it) => { const b = bb.get(it); return axis === 'x' ? (dir < 0 ? b.x0 : b.x1) : (dir < 0 ? b.y0 : b.y1); };
+                const isLine = (it) => { const b = bb.get(it); return axis === 'x' ? (b.x1 - b.x0) < tol : (b.y1 - b.y0) < tol; };
+                const cand = lines.filter(isLine);
+                if (!cand.length) return null;
+                return cand.reduce((a, b) => (dir < 0 ? val(b) < val(a) : val(b) > val(a)) ? b : a);
+            };
+            const set = new Set([pick('x', -1), pick('x', 1), pick('y', -1), pick('y', 1)].filter(Boolean));
+            border = [...set];
+        }
+        const borderSet = new Set(border);
+        const inner = cuttable.filter(it => !borderSet.has(it));
+
+        // --- Greedy Nearest-Neighbor ab Nullpunkt ---
+        const o = (this.settings && this.settings.originSet && this.settings.origin) ? this.settings.origin : { x: 0, y: 0 };
+        let pos = { x: o.x, y: o.y };
+        const d2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+        const reversed = [];
+        const takeNearest = (pool) => {
+            let best = null, bestD = Infinity, bestRev = false;
+            for (const it of pool) {
+                const pts = it.contour.points;
+                const dS = d2(pos, pts[0]);
+                if (dS < bestD) { bestD = dS; best = it; bestRev = false; }
+                if (!it.contour.isClosed) {
+                    const dE = d2(pos, pts[pts.length - 1]);
+                    if (dE < bestD) { bestD = dE; best = it; bestRev = true; }
+                }
+            }
+            if (bestRev) {
+                best.contour.points.reverse();
+                best.contour.invalidate?.();
+                reversed.push(best.contour);
+            }
+            const pts = best.contour.points;
+            pos = best.contour.isClosed ? pts[0] : pts[pts.length - 1];
+            return best;
+        };
+
+        const sorted = [];
+        const pool = [...inner];
+        while (pool.length) { const b = takeNearest(pool); pool.splice(pool.indexOf(b), 1); sorted.push(b); }
+        const bpool = [...border];
+        while (bpool.length) { const b = takeNearest(bpool); bpool.splice(bpool.indexOf(b), 1); sorted.push(b); }
+
+        cuttable.length = 0;
+        cuttable.push(...sorted);
+        this._lastReversedContours = reversed;
+        console.log(`[SORT V6.88] Mosaik: ${inner.length} innen, ${border.length} Rand (zuletzt), ${reversed.length} umgekehrt`);
+    }
+
     sortByShortestPath(cuttable, startItem = null) {
         if (cuttable.length < 2) return;
         console.time('[SORT] sortByShortestPath');
