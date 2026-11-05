@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.83
- * Version: V6.83
+ * CeraCUT Build Info V6.84
+ * Version: V6.84
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-zuschnitt
+ * Build: 20261105-menulabel
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.83',
-    build: '20261105-zuschnitt',
+    version: '6.84',
+    build: '20261105-menulabel',
     date: '2026-11-05',
-    time: '16:00 MEZ',
+    time: '16:10 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '0a376d3',
-        date: '2026-11-05 15:51:43 +0100',
-        message: 'feat: CAD-Tools-Menue mit Zuschnitt-Generator (Mosaik Wuerfel/Rechteck, Sockel) + Auto-Ref/Grips/Fangmarker (V6.83)'
+        hash: 'ceecceb',
+        date: '2026-11-05 16:03:28 +0100',
+        message: 'fix: Menue-Beschriftung — Button "Zuschnitte", Gruppenlabel "CAD-Tools" (V6.84)'
     },
 
     modules: {
@@ -69,6 +69,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.84: Fix — Menue-Beschriftung: Button unter dem Icon heisst "Zuschnitte", nur die kleine Gruppenbeschriftung darunter heisst "CAD-Tools".',
         'V6.83: Feat — CAD-Tools-Menue (Ribbon CAD, nach CAM-Tools) mit Zuschnitt-Generator (mosaic-generator V1.3): Mosaik Wuerfel (MOSW), Mosaik Rechteck (MOSR), Sockel (MOSS). Fliese per Masseingabe, Teilung = Stueckmass + 0,8 mm Schnittaufmass, Randabstand 3 mm, Rechteck mit Verschnittpruefung beider Lagen, Dekor-Lage fest waehlbar, Mischlage (Reststreifen gedreht) optional, Ueberlauf der Schnittlinien nur soweit Platz ist, Aussenkontur als eine Kontur (Ueberschnitt nur an einer Ecke, wie Musterdateien), Sockel = Streifen ueber volle Fliesenseite nur mit Parallelschnitten. Live-Vorschau, Erzeugen oeffnet neuen Tab (loadDXFContent), DXF-Download.',
         'V6.83: Feat — Auto-Referenz/Join: offene Einzellinien werden per Endpunkt-Abgleich zu geschlossener Fliese verkettet; offene Linien gelten immer als Slit (app V6.42).',
         'V6.83: Feat — AutoCAD-Grips fuer Rechteck mit gerundeten Ecken (4 Kanten-Grips), Klick-Modus und Masseingabe beim Strecken (canvas-renderer V3.45-V3.47); Fangmarker im AutoCAD-Stil (snap-manager V1.9).',
