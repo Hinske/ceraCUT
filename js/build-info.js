@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.86
- * Version: V6.86
+ * CeraCUT Build Info V6.87
+ * Version: V6.87
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-cncsave
+ * Build: 20261105-simplayer
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.86',
-    build: '20261105-cncsave',
+    version: '6.87',
+    build: '20261105-simplayer',
     date: '2026-11-05',
     time: '16:50 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '8b3a2cd',
-        date: '2026-11-05 16:21:13 +0100',
-        message: 'feat: CNC-Export speichert direkt auf Server (Share Wasserstrahl/CNC), POST /api/cnc/save (V6.86)'
+        hash: 'ee683ab',
+        date: '2026-11-05',
+        message: 'feat: Simulation mit Player (Play/Pause, Seek, Speed, Restart) + Zoom/Pan waehrend Simulation (V6.87)'
     },
 
     modules: {
@@ -69,6 +69,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.87: Feat — Simulation: Player-Leiste (Play/Pause, Restart, Seek-Slider, Speed 0.2x-30x, Phasenanzeige, Leertaste/Home/Esc) + Zoom/Pan waehrend laufender Simulation (Overlay pointer-events:none, Animation folgt Live-Transform, Trail-Neuzeichnung) (toolpath-simulator V1.6)',
         'V6.86: Feat — CNC-Export (normal + Intarsien POS/NEG) speichert direkt auf dem Server in Share Wasserstrahl/CNC (/mnt/cnc, CNC_ROOT): neuer Endpunkt POST /api/cnc/save (nur *.CNC, flach, Login, 409 + Rueckfrage bei vorhandener Datei), Fallback Workspace/Download (app V6.43, server V1.10)',
         'V6.84: Fix — Menue-Beschriftung: Button unter dem Icon heisst "Zuschnitte", nur die kleine Gruppenbeschriftung darunter heisst "CAD-Tools".',
         'V6.83: Feat — CAD-Tools-Menue (Ribbon CAD, nach CAM-Tools) mit Zuschnitt-Generator (mosaic-generator V1.3): Mosaik Wuerfel (MOSW), Mosaik Rechteck (MOSR), Sockel (MOSS). Fliese per Masseingabe, Teilung = Stueckmass + 0,8 mm Schnittaufmass, Randabstand 3 mm, Rechteck mit Verschnittpruefung beider Lagen, Dekor-Lage fest waehlbar, Mischlage (Reststreifen gedreht) optional, Ueberlauf der Schnittlinien nur soweit Platz ist, Aussenkontur als eine Kontur (Ueberschnitt nur an einer Ecke, wie Musterdateien), Sockel = Streifen ueber volle Fliesenseite nur mit Parallelschnitten. Live-Vorschau, Erzeugen oeffnet neuen Tab (loadDXFContent), DXF-Download.',
