@@ -4,9 +4,11 @@
  * Ermöglicht das Browsen und Laden von DXF-Dateien vom Server-Netzlaufwerk
  * über die /api/dxf/* Endpunkte von server.js.
  *
- * Version: V1.2
+ * Version: V1.3
+ * V1.3: Sortierung (Name/Datum, auf-/absteigend, Ordner immer oben, pro User gemerkt)
  * V1.1: Zuletzt-Pfad pro User (_userKey(), Login/User-Management V6.32)
- * Last Modified: 2026-11-04
+ * Last Modified: 2026-11-05
+ * Build: 20261105-sort2
  */
 
 /** Pro-User-Namespacing für localStorage-Keys (V6.32 Login/User-Management). */
@@ -20,6 +22,50 @@ class DXFBrowser {
         this.currentPath = localStorage.getItem(_userKey('ceracut-dxf-browser-path')) || '';
         this.overlay = null;
         this.isAvailable = null; // null = ungeprüft
+        this.items = [];
+        this.sort = { key: 'name', dir: 'asc' };
+        try {
+            const saved = JSON.parse(localStorage.getItem(_userKey('ceracut-dxf-browser-sort')) || 'null');
+            if (saved && ['name', 'mtime'].includes(saved.key) && ['asc', 'desc'].includes(saved.dir)) this.sort = saved;
+        } catch (e) { /* ignorieren */ }
+    }
+
+    /** Sortiert Items: Ordner immer zuerst, dann nach gewähltem Schlüssel. */
+    _sortItems(items) {
+        const { key, dir } = this.sort;
+        const f = dir === 'asc' ? 1 : -1;
+        return [...items].sort((a, b) => {
+            if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+            let r = 0;
+            if (key === 'name') r = 0;
+            else r = (a.mtime || 0) - (b.mtime || 0);
+            if (r === 0) return f * a.name.localeCompare(b.name, 'de', { numeric: true, sensitivity: 'base' });
+            return f * r;
+        });
+    }
+
+    _setSort(key) {
+        if (this.sort.key === key) this.sort.dir = this.sort.dir === 'asc' ? 'desc' : 'asc';
+        else this.sort = { key, dir: key === 'mtime' ? 'desc' : 'asc' };
+        try { localStorage.setItem(_userKey('ceracut-dxf-browser-sort'), JSON.stringify(this.sort)); } catch (e) {}
+        const listEl = this.overlay?.querySelector('.dxf-browser-list');
+        if (listEl) this._renderList(this.items, listEl);
+        this._renderSortBar();
+    }
+
+    _renderSortBar() {
+        const bar = this.overlay?.querySelector('.dxf-browser-sortbar');
+        if (!bar) return;
+        bar.innerHTML = '';
+        const defs = [['name', 'Name'], ['mtime', 'Datum']];
+        for (const [key, label] of defs) {
+            const active = this.sort.key === key;
+            const b = document.createElement('span');
+            b.textContent = label + (active ? (this.sort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+            b.style.cssText = 'cursor:pointer; padding:2px 8px; border-radius:3px; ' + (active ? 'color:#4fc3f7; background:#2a3a4a;' : 'color:#888;');
+            b.addEventListener('click', () => this._setSort(key));
+            bar.appendChild(b);
+        }
     }
 
     /**
@@ -84,6 +130,7 @@ class DXFBrowser {
                 </div>
                 <div class="dxf-browser-breadcrumb" style="padding:8px 16px; border-bottom:1px solid #333; font-size:12px; color:#888; display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
                 </div>
+                <div class="dxf-browser-sortbar" style="padding:6px 16px; border-bottom:1px solid #333; font-size:12px; display:flex; gap:4px; align-items:center;"></div>
                 <div class="dxf-browser-list" style="flex:1; overflow-y:auto; padding:4px 0; min-height:200px;">
                     <div style="padding:40px; text-align:center; color:#666;">Lade...</div>
                 </div>
@@ -107,6 +154,7 @@ class DXFBrowser {
         document.addEventListener('keydown', this._escHandler);
 
         document.body.appendChild(this.overlay);
+        this._renderSortBar();
     }
 
     /**
@@ -133,7 +181,8 @@ class DXFBrowser {
             const data = await resp.json();
             try { localStorage.setItem(_userKey('ceracut-dxf-browser-path'), dirPath); } catch (e) {}
             this._renderBreadcrumb(data.path);
-            this._renderList(data.items, listEl);
+            this.items = data.items;
+            this._renderList(this.items, listEl);
 
             if (statusEl) {
                 const dirs = data.items.filter(i => i.type === 'directory').length;
@@ -204,8 +253,8 @@ class DXFBrowser {
             listEl.appendChild(upItem);
         }
 
-        for (const item of items) {
-            const el = this._createListItem(item.name, item.type, item.size);
+        for (const item of this._sortItems(items)) {
+            const el = this._createListItem(item.name, item.type, item.size, item.mtime);
 
             if (item.type === 'directory') {
                 el.addEventListener('click', () => {
@@ -226,7 +275,7 @@ class DXFBrowser {
     /**
      * Erstellt ein Listen-Element.
      */
-    _createListItem(name, type, size) {
+    _createListItem(name, type, size, mtime) {
         const el = document.createElement('div');
         el.style.cssText = 'padding:8px 16px; cursor:pointer; display:flex; align-items:center; gap:8px; border-bottom:1px solid #2a2a2a;';
 
@@ -244,6 +293,13 @@ class DXFBrowser {
 
         el.appendChild(icon);
         el.appendChild(nameSpan);
+
+        if (mtime > 0) {
+            const d = document.createElement('span');
+            d.textContent = new Date(mtime).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            d.style.cssText = 'color:#666; font-size:11px; min-width:110px; text-align:right;';
+            el.appendChild(d);
+        }
 
         if (type === 'file' && size > 0) {
             const sizeSpan = document.createElement('span');

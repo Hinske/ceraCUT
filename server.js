@@ -16,8 +16,9 @@
  *       Siehe lib/user-store.js, lib/session-store.js, lib/auth.js.
  * V1.3: Fix — safePath() prüft Symlink-Ziel via fs.realpathSync gegen DXF_ROOT,
  *       Content-Disposition-Header filtert CR/LF (Header-Injection)
- * Last Modified: 2026-11-04
- * Build: 20261104-pushexecuted
+ * V1.9: Feat — /api/dxf/list liefert mtime (Änderungsdatum) für Ordner und Dateien
+ * Last Modified: 2026-11-05
+ * Build: 20261105-sort
  * V1.7: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * Statischer Dateiserver + DXF-Browse-API für Netzlaufwerk-Zugriff.
@@ -259,7 +260,9 @@ function handleDXFList(res, queryPath) {
                 if (entry.name.startsWith('.')) continue;
 
                 if (entry.isDirectory()) {
-                    items.push({ name: entry.name, type: 'directory' });
+                    let dMtime = 0;
+                    try { dMtime = fs.statSync(path.join(dirPath, entry.name)).mtimeMs; } catch {}
+                    items.push({ name: entry.name, type: 'directory', mtime: dMtime });
                 } else if (entry.name.toLowerCase().endsWith('.dxf')) {
                     // Dateigröße ermitteln
                     try {
@@ -268,9 +271,10 @@ function handleDXFList(res, queryPath) {
                             name: entry.name,
                             type: 'file',
                             size: stat.size,
+                            mtime: stat.mtimeMs,
                         });
                     } catch {
-                        items.push({ name: entry.name, type: 'file', size: 0 });
+                        items.push({ name: entry.name, type: 'file', size: 0, mtime: 0 });
                     }
                 }
             }

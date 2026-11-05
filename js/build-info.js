@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.84
- * Version: V6.84
+ * CeraCUT Build Info V6.85
+ * Version: V6.85
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-menulabel
+ * Build: 20261105-sort2
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.84',
-    build: '20261105-menulabel',
+    version: '6.85',
+    build: '20261105-sort2',
     date: '2026-11-05',
-    time: '16:10 MEZ',
+    time: '16:25 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'ceecceb',
-        date: '2026-11-05 16:03:28 +0100',
-        message: 'fix: Menue-Beschriftung — Button "Zuschnitte", Gruppenlabel "CAD-Tools" (V6.84)'
+        hash: '3cf0dc2',
+        date: '2026-11-05 16:13:48 +0100',
+        message: 'feat: Server-DXF-Browser Sortierung nach Name/Datum, mtime in /api/dxf/list (V6.85)'
     },
 
     modules: {
@@ -55,8 +55,8 @@ const CERACUT_BUILD = {
         'arc-fitting':        { version: '3.3', build: '20261104-reviewfix' },
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
         'dimension-tool':     { version: '2.6', build: '20261104-pushexecuted' },
-        'dxf-browser':        { version: '1.2', build: '20261104-reviewfix' },
-        'server':             { version: '1.8', build: '20261104-pushexecuted' },
+        'dxf-browser':        { version: '1.3', build: '20261105-sort2' },
+        'server':             { version: '1.9', build: '20261105-sort' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
         'constants': { version: '2.14', build: '20261105-zuschnitt' },
