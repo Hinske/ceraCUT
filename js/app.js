@@ -1,10 +1,11 @@
 /**
- * CeraCUT V6.40 - Main Application
+ * CeraCUT V6.41 - Main Application
+ * V6.41: Feat — Druckdialog: Farbe / Schwarz-Weiss waehlbar (Wahl wird gemerkt)
  * V6.40: Feat — Druck/Bereichsdruck uebernimmt Layerfarben (helle Farben werden abgedunkelt)
  * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
  * Last Modified: 2026-11-05
- * Build: 20261105-printcolor
+ * Build: 20261105-printmode
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -5460,7 +5461,16 @@ class CeraCutApp {
      * Canvas-Inhalt drucken — rendert auf ein temporäres Canvas mit weißem
      * Hintergrund und Konturen in Layerfarbe, skaliert auf A4 Landscape.
      */
-    printCanvas(region = null) {
+    printCanvas(region = null, mode = null) {
+        // V6.82: Farbmodus waehlen (Farbe / Schwarz-Weiss), danach erneut mit mode aufrufen
+        if (!mode) {
+            if (!this.contours || this.contours.length === 0) {
+                this.showToast('Keine Konturen zum Drucken', 'warning');
+                return;
+            }
+            this._askPrintMode(m => this.printCanvas(region, m));
+            return;
+        }
         if (!this.contours || this.contours.length === 0) {
             this.showToast('Keine Konturen zum Drucken', 'warning');
             return;
@@ -5542,6 +5552,7 @@ class CeraCutApp {
         // V6.80: Layerfarben uebernehmen. Sehr helle Farben (z.B. Weiss, Gelb) sind auf
         // weissem Papier unsichtbar -> auf Schwarz bzw. abgedunkelt zurueckfallen.
         const printColor = (layerName) => {
+            if (mode === 'bw') return '#000000';
             const col = lm?.getLayer(layerName || '0')?.color;
             const m = /^#?([0-9a-f]{6})$/i.exec((col || '').trim());
             if (!m) return '#000000';
@@ -5584,6 +5595,49 @@ class CeraCutApp {
         // System-Druckdialog
         console.log('[App] Drucken gestartet:', this.loadedFileName || 'Unbenannt');
         window.print();
+    }
+
+    /**
+     * V6.82: Kleiner Dialog "Farbe / Schwarz-Weiss" vor dem Drucken.
+     * Letzte Wahl wird in localStorage gemerkt. Enter = Drucken, ESC = Abbruch.
+     * @param {(mode: 'color'|'bw') => void} onConfirm
+     */
+    _askPrintMode(onConfirm) {
+        if (document.getElementById('print-mode-modal')) return;
+        let last = 'color';
+        try { last = localStorage.getItem('ceracut.printMode') === 'bw' ? 'bw' : 'color'; } catch (_) { /* privat/gesperrt */ }
+
+        const wrap = document.createElement('div');
+        wrap.id = 'print-mode-modal';
+        wrap.innerHTML = `
+            <div class="pm-box" role="dialog" aria-label="Druckoptionen">
+                <div class="pm-title">Drucken</div>
+                <label><input type="radio" name="pm-mode" value="color"> Farbe (Layerfarben)</label>
+                <label><input type="radio" name="pm-mode" value="bw"> Schwarz-Weiß</label>
+                <div class="pm-actions">
+                    <button type="button" class="pm-cancel">Abbrechen</button>
+                    <button type="button" class="pm-ok">Drucken</button>
+                </div>
+            </div>`;
+        document.body.appendChild(wrap);
+        wrap.querySelector(`input[value="${last}"]`).checked = true;
+
+        const close = () => { window.removeEventListener('keydown', onKey, true); wrap.remove(); };
+        const confirm = () => {
+            const mode = wrap.querySelector('input[name="pm-mode"]:checked')?.value === 'bw' ? 'bw' : 'color';
+            try { localStorage.setItem('ceracut.printMode', mode); } catch (_) { /* ignorieren */ }
+            close();
+            onConfirm(mode);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+            else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); confirm(); }
+        };
+        window.addEventListener('keydown', onKey, true);
+        wrap.querySelector('.pm-ok').addEventListener('click', confirm);
+        wrap.querySelector('.pm-cancel').addEventListener('click', close);
+        wrap.addEventListener('pointerdown', (e) => { if (e.target === wrap) close(); });
+        wrap.querySelector('.pm-ok').focus();
     }
 
     /**

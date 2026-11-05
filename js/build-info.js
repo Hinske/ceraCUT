@@ -1,23 +1,23 @@
 /**
- * CeraCUT Build Info V6.81
- * Version: V6.81
+ * CeraCUT Build Info V6.82
+ * Version: V6.82
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-printcolor
+ * Build: 20261105-printmode
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.81',
-    build: '20261105-printcolor',
+    version: '6.82',
+    build: '20261105-printmode',
     date: '2026-11-05',
     time: '10:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '2228caf',
-        date: '2026-11-05 07:27:04 +0100',
-        message: 'feat: Druck uebernimmt Layerfarben, helle Farben werden abgedunkelt (V6.81)'
+        hash: 'c2e1277',
+        date: '2026-11-05 07:28:35 +0100',
+        message: 'feat: Druckdialog Farbe / Schwarz-Weiss mit gemerkter Wahl (V6.82)'
     },
 
     modules: {
@@ -39,7 +39,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.40', build: '20261105-printcolor' },
+        'app':                { version: '6.41', build: '20261105-printmode' },
         'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
