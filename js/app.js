@@ -6,6 +6,7 @@
  * V6.64: Feat — AP4 Waricam-Workflow: Auto-Setup beim Import (Referenz + Nullpunkt), danach direkt in Bearbeitung; Bearbeitung-Tab in Workflow-Reihenfolge ① Loch/Scheibe ② Leads ③ Schnittfuge
  * V6.63: Feat — AP2 Bogenwinkel (Feld ⌒°, Aussen/Innen) und Ecken-Lead (Typ/Winkel/ab Eckwinkel) im Lead-Ribbon, in Profilen und Undo-Snapshots
  * V6.61: Feat — Schnittfugenband An/Aus (btn-kerf-band, renderer.showKerfBand, localStorage ceracut_kerf_band)
+ * V6.62: Feat — Jede Fliese (geschlossene Kontur auf Layer Fliese) ist automatisch Referenz: nicht geschnitten, nicht in Schnittreihenfolge, Topologie transparent; Plattengroesse je Fliese im Export (pipeline V3.12, sinumerik-pp V2.9)
  * V6.60: Feat — Schnittreihenfolge manuell: Schnitte anklicken, Auswahl Anfang/↑/↓/Ende/Position N (je Fliese, Undo); alte Schnittliste war seit V5.7 nicht mehr im HTML
  * V6.59: Feat — Fliesen-Reihenfolge im Tab Reihenfolge: Presets (Zeile/Spalte/Schlangenlinie/Nachbar, Startecke, umkehren), Anklick-Modus, Drag&Drop, Sperre bei manueller Reihenfolge; Button "Fliesen erkennen" entfällt (Erkennung automatisch)
  * V6.58: Fix — Fliesen nach Auto-Referenz neu zuordnen, Nullpunkt-Gedaechtnis, Rechteck-Erkennung tolerant (verkettete Linien)
@@ -28,7 +29,7 @@
  * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
  * Last Modified: 2026-11-06
- * Build: 20261106-cutorder
+ * Build: 20261106-tileref
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -5880,6 +5881,7 @@ class CeraCutApp {
                 dicke: this.settings.materialThickness || 10.0,
                 material: this._cerajetResult?.material?.name || 'AALLGEMEIN',
                 technologyParams,
+                plateBBox: part.bbox,   // V6.62: Plattengroesse = diese Fliese (jede Fliese ist Referenz)
                 origin: { x: part.origin.x, y: part.origin.y }   // V6.95: Nullpunkt je Fliese (vom Benutzer gesetzt/geprüft)
             });
             if (!res?.code?.trim()) { this.showToast(`Fliese ${n + 1}: kein G-Code erzeugt`, 'error'); return; }
@@ -6563,8 +6565,8 @@ class CeraCutApp {
         ctx.fillRect(0, 0, w, h);
 
         // Referenz-Kontur (grau)
-        const ref = this.contours.find(c => c.isReference);
-        if (ref?.points?.length > 1) {
+        for (const ref of this.contours.filter(c => c.isReference)) {   // V6.62: mehrere Referenzen (Fliesen)
+            if (!(ref.points?.length > 1)) continue;
             ctx.strokeStyle = '#333';
             ctx.lineWidth = 1;
             ctx.setLineDash([4, 4]);

@@ -185,3 +185,5 @@ Liste zur Entscheidung (behalten / unter "Erweitert" verstecken / streichen):
 - **AP4 Workflow** (Teil 1 ✔): Waricam-Ablauf: *DXF-Import → Referenz + Nullpunkt automatisch → pruefen: Loch/Scheibe → Lead (Art/Laenge) → Schnittfuge → Reihenfolge → Export*. Umgesetzt: Auto-Setup beim Import (Checkbox "Auto beim Import"), automatischer Wechsel in Bearbeitung, Bearbeitung-Tab in Reihenfolge ① Loch/Scheibe ② Leads ③ Schnittfuge/Qualitaet. Offen: Reihenfolge-/Export-Tab im selben Stil nummerieren (④/⑤), Dialoge/Seitenpanel pruefen, evtl. "Weiter"-Leiste.
 
 - **Setup-Tab entfaellt** (2026-11-06, app V6.67): Referenz + Nullpunkt (laufen beim Import automatisch) liegen im Tab **Datei** (manuelle Korrektur), Technologie (Material/Dicke/Druck/Duese) als Gruppe **③ Technologie** in Bearbeitung. Tabs: Datei · CAD · Bearbeitung · Reihenfolge · Extras · Export · Ansicht.
+
+- **Offene Punkte:** siehe `todo-waricam.md`.

@@ -1,5 +1,6 @@
 /**
- * CeraCUT Sinumerik 840D Postprozessor V2.8
+ * CeraCUT Sinumerik 840D Postprozessor V2.9
+ * V2.9: Plattengroesse aus settings.plateBBox (Export je Fliese), sonst erste Referenz
  * V2.8: AP1 S4 — Lead-In/-Out kommen 1:1 aus den Lead-Segmenten (lead-geometry.js): G01/G02/G03 identisch zur
  *       Darstellung, auch gekuerzte Boegen bleiben exakte Boegen (kein Refitting mehr, _processArcLeadExact entfernt).
  *       Fix: negativer Ueberschnitt kuerzt jetzt die gefahrene Kontur (vorher volle Kontur, Lead-Out am gekuerzten Ende).
@@ -138,7 +139,7 @@ class SinumerikPostprocessor {
         }
 
         // Plattengröße aus Referenzkontur oder Bounding-Box
-        const plate = this._getPlateSize(contours);
+        const plate = this._getPlateSize(contours, settings);
 
         // Zusammenbauen
         let code = '';
@@ -966,7 +967,10 @@ class SinumerikPostprocessor {
     // PLATTENGRÖSSE
     // ════════════════════════════════════════════════════════════════
 
-    _getPlateSize(contours) {
+    _getPlateSize(contours, settings = {}) {
+        // V2.9: Export je Fliese uebergibt die Fliesen-BBox (mehrere Referenzen = mehrere Fliesen)
+        const pb = settings.plateBBox;
+        if (pb) return { width: Math.abs(pb.maxX - pb.minX), height: Math.abs(pb.maxY - pb.minY) };
         const ref = contours.find(c => c.isReference);
         if (ref) {
             const bb = ref.getBoundingBox?.();
@@ -1146,7 +1150,7 @@ class SinumerikPostprocessor {
         const tafelName = settings.tafelName || planName;
         const dicke = settings.dicke || 8.0;
         const rp = settings.technologyParams || {};
-        const plate = this._getPlateSize(contours);
+        const plate = this._getPlateSize(contours, settings);
 
         // Achsgrenzen-Check: letzter Kopf darf nicht über die Maschinen-Achsgrenze fahren
         if (this.machineProfile?.axes) {

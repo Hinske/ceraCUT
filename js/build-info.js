@@ -9,25 +9,25 @@
 
 const CERACUT_BUILD = {
     version: '7.00',
-    build: '20261106-cutorder',
+    build: '20261106-tileref',
     date: '2026-11-06',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '686cef2',
+        hash: 'c780b69',
         date: '2026-11-06',
-        message: 'refactor: Setup-Tab entfaellt - Referenz/Nullpunkt im Tab Datei, Technologie in '
+        message: 'chore: offene Waricam-Punkte (todo-waricam.md) + paralleler Stand (Fliesen als R'
     },
 
     modules: {
         'dxf-parser':         { version: '3.20', build: '20261106-fliese4' },
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
-        'pipeline':           { version: '3.11', build: '20261106-fliese4' },
+        'pipeline':           { version: '3.12', build: '20261106-tileref' },
         'cam-contour':        { version: '5.30', build: '20261106-arcangle' },
         'canvas-renderer':    { version: '3.62', build: '20261106-classic' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
-        'sinumerik-pp':       { version: '2.8', build: '20261106-leadseg' },
+        'sinumerik-pp':       { version: '2.9', build: '20261106-tileref' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
         'snap-manager':       { version: '1.9', build: '20261105-acmarker' },
         'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },

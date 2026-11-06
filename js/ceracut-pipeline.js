@@ -1,7 +1,8 @@
 /**
- * CeraCUT V3.11 - Processing Pipeline
+ * CeraCUT V3.12 - Processing Pipeline
+ * V3.12: Feat — Jede geschlossene Kontur auf Layer Fliese/Fliesen ist Referenz (isTileOutline): nie geschnitten, in der Topologie transparent
  * Last Modified: 2026-11-06
- * Build: 20261104-reviewfix
+ * Build: 20261106-tileref
  * V3.10: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * V3.9: Fix — _analyzeTopology() behandelt die Referenz jetzt IMMER als "transparent"
@@ -34,6 +35,10 @@ const CeraCutPipeline = {
         if (!c) return false;
         if (this.isNonCutLayer(c.layer)) return true;
         return !c.isClosed && String(c.layer || '').trim().toLowerCase() === 'fliese';
+    },
+    /** V3.12: Fliesenumriss = geschlossene Kontur auf Layer "Fliese"/"Fliesen". Jede Fliese ist Referenz (eigener Nullpunkt), nie Schneidkontur. */
+    isTileOutline(c) {
+        return !!c && !!c.isClosed && ['fliese', 'fliesen'].includes(String(c.layer || '').trim().toLowerCase());
     },
     kerfWidth: 1.0,
     healingStats: null,
@@ -280,6 +285,9 @@ const CeraCutPipeline = {
         // zusaetzlich beruecksichtigen (sonst doppelte Dekrementierung).
         const honorRefFlags = !!options.skipReference;
         if (!honorRefFlags) sorted.forEach(c => { c.isReference = false; });
+        // V3.12: alle Fliesenumrisse sind Referenz (transparent in der Topologie, nicht geschnitten)
+        let hasTiles = false;
+        sorted.forEach(c => { if (this.isTileOutline(c)) { c.isReference = true; hasTiles = true; } });
 
         for (let i = 0; i < sorted.length; i++) {
             const contour = sorted[i];
@@ -315,7 +323,7 @@ const CeraCutPipeline = {
         // V2.9: Referenz-Erkennung - NUR bei Rechteck!
         // V3.8: Referenz-Erkennung optional deaktivierbar
         if (!options.skipReference) {
-            this._detectReference(sorted);
+            this._detectReference(sorted, hasTiles);
         } else {
             console.log('[Pipeline V3.7] Referenz-Erkennung übersprungen (skipReference)');
         }
@@ -334,10 +342,14 @@ const CeraCutPipeline = {
      * Nach Referenz-Erkennung: Nesting-Level aller inneren Konturen korrigieren,
      * da die Referenz als "transparent" gilt (Plattenbegrenzung, kein Schnittobjekt).
      */
-    _detectReference(sortedContours) {
-        // Reset
+    _detectReference(sortedContours, hasTiles = false) {
+        // Reset (Fliesenumrisse bleiben Referenz; mit Fliesen keine Groesste-Kontur-Erkennung)
         for (const c of sortedContours) {
-            c.isReference = false;
+            c.isReference = this.isTileOutline(c);
+        }
+        if (hasTiles) {
+            console.log('[Pipeline V3.12] Referenz = Fliesenumrisse (Layer Fliese), keine Auto-Erkennung');
+            return;
         }
 
         // Regel 1: Mindestens 2 Konturen
