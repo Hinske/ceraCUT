@@ -1,5 +1,8 @@
 /**
- * CeraCUT CamContour V5.26 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.27 - IGEMS-konformes Lead-In/Out System
+ * V5.27: Fix — _minSelfClearance() wertete Nachbarsegmente einer glatten Kurve als gegenueberliegende
+ *        Wand: auf Kreisen/Rundungen wurde jeder Lead auf ~0.5 mm gekappt (V6.43-Kappung). Jetzt zaehlen
+ *        nur Segmente, deren Weg ENTLANG der Kontur > 2x ihres direkten Abstands ist (echte Engstelle).
  * V5.26: Fix — _isAtCorner() lieferte Supplementwinkel (gerade = 175 Grad statt 0) -> fast jede Stelle
  *        galt als Ecke, JEDER Arc-Lead wurde zu linear degradiert. Jetzt Drehwinkel (gerade 0,
  *        90-Grad-Ecke 90). Effekt: Arc-Leads entstehen wieder auf glatten Konturen/Kanten-
@@ -106,7 +109,7 @@
  * V5.6: Hatch als eigenständige CamContour (cuttingMode='none', isHatchContour)
  * V5.7: Gap Detection — gaps[], healedGaps[] Properties + hasGaps()/clearGapData()
  * Last Modified: 2026-11-06
- * Build: 20261106-cornerfix
+ * Build: 20261106-clearfix
  */
 
 class CamContour {
@@ -1495,6 +1498,30 @@ class CamContour {
         const skipRadius = Math.max(this.kerfWidth * 2, 1.0);
         const onSegEps = 1e-6;
 
+        // V5.27: Kontur-Laengenposition des Punkts + kumulierte Segmentlaengen. Dient dazu, die
+        // eigene Kruemmung von echten Engstellen zu unterscheiden: Nachbarsegmente einer glatten
+        // Kurve (Kreis!) liegen euklidisch nur ~Bogenlaenge entfernt und wurden bisher als
+        // "gegenueberliegende Wand" gewertet -> Lead auf Kreisen auf ~0.5 mm gekappt.
+        const cum = [0];
+        for (let i = 0; i < n; i++) {
+            cum.push(cum[i] + Math.hypot(contourPts[i + 1].x - contourPts[i].x, contourPts[i + 1].y - contourPts[i].y));
+        }
+        const total = cum[n];
+        let s0 = 0, bestD = Infinity;
+        for (let i = 0; i < n; i++) {
+            const d = this._pointToSegDist(point, contourPts[i], contourPts[i + 1]);
+            if (d < bestD) {
+                bestD = d;
+                const a = contourPts[i], b = contourPts[i + 1];
+                const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+                const t = l2 > 0 ? Math.max(0, Math.min(1, ((point.x - a.x) * (b.x - a.x) + (point.y - a.y) * (b.y - a.y)) / l2)) : 0;
+                s0 = cum[i] + t * Math.sqrt(l2);
+            }
+        }
+        // Nur Segmente zaehlen, deren Weg ENTLANG der Kontur deutlich laenger ist als der direkte
+        // Abstand (Kontur laeuft weg und kommt wieder = Kanalwand). Glatte Kruemmung: Verhaeltnis <= pi/2.
+        const WALL_RATIO = 2.0;
+
         let minDist = Infinity;
         for (let i = 0; i < n; i++) {
             const a = contourPts[i], b = contourPts[i + 1];
@@ -1503,7 +1530,15 @@ class CamContour {
             if (distA < skipRadius && distB < skipRadius) continue;          // (b)
             const d = this._pointToSegDist(point, a, b);
             if (d < onSegEps) continue;                                     // (a)
-            if (d < minDist) minDist = d;
+            if (d >= minDist) continue;
+            // Laengenposition des naechsten Segmentpunkts
+            const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+            const t = l2 > 0 ? Math.max(0, Math.min(1, ((point.x - a.x) * (b.x - a.x) + (point.y - a.y) * (b.y - a.y)) / l2)) : 0;
+            const pos = cum[i] + t * Math.sqrt(l2);
+            const along = Math.abs(pos - s0);
+            const arcDist = Math.min(along, total - along);
+            if (arcDist <= WALL_RATIO * d) continue;                        // (c) eigene Kruemmung
+            minDist = d;
         }
         return minDist;
     }

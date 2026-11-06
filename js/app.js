@@ -1,5 +1,6 @@
 /**
  * CeraCUT V6.50 - Main Application
+ * V6.61: Feat — Schnittfugenband An/Aus (btn-kerf-band, renderer.showKerfBand, localStorage ceracut_kerf_band)
  * V6.60: Feat — Schnittreihenfolge manuell: Schnitte anklicken, Auswahl Anfang/↑/↓/Ende/Position N (je Fliese, Undo); alte Schnittliste war seit V5.7 nicht mehr im HTML
  * V6.59: Feat — Fliesen-Reihenfolge im Tab Reihenfolge: Presets (Zeile/Spalte/Schlangenlinie/Nachbar, Startecke, umkehren), Anklick-Modus, Drag&Drop, Sperre bei manueller Reihenfolge; Button "Fliesen erkennen" entfällt (Erkennung automatisch)
  * V6.58: Fix — Fliesen nach Auto-Referenz neu zuordnen, Nullpunkt-Gedaechtnis, Rechteck-Erkennung tolerant (verkettete Linien)
@@ -4999,6 +5000,24 @@ class CeraCutApp {
                 applyMode();
             });
             applyMode();
+        }
+
+        // V6.61: Schnittfugenband An/Aus (massstaebliche Fuge um Kontur, Leads, Ueberschnitt)
+        const kerfBtn = document.getElementById('btn-kerf-band');
+        if (kerfBtn && this.renderer) {
+            let on = true;
+            try { on = localStorage.getItem('ceracut_kerf_band') !== '0'; } catch (e) { /* ignore */ }
+            const applyKerf = () => {
+                this.renderer.showKerfBand = on;
+                kerfBtn.textContent = on ? '▮ Fuge An' : '▯ Fuge Aus';
+                this.renderer.render();
+            };
+            kerfBtn.addEventListener('click', () => {
+                on = !on;
+                try { localStorage.setItem('ceracut_kerf_band', on ? '1' : '0'); } catch (e) { /* ignore */ }
+                applyKerf();
+            });
+            applyKerf();
         }
 
         console.debug('[App V6.0] Lead-Profile initialisiert');

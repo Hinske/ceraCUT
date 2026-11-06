@@ -15,17 +15,17 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '7922540',
+        hash: 'e20874a',
         date: '2026-11-06',
-        message: 'fix: _isAtCorner Drehwinkel statt Supplementwinkel - Arc-Leads werden wieder erz'
+        message: 'feat: AP1 S3 Lead-Darstellung Waricam-Stil (Renderer V3.60), Schnittfugenband; f'
     },
 
     modules: {
         'dxf-parser':         { version: '3.20', build: '20261106-fliese4' },
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.11', build: '20261106-fliese4' },
-        'cam-contour':        { version: '5.26', build: '20261106-cornerfix' },
-        'canvas-renderer':    { version: '3.59', build: '20261106-kerfside' },
+        'cam-contour':        { version: '5.27', build: '20261106-clearfix' },
+        'canvas-renderer':    { version: '3.60', build: '20261106-leadview' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.7', build: '20261106-kerfside' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
@@ -42,7 +42,7 @@ const CERACUT_BUILD = {
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
         'lead-geometry':      { version: '1.0', build: '20261106-leadgeom' },
-        'app':                { version: '6.60', build: '20261106-cutorder' },
+        'app':                { version: '6.61', build: '20261106-kerfband' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.04: Feat — AP1 S3 Lead-Darstellung im Waricam-Stil (canvas-renderer V3.60): Leads aus echten Segmenten (Bogen immer ctx.arc), Anschnitt rot, Ausschnitt/Ueberschnitt blau, Pfeile in Schneidrichtung, einheitlicher Anschusspunkt, Warnsymbol (!) statt Zustandsfarben, Schnittfuge massstaeblich als Band (Schalter Fuge An/Aus, app V6.61). Fix (cam-contour V5.27): _minSelfClearance() hielt eigene Kruemmung/Ecken fuer Kanalwaende — Leads wurden auf Kreisen und fast alle Lead-Outs (auch an Rechteckecken) auf ~0.5 mm gekappt; jetzt voller konfigurierter Lead, echte Engstellen bleiben gekappt. Visuell per Headless-Chromium geprueft.',
         'V7.03: Fix — _isAtCorner() (cam-contour V5.26) rechnete mit Supplementwinkel (gerade=175 Grad): Arc-Leads wurden im Default nie erzeugt. Jetzt Drehwinkel; Arc-Leads erscheinen auf glatten Konturen/Kantenmitten wieder, Ecken weiter linear. Golden neu erfasst (nur Kreis-Szenarien aendern sich: linear/tangent -> arc)',
         'V7.02: Refactor — AP1 S2 Lead-Kern angebunden: cam-contour V5.25 baut Leads ueber lead-geometry (segments), Kuerzen trimmt Boegen als Boegen. Golden-Regressionstest (279 Szenarien + Multi-Kontur) bestaetigt unveraendertes Verhalten. BEFUND (noch nicht behoben): _isAtCorner() liefert fuer fast jede Stelle >60 Grad -> Arc-Leads werden im Default IMMER zu linear degradiert (cam-contour V5.25)',
         'V7.01: Feat — AP1 S1 Lead-Kern: neues Modul lead-geometry.js V1.0 (reine Segment-Geometrie fuer Lead-In/-Out: Linie/Bogen lueckenlos, Kuerzen als echter Bogen, einzige Tessellierung toPolyline, validate). Noch NICHT an cam-contour/Renderer/PP angebunden (folgt in S2-S5). 22 Node-Tests (npm test). Siehe tasks/ap1-lead-kern-design.md (lead-geometry V1.0)',

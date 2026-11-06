@@ -205,14 +205,14 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 
 | Modul | Datei | Version | Verantwortung |
 |-------|-------|---------|---------------|
-| **App** | `app.js` | **V6.60** | Wizard, Kontextmenu, Export-Modal, Undo (Granular per Kontur), ToolManager, Click-Routing, Window-Selection, DynamicInput, Print, FSAPI-Save, ProjectManager, CAM-Kontextmenu, Lead-Profiles, Intarsien V2.0, Layer-Visibility→Pipeline, Validation Engine, Multi-Material Export, Hatch-Entity, Undo/Redo-Button-Click, Snap-Modi-Statusbar, Cycle-Selection |
+| **App** | `app.js` | **V6.61** | Wizard, Kontextmenu, Export-Modal, Undo (Granular per Kontur), ToolManager, Click-Routing, Window-Selection, DynamicInput, Print, FSAPI-Save, ProjectManager, CAM-Kontextmenu, Lead-Profiles, Intarsien V2.0, Layer-Visibility→Pipeline, Validation Engine, Multi-Material Export, Hatch-Entity, Undo/Redo-Button-Click, Snap-Modi-Statusbar, Cycle-Selection |
 | **Geometry** | `geometry.js` | **V2.14** | Vektoren, SplineUtils (De Boor), MicroHealing (5-Stage), Shoelace, interiorPoint |
 | **GeometryOps** | `geometry-ops.js` | **V2.7** | Intersection, Segment-Modell, Arabeske, circumscribedCircle, splitAndOverlap, Boundary (DCEL Planar Graph), filletPolyline/chamferPolyline |
 | **DXF-Parser** | `dxf-parser.js` | **V3.20** | DXF → Entities, SPLINE-Tessellation, Deque-Chaining, Layer-aware, TEXT/MTEXT, TEXT-Glyphs, Center/Radius-Passthrough, R12-Layer-Table, HATCH-Skip |
-| **CAMContour** | `cam-contour.js` | **V5.26** | Lead-In/Out, Overcut, Multi-Contour-Collision, Lead-Routing (Corner-Penalty, Flat-Segment-Bonus, Dog-Leg), Slit, Kerf-Flip, Arc-Metadaten, clone(), leadManualOverride, Flat-Preferred autoPlace, Hatch-Entity (cuttingMode='none', isHatchContour), materialGroup, intarsiaRole |
+| **CAMContour** | `cam-contour.js` | **V5.27** | Lead-In/Out, Overcut, Multi-Contour-Collision, Lead-Routing (Corner-Penalty, Flat-Segment-Bonus, Dog-Leg), Slit, Kerf-Flip, Arc-Metadaten, clone(), leadManualOverride, Flat-Preferred autoPlace, Hatch-Entity (cuttingMode='none', isHatchContour), materialGroup, intarsiaRole |
 | **Lead Profiles** | `lead-profiles.js` | **V1.1** | 8 Built-in Profile (inkl. Intarsien), Benutzerdefiniert (localStorage), Batch-Engine (disc/hole/smallHole/slit) |
 | **CeraJet Engine** | `cerajet-engine.js` | — | Technologie-Engine (Piercing, Speed-Ramping) |
-| **Renderer** | `canvas-renderer.js` | **V3.59** | Canvas-Rendering, Hit-Testing (Kante+Fläche), Arc-Leads, DPR-Fix, Grip-Editing, Window-Selection-Rect, Lead-Differenzierung, Trackpad-Navigation, Disc-Füllung (nur CAM-Modi), Intarsien-Overlay (Multi-Material), Entry-Pfeil, Hatch-Entity-Rendering, Hatch-Live-Preview, Locked-Layer-Guard, Cycle-Selection (findAllContoursAtPoint) |
+| **Renderer** | `canvas-renderer.js` | **V3.60** | Canvas-Rendering, Hit-Testing (Kante+Fläche), Arc-Leads, DPR-Fix, Grip-Editing, Window-Selection-Rect, Lead-Differenzierung, Trackpad-Navigation, Disc-Füllung (nur CAM-Modi), Intarsien-Overlay (Multi-Material), Entry-Pfeil, Hatch-Entity-Rendering, Hatch-Live-Preview, Locked-Layer-Guard, Cycle-Selection (findAllContoursAtPoint) |
 | **Postprozessor** | `sinumerik-postprocessor.js` | **V2.7** | Sinumerik 840D MPF, 3-in-1, G41/G42, Piercing-Types, Multi-Head, Machine-Profile, Safety-Guards, Hatch-Filter |
 | **UndoManager** | `undo-manager.js` | **V1.4** | Command Pattern, Undo/Redo, Clipboard, WizardStepUndo |
 | **Arc-Fitting** | `arc-fitting.js` | **V3.4** | Polylinie → G02/G03 Bogen (fur PP-Ausgabe) |
@@ -291,10 +291,10 @@ ceraCUT/
 │   ├── geometry.js                    ← Geometrie-Kernel V2.14
 │   ├── geometry-ops.js                ← GeometryOps V2.7 (Intersection, Arabeske, splitAndOverlap)
 │   ├── ceracut-pipeline.js            ← Pipeline V3.11
-│   ├── cam-contour.js                 ← Kontur-Klasse V5.26 (Flat-Preferred autoPlace)
+│   ├── cam-contour.js                 ← Kontur-Klasse V5.27 (Flat-Preferred autoPlace)
 │   ├── lead-profiles.js               ← Lead-Profile V1.1 (8 Built-in inkl. Intarsien, Batch-Engine)
 │   ├── cerajet-engine.js              ← Technologie-Engine
-│   ├── canvas-renderer.js             ← Canvas Rendering V3.59 (Flächen-Hit, Disc-Fill Fix, Cycle-Selection)
+│   ├── canvas-renderer.js             ← Canvas Rendering V3.60 (Flächen-Hit, Disc-Fill Fix, Cycle-Selection)
 │   ├── arc-fitting.js                 ← Arc Fitting V3.4
 │   ├── undo-manager.js               ← Undo/Redo + Clipboard V1.4 (WizardStepUndo)
 │   ├── sinumerik-postprocessor.js     ← Sinumerik PP V2.7 (Safety-Guards, Hatch-Filter)
@@ -525,8 +525,8 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   dxf-parser: V3.20 (20261106-fliese4)
   geometry: V2.14 (20261104-reviewfix)
   pipeline: V3.11 (20261106-fliese4)
-  cam-contour: V5.26 (20261106-cornerfix)
-  canvas-renderer: V3.59 (20261106-kerfside)
+  cam-contour: V5.27 (20261106-clearfix)
+  canvas-renderer: V3.60 (20261106-leadview)
   undo-manager: V1.4 (20261104-reviewfix)
   sinumerik-pp: V2.7 (20261106-kerfside)
   command-line: V1.6 (20261104-reviewfix)
@@ -540,7 +540,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   text-tool: V1.3 (20261104-reviewfix)
   dxf-writer: V1.16 (20261104-reviewfix)
   lead-profiles: V1.4 (20260625-cornerleadslot)
-  app: V6.60 (20261106-cutorder)
+  app: V6.61 (20261106-kerfband)
   document-manager: V1.6 (20261106-fliesenrect)
   project-manager: V1.2 (20261104-pushexecuted)
   properties-panel: V1.6 (20261104-reviewfix)

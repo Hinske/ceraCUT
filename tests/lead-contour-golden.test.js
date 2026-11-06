@@ -159,3 +159,16 @@ test('Eckenerkennung (V5.26): gerade/glatt -> Arc bleibt, echte Ecke -> degradie
     assert.ok(Math.abs(corner._isAtCorner(corner.points) - 90) < 1e-6);
     assert.equal(corner.getLeadInPath().type, 'linear');
 });
+
+test('Lead-Laenge wird nicht mehr durch eigene Kruemmung/Ecke gekappt (V5.27)', () => {
+    const len = pts => { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); return l; };
+    const mk = (pts, mode, o = {}) => new F.CamContour(pts, { cuttingMode: mode, kerfWidth: 0.8, isClosed: true, leadInType: 'tangent', leadInLength: 8, leadOutType: 'tangent', leadOutLength: 8, ...o });
+    for (const [pts, mode] of [[F.circle(0, 0, 30), 'disc'], [F.circle(0, 0, 15), 'hole'], [F.rect(0, 0, 100, 60), 'disc'], [F.rect(10, 10, 40, 25), 'hole']]) {
+        const c = mk(pts, mode);
+        assert.ok(Math.abs(len(c.getLeadInPath().points) - 8) < 1e-6, `In ${mode}: ${len(c.getLeadInPath().points)}`);
+        assert.ok(Math.abs(len(c.getLeadOutPath().points) - 8) < 1e-6, `Out ${mode}: ${len(c.getLeadOutPath().points)}`);
+    }
+    // Echte Engstelle (4 mm breiter Schlitz, Start in Kantenmitte): Lead bleibt auf halbe Kanalbreite gekappt
+    const slot = mk([{ x: 30, y: 0 }, { x: 60, y: 0 }, { x: 60, y: 4 }, { x: 0, y: 4 }, { x: 0, y: 0 }, { x: 30, y: 0 }], 'hole');
+    assert.ok(len(slot.getLeadInPath().points) <= 2.0 + 1e-6, `Schlitz-Lead ${len(slot.getLeadInPath().points)}`);
+});

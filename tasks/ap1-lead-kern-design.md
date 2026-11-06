@@ -92,7 +92,8 @@ Danach AP2 (Katalog) setzt direkt auf `buildFlag()` auf.
 
 - [x] **S1** `lead-geometry.js` + 22 Node-Tests (2026-11-06)
 - [x] **S2** Anbindung `cam-contour.js` V5.25: Builder + Kuerzen ueber Segmente. Golden-Regression (`tests/golden/leads-old.json`, 279 Szenarien aus altem Code, `tests/lead-contour-golden.test.js`) gruen. Overcut noch ohne Segmente (folgt mit S4/S5).
-- [ ] **S3** Renderer · [ ] **S4** Postprozessor · [ ] **S5** Simulator · [ ] **S6** Roundtrip · [ ] **S7** Aufraeumen
+- [x] **S3** Renderer (V3.60): rot/blau, echte Boegen, Pfeile, Warnsymbol, Schnittfugenband + Schalter. Bonus-Fix cam-contour V5.27: `_minSelfClearance` kappte Leads auf Kreisen und fast alle Lead-Outs auf ~0.5 mm. Visuell per Headless-Chromium geprueft.
+- [ ] **S4** Postprozessor · [ ] **S5** Simulator · [ ] **S6** Roundtrip · [ ] **S7** Aufraeumen
 
 ## 7. Befund waehrend S2: Arc-Leads werden nie erzeugt (offen, Entscheidung noetig)
 

@@ -1,5 +1,6 @@
 /**
  * CeraCUT V3.52 - Canvas Renderer
+ * V3.60: Feat — AP1 S3 (Waricam-Stil): Leads aus echten Segmenten (Bogen immer ctx.arc, kein Polylinien-Fallback), Anschnitt rot / Ausschnitt+Ueberschnitt blau, Pfeil in Schneidrichtung, einheitlicher Anschusspunkt, Warnsymbol (!) statt Zustandsfarben, Schnittfuge massstaeblich als Band (showKerfBand, Schalter btn-kerf-band). Typ-Farben/-Dashes/-Labels entfernt.
  * V3.58: Feat — Reihenfolge-Nummern: Anklick-Modus (cutSeq) grün/gedimmt, ausgewählte Schnitte gelb umrandet
  * V3.57: Feat — Fliesennummer gross mittig, Anklick-Modus zeigt Klick-Reihenfolge (app.tileSeq)
  * V3.52: Fix — Konturen auf Nicht-Schnitt-Layern (Konstruktion/Beschriftung, offene Linien auf Fliese) wurden unsichtbar gezeichnet (nur Hatch-Fuellung); jetzt duenne Linie in Layerfarbe
@@ -76,16 +77,11 @@ const CANVAS_THEMES = {
         kerfHovered:    '#ffff00',
         q1: '#22c55e', q2: '#3b82f6', q3: '#eab308', q4: '#f97316', q5: '#ef4444',
         original:       'rgba(255,255,255,0.4)',
-        leadIn:         '#00ff00',
-        leadOut:        '#ff00ff',
-        leadDefault:    '#00FFFF',       // Cyan: Standard-Lead (ungekürzt)
-        leadShortened:  '#FF0000',       // Rot: Gekürzter Lead (Warnung)
-        leadRotated:    '#00FF00',       // Grün: Rotiert (Strategy A)
-        leadAlternative:'#FFFF00',       // Gelb: Dog-Leg / Alternative (Strategy B)
-        leadFallback:   '#FF00FF',       // Magenta: Center-Pierce Fallback
-        leadTypeLinear: '#FFA500',       // V3.48: Orange: Linear-Lead (Normalzustand)
-        leadTypeTangent:'#C77DFF',       // V3.48: Violett: Tangential-Lead (Normalzustand)
-        overcut:        '#00ffff',
+        leadIn:         '#ff3b30',       // V3.60 (Waricam-Stil): Anschnitt rot
+        leadOut:        '#3b82f6',       // Ausschnitt/Ueberschnitt blau
+        leadWarn:       '#ffb000',       // Warnsymbol (gekuerzt/rotiert/Fallback)
+        kerfBand:       '#ffd54a',       // Schnittfugenband
+        overcut:        '#3b82f6',
         microjoint:     '#ff8800',
         travel:         '#888888',
         orderNumber:    '#ffffff',
@@ -117,16 +113,11 @@ const CANVAS_THEMES = {
         kerfHovered:    '#aa8800',
         q1: '#16a34a', q2: '#1d4ed8', q3: '#b45309', q4: '#c2410c', q5: '#dc2626',
         original:       'rgba(0,0,0,0.35)',
-        leadIn:         '#007700',
-        leadOut:        '#880088',
-        leadDefault:    '#008888',
-        leadShortened:  '#CC0000',
-        leadRotated:    '#007700',
-        leadAlternative:'#AA8800',
-        leadFallback:   '#880088',
-        leadTypeLinear: '#CC6600',
-        leadTypeTangent:'#7B3FBF',
-        overcut:        '#006688',
+        leadIn:         '#cc0000',
+        leadOut:        '#0044cc',
+        leadWarn:       '#cc7700',
+        kerfBand:       '#b38600',
+        overcut:        '#0044cc',
         microjoint:     '#cc5500',
         travel:         '#666666',
         orderNumber:    '#ffffff',
@@ -183,6 +174,7 @@ class CanvasRenderer {
         this.app = null;
 
         this.scale = 1.0;
+        this.showKerfBand = true;   // V3.60: Schnittfuge massstaeblich (Schalter btn-kerf-band)
         this.offsetX = 0;
         this.offsetY = 0;
 
@@ -836,7 +828,8 @@ class CanvasRenderer {
         if (!kerfPoints || kerfPoints.length < 3 || !contour.points || contour.points.length < 3) return;
         const side = contour.resolveKerfSide ? contour.resolveKerfSide() : 'left';
         const col = this.getKerfColor(contour);
-        // Band: Flaeche zwischen Original und Kerf-Bahn (even-odd)
+        // Band: Flaeche zwischen Original und Kerf-Bahn (even-odd) — V3.60: entfaellt bei echtem Fugenband
+        if (!this.showKerfBand) {
         ctx.save();
         ctx.globalAlpha = 0.18;
         ctx.fillStyle = col;
@@ -847,6 +840,7 @@ class CanvasRenderer {
         });
         ctx.fill('evenodd');
         ctx.restore();
+        }
         // Pfeile + L/R-Marker auf der Kerf-Bahn
         const pts = kerfPoints, n = pts.length;
         let total = 0;
@@ -1181,11 +1175,16 @@ class CanvasRenderer {
 
             // V3.11: Kerf nur in CAM-Modi anzeigen (nicht im CAD-Zeichenmodus)
             if (kerfPoints && (this.currentMode === 'anschuss' || this.currentMode === 'reihenfolge')) {
-                ctx.globalAlpha = 0.45;
-                ctx.setLineDash([6 / this.scale, 3 / this.scale]);
-                this.drawPath(ctx, kerfPoints, this.getKerfColor(contour), baseWidth * 0.9);
-                ctx.setLineDash([]);
-                ctx.globalAlpha = 1;
+                if (this.showKerfBand && contour.kerfWidth > 0) {
+                    // V3.60: Schnittfuge massstaeblich (Breite = Kerf, zentriert auf der Werkzeugbahn)
+                    this._strokeBand(ctx, kerfPoints, contour.kerfWidth);
+                } else {
+                    ctx.globalAlpha = 0.45;
+                    ctx.setLineDash([6 / this.scale, 3 / this.scale]);
+                    this.drawPath(ctx, kerfPoints, this.getKerfColor(contour), baseWidth * 0.9);
+                    ctx.setLineDash([]);
+                    ctx.globalAlpha = 1;
+                }
                 this._drawKerfSideOverlay(ctx, contour, kerfPoints, baseWidth);
             }
 
@@ -1708,240 +1707,169 @@ class CanvasRenderer {
     // LEAD-IN (IGEMS-Stil: Einfache Linie Pierce → Entry)
     // ════════════════════════════════════════════════════════════════
 
+    // ════════════════════════════════════════════════════════════════
+    // LEADS / ÜBERSCHNITT (V3.60, Waricam-Stil): echte Segmente, Anschnitt rot,
+    // Ausschnitt/Überschnitt blau, Pfeil in Schneidrichtung, Schnittfugenband.
+    // Bögen werden IMMER als ctx.arc() gezeichnet (kein Polylinien-Fallback).
+    // ════════════════════════════════════════════════════════════════
+
+    /** Pfad aus Segmenten (Linie/Bogen) in den aktuellen ctx-Pfad legen. */
+    _traceSegments(ctx, segs) {
+        ctx.beginPath();
+        ctx.moveTo(segs[0].p0.x, segs[0].p0.y);
+        for (const sg of segs) {
+            if (sg.kind === 'arc') {
+                const a0 = Math.atan2(sg.p0.y - sg.center.y, sg.p0.x - sg.center.x);
+                const a1 = sg.ccw ? a0 + sg.span : a0 - sg.span;
+                // ctx.arc(anticlockwise=false) laeuft bei STEIGENDEM Winkel = unser ccw=true
+                ctx.arc(sg.center.x, sg.center.y, sg.radius, a0, a1, !sg.ccw);
+            } else {
+                ctx.lineTo(sg.p1.x, sg.p1.y);
+            }
+        }
+    }
+
+    /** Schnittfugenband (Breite = Kerf in mm, massstaeblich) entlang Punktliste ODER Segmenten. */
+    _strokeBand(ctx, pathOrSegs, kerfWidth) {
+        if (!(kerfWidth > 0) || !pathOrSegs || !pathOrSegs.length) return;
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.setLineDash([]);
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'butt';
+        ctx.strokeStyle = this.colors.kerfBand;
+        ctx.lineWidth = kerfWidth;
+        if (pathOrSegs[0].kind) {
+            this._traceSegments(ctx, pathOrSegs);
+        } else {
+            ctx.beginPath();
+            ctx.moveTo(pathOrSegs[0].x, pathOrSegs[0].y);
+            for (let i = 1; i < pathOrSegs.length; i++) ctx.lineTo(pathOrSegs[i].x, pathOrSegs[i].y);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /** Hinweistext fuer automatisch veraenderte Leads (null = unveraendert). */
+    _leadWarning(lp) {
+        if (!lp) return null;
+        if (lp.isFallbackCenterPierce || lp.isFallbackCenterExit) return 'Center-Pierce (Fallback)';
+        if (lp.shortened) return 'gekuerzt';
+        if (lp.isAlternative) return 'Alternativ-Lead';
+        if (lp.isRotated) return 'Startpunkt rotiert';
+        return null;
+    }
+
+    /** Kleines Warnsymbol (!) neben dem Anschuss-/End-Punkt. */
+    _drawLeadWarning(ctx, point, lp) {
+        if (!point || !this._leadWarning(lp)) return;
+        const r = 5 / this.scale;
+        ctx.save();
+        ctx.translate(point.x + r * 1.6, point.y + r * 1.6);
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fillStyle = this.colors.leadWarn;
+        ctx.fill();
+        ctx.scale(1, -1);   // Y-Flip der Welt fuer Text zuruecknehmen
+        ctx.fillStyle = '#000';
+        ctx.font = `bold ${Math.max(8, 8 / this.scale)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('!', 0, 0);
+        ctx.restore();
+    }
+
+    /** Pfeil am Pfadende in Schneidrichtung. */
+    _drawSegmentArrow(ctx, seg, color) {
+        const t = LeadGeometry.tangentAt(seg, 'end');
+        this.drawSmallArrow(ctx, seg.p1.x, seg.p1.y, Math.atan2(t.y, t.x), color);
+    }
+
     drawLeadIn(ctx, contour, kerfPoints) {
         let leadPath = null;
-        try { leadPath = contour.getLeadInPath?.(); } catch(e) {}
-        if (!leadPath?.points?.length || leadPath.points.length < 1) return;
+        try { leadPath = contour.getLeadInPath?.(); } catch (e) { /* ignore */ }
+        if (!leadPath) return;
 
-        // "On geometry" -> kein sichtbarer Lead
+        // "On geometry" -> kein sichtbarer Lead, nur Anschussmarke
         if (leadPath.type === 'on_geometry') {
-            this.drawPierceSymbol(ctx, leadPath.piercingPoint, this.colors.leadIn, 'on_geometry');
+            if (leadPath.piercingPoint) this.drawPierceSymbol(ctx, leadPath.piercingPoint, this.colors.leadIn, 'on_geometry');
             return;
         }
 
-        const pts = leadPath.points;
-        if (pts.length < 2) return;
-
-        const pierce = pts[0];
-        const color = this._getLeadColor(leadPath, 'in');
+        const segs = leadPath.segments;
+        if (!segs || !segs.length) return;
+        const color = this.colors.leadIn;
         const lw = CanvasRenderer.LINE_WIDTH.LEAD / this.scale;
-        const dash = this._getLeadDash(leadPath.type, lw);
+
+        if (this.showKerfBand) this._strokeBand(ctx, segs, contour.kerfWidth);
 
         ctx.save();
-        ctx.setLineDash(dash);
-        if (leadPath.type === 'arc' && leadPath.arcCenter && leadPath.arcRadius) {
-            this._drawArcLead(ctx, leadPath, color, lw);
-        } else if (pts.length > 2) {
-            this._drawLeadPath(ctx, pts, color, lw);
-        } else {
-            ctx.beginPath();
-            ctx.moveTo(pierce.x, pierce.y);
-            ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
-            ctx.strokeStyle = color;
-            ctx.lineWidth = lw;
-            ctx.stroke();
-        }
+        ctx.setLineDash([]);
+        this._traceSegments(ctx, segs);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lw;
+        ctx.stroke();
         ctx.restore();
 
-        // Pierce-Punkt
-        this.drawPierceSymbol(ctx, pierce, color, 'pierce', leadPath.type);
-
-        // V3.20: Richtungspfeil am Kontureintritt (letzter Punkt)
-        const entryIdx = pts.length - 1;
-        const prevIdx = Math.max(entryIdx - 1, 0);
-        const ax = pts[entryIdx].x, ay = pts[entryIdx].y;
-        const angle = Math.atan2(ay - pts[prevIdx].y, ax - pts[prevIdx].x);
-        this.drawSmallArrow(ctx, ax, ay, angle, color);
+        const pierce = segs[0].p0;
+        this.drawPierceSymbol(ctx, pierce, color, 'pierce');
+        this._drawLeadWarning(ctx, pierce, leadPath);
+        this._drawSegmentArrow(ctx, segs[segs.length - 1], color);
     }
 
-    /** V5.2: Pfad mit Zwischenpunkten zeichnen (für gekürzte Arc-Leads Fallback) */
-    _drawLeadPath(ctx, pts, color, lineWidth) {
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) {
-            ctx.lineTo(pts[i].x, pts[i].y);
-        }
+    drawLeadOut(ctx, contour, kerfPoints) {
+        let leadPath = null;
+        try { leadPath = contour.getLeadOutPath?.(); } catch (e) { /* ignore */ }
+        const segs = leadPath?.segments;
+        if (!segs || !segs.length) return;
+        const color = this.colors.leadOut;
+        const lw = CanvasRenderer.LINE_WIDTH.LEAD / this.scale;
+
+        if (this.showKerfBand) this._strokeBand(ctx, segs, contour.kerfWidth);
+
+        ctx.save();
+        ctx.setLineDash([]);
+        this._traceSegments(ctx, segs);
         ctx.strokeStyle = color;
-        ctx.lineWidth = lineWidth;
+        ctx.lineWidth = lw;
         ctx.stroke();
+        ctx.restore();
+
+        const end = segs[segs.length - 1].p1;
+        this.drawPierceSymbol(ctx, end, color, 'exit');
+        this._drawLeadWarning(ctx, end, leadPath);
+        this._drawSegmentArrow(ctx, segs[segs.length - 1], color);
     }
 
-    /**
-     * V3.19: Echte ctx.arc() Darstellung für Arc-Leads
-     * Nutzt arcStartAngle/arcEndAngle direkt aus leadPath-Metadaten
-     * Zeichnet: optionale Gerade (Pierce → Bogenstart) + Canvas-Bogen
-     * Bei gekürzten Leads: Fallback auf Polylinien-Rendering (gekürzte Metadaten)
-     */
-    _drawArcLead(ctx, leadPath, color, lineWidth) {
-        const { arcCenter, arcRadius, arcSweepCCW, arcStartAngle, arcEndAngle, points, hasLinePortion } = leadPath;
-        if (!arcCenter || !arcRadius || !points || points.length < 2) return;
-
-        ctx.strokeStyle = color;
-        ctx.lineWidth = lineWidth;
-
-        // Gekürzte Arc-Leads: Polylinien-Fallback (Arc-Metadaten passen nicht mehr zu gekürzten Punkten)
-        if (leadPath.shortened) {
-            this._drawLeadPath(ctx, points, color, lineWidth);
-            return;
-        }
-
-        // Gerade Portion: Pierce-Punkt → Bogenstart (wenn Lead länger als Bogenlänge)
-        if (hasLinePortion && points.length > 2) {
-            const arcStartPt = { x: arcCenter.x + arcRadius * Math.cos(arcStartAngle), y: arcCenter.y + arcRadius * Math.sin(arcStartAngle) };
-            ctx.beginPath();
-            ctx.moveTo(points[0].x, points[0].y);
-            ctx.lineTo(arcStartPt.x, arcStartPt.y);
-            ctx.stroke();
-        }
-
-        // Bogen mit echtem ctx.arc()
-        const sAngle = (arcStartAngle !== undefined) ? arcStartAngle
-            : Math.atan2(points[0].y - arcCenter.y, points[0].x - arcCenter.x);
-        const eAngle = (arcEndAngle !== undefined) ? arcEndAngle
-            : Math.atan2(points[points.length - 1].y - arcCenter.y, points[points.length - 1].x - arcCenter.x);
-
-        // V3.40 Fix: canvas arc() "anticlockwise" sweept bei steigendem Winkel auf FALSE,
-        // unser arcSweepCCW meint aber "Welt-CCW = steigender Winkel" — ungeflippt wurde
-        // der 270°-Major-Arc statt des 90°-Minor-Arc gezeichnet (Vollkreis-Schleife am Eck).
-        ctx.beginPath();
-        ctx.arc(arcCenter.x, arcCenter.y, arcRadius, sAngle, eAngle, !arcSweepCCW);
-        ctx.stroke();
-    }
-
-    /** V5.2: Pierce-Symbol — ⊕ (Kreis + Kreuz) statt einfachem Punkt */
-    drawPierceSymbol(ctx, point, color, type = 'pierce', leadType = null) {
+    /** Anschuss-/Endmarke: kleiner einheitlicher Punkt (on_geometry: zusaetzlich Kreuz). */
+    drawPierceSymbol(ctx, point, color, type = 'pierce') {
         if (!point) return;
         const size = CanvasRenderer.MARKER_SIZE.PIERCE_POINT / this.scale;
-        const crossSize = size * 1.4;
-
-        // V3.48: Form nach Lead-Typ — Arc=Kreis, Linear=Quadrat, Tangential=Raute
         ctx.beginPath();
-        if (leadType === 'linear') {
-            ctx.rect(point.x - size, point.y - size, size * 2, size * 2);
-        } else if (leadType === 'tangent') {
-            const d = size * 1.35;
-            ctx.moveTo(point.x, point.y - d);
-            ctx.lineTo(point.x + d, point.y);
-            ctx.lineTo(point.x, point.y + d);
-            ctx.lineTo(point.x - d, point.y);
-            ctx.closePath();
-        } else {
-            ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
-        }
+        ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
         ctx.fillStyle = color;
         ctx.fill();
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 0.5 / this.scale;
         ctx.stroke();
-
-        // Kreuz (⊕) — immer zeichnen für bessere Sichtbarkeit
-        ctx.beginPath();
-        ctx.moveTo(point.x - crossSize, point.y);
-        ctx.lineTo(point.x + crossSize, point.y);
-        ctx.moveTo(point.x, point.y - crossSize);
-        ctx.lineTo(point.x, point.y + crossSize);
-        ctx.strokeStyle = type === 'on_geometry' ? '#000' : color;
-        ctx.lineWidth = 0.8 / this.scale;
-        ctx.stroke();
-    }
-
-    /**
-     * V4.8: Lead-Farbe nach Zustand — visuelle Differenzierung
-     * Priorität: Fallback > Shortened > Alternative > Rotated > Default
-     */
-    _getLeadColor(leadPath, direction) {
-        if (!leadPath) return direction === 'in' ? this.colors.leadIn : this.colors.leadOut;
-        if (leadPath.isFallbackCenterPierce || leadPath.isFallbackCenterExit) return this.colors.leadFallback;
-        if (leadPath.shortened)              return this.colors.leadShortened;
-        if (leadPath.isAlternative)          return this.colors.leadAlternative;
-        if (leadPath.isRotated)              return this.colors.leadRotated;
-        // V3.48: Normalzustand nach Lead-Typ einfaerben (Arc=Cyan, Linear=Orange, Tangential=Violett)
-        if (leadPath.type === 'linear')      return this.colors.leadTypeLinear;
-        if (leadPath.type === 'tangent')     return this.colors.leadTypeTangent;
-        return this.colors.leadDefault;
-    }
-
-    /** Dash-Pattern je Lead-Typ (skaliert auf Linewidth) */
-    _getLeadDash(type, lw) {
-        const s = Math.max(lw * 3, 2 / this.scale);
-        switch (type) {
-            case 'arc':      return [];                                    // durchgezogen ———
-            case 'linear':   return [s * 3, s * 2];                       // gestrichelt ▬  ▬  ▬ (breitere Lücken)
-            case 'tangent':  return [s * 2, s * 0.6, s * 0.5, s * 0.6];  // strichpunkt ▬·▬·
-            case 'dog_leg':  return [s, s * 0.5];                         // kurz gestrichelt ▪ ▪ ▪
-            default:         return [];
-        }
-    }
-
-    /** Kurzlabel pro Lead-Typ */
-    _getLeadTypeLabel(type) {
-        switch (type) {
-            case 'arc':     return 'A';
-            case 'linear':  return 'L';
-            case 'tangent': return 'T';
-            case 'dog_leg': return 'DL';
-            default:        return '';
-        }
-    }
-
-    /** Typ-Label neben dem Pierce-Punkt zeichnen */
-    _drawLeadTypeLabel(ctx, point, label, color) {
-        if (!label || !point) return;
-        const fontSize = Math.max(10, 12 / this.scale);
-        ctx.save();
-        // Canvas hat Y-Flip → temporär zurückdrehen für Text
-        ctx.translate(point.x, point.y);
-        ctx.scale(1, -1);
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        ctx.fillStyle = color;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(label, fontSize * 0.8, -fontSize * 0.3);
-        ctx.restore();
-    }
-
-    // ════════════════════════════════════════════════════════════════
-    // LEAD-OUT (IGEMS-Stil: Einfache Linie Exit → End)
-    // ════════════════════════════════════════════════════════════════
-
-    drawLeadOut(ctx, contour, kerfPoints) {
-        let leadPath = null;
-        try { leadPath = contour.getLeadOutPath?.(); } catch(e) {}
-        if (!leadPath?.points?.length || leadPath.points.length < 2) return;
-
-        const pts = leadPath.points;
-        const color = this._getLeadColor(leadPath, 'out');
-        const lw = CanvasRenderer.LINE_WIDTH.LEAD / this.scale;
-        const dash = this._getLeadDash(leadPath.type, lw);
-
-        ctx.save();
-        ctx.setLineDash(dash);
-        if (leadPath.type === 'arc' && leadPath.arcCenter && leadPath.arcRadius) {
-            this._drawArcLead(ctx, leadPath, color, lw);
-        } else if (pts.length > 2) {
-            this._drawLeadPath(ctx, pts, color, lw);
-        } else {
+        if (type === 'on_geometry') {
+            const c = size * 1.6;
             ctx.beginPath();
-            ctx.moveTo(pts[0].x, pts[0].y);
-            ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+            ctx.moveTo(point.x - c, point.y); ctx.lineTo(point.x + c, point.y);
+            ctx.moveTo(point.x, point.y - c); ctx.lineTo(point.x, point.y + c);
             ctx.strokeStyle = color;
-            ctx.lineWidth = lw;
+            ctx.lineWidth = 0.8 / this.scale;
             ctx.stroke();
         }
-        ctx.restore();
-
-        // End-Punkt
-        this.drawPierceSymbol(ctx, pts[pts.length - 1], color, 'exit', leadPath.type);
     }
 
     // ════════════════════════════════════════════════════════════════
-    // OVERCUT (entlang Kontur / Slit: rückwärts)
+    // OVERCUT (entlang Kontur / Slit: rückwärts) — massstaeblich, blau, mit Pfeil
     // ════════════════════════════════════════════════════════════════
 
     drawOvercut(ctx, contour, kerfPoints) {
         let overcutPath = null;
-        try { overcutPath = contour.getOvercutPath?.(); } catch(e) {}
-
+        try { overcutPath = contour.getOvercutPath?.(); } catch (e) { /* ignore */ }
         if (!overcutPath) return;
 
         if (overcutPath.type === 'negative') {
@@ -1952,7 +1880,7 @@ class CanvasRenderer {
                 ctx.beginPath();
                 ctx.moveTo(p.x - s, p.y - s); ctx.lineTo(p.x + s, p.y + s);
                 ctx.moveTo(p.x + s, p.y - s); ctx.lineTo(p.x - s, p.y + s);
-                ctx.strokeStyle = '#ff4444';
+                ctx.strokeStyle = this.colors.leadIn;
                 ctx.lineWidth = 1.5 / this.scale;
                 ctx.stroke();
             }
@@ -1962,22 +1890,21 @@ class CanvasRenderer {
         const pts = overcutPath.points;
         if (!pts || pts.length < 2) return;
 
-        // Overcut-Linie
+        if (this.showKerfBand) this._strokeBand(ctx, pts, contour.kerfWidth);
+
+        ctx.save();
+        ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) {
-            ctx.lineTo(pts[i].x, pts[i].y);
-        }
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
         ctx.strokeStyle = this.colors.overcut;
         ctx.lineWidth = CanvasRenderer.LINE_WIDTH.OVERCUT / this.scale;
         ctx.stroke();
+        ctx.restore();
 
-        // Pfeil am Overcut-Ende
-        if (pts.length >= 2) {
-            const last = pts[pts.length - 1];
-            const prev = pts[pts.length - 2];
-            this.drawOvercutArrow(ctx, last.x, last.y, Math.atan2(last.y - prev.y, last.x - prev.x));
-        }
+        const last = pts[pts.length - 1];
+        const prev = pts[pts.length - 2];
+        this.drawOvercutArrow(ctx, last.x, last.y, Math.atan2(last.y - prev.y, last.x - prev.x));
     }
 
     drawOvercutArrow(ctx, x, y, angle) {
