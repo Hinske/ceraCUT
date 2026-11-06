@@ -66,13 +66,13 @@ const LEADS = {
     long:         { leadInLength: 30, leadOutLength: 30, leadInRadius: 8, leadOutRadius: 8 },
 };
 
-function buildScenarios() {
+function buildScenarios(kerfWidth = 0.8) {
     const out = [];
     for (const [sn, s] of Object.entries(SHAPES)) {
         for (const [ln, l] of Object.entries(LEADS)) {
             out.push({
                 name: `${sn}/${ln}`,
-                make: () => new CamContour(s.pts.map(p => ({ ...p })), { name: `${sn}/${ln}`, cuttingMode: s.mode, kerfWidth: 0.8, isClosed: true, ...l })
+                make: () => new CamContour(s.pts.map(p => ({ ...p })), { name: `${sn}/${ln}`, cuttingMode: s.mode, kerfWidth, isClosed: true, ...l })
             });
         }
     }
@@ -80,11 +80,11 @@ function buildScenarios() {
 }
 
 /** Zwei dicht benachbarte Konturen -> checkMultiContourCollision (Rotieren/Dog-Leg/Kuerzen) */
-function buildMultiScenarios() {
+function buildMultiScenarios(kerfWidth = 0.8) {
     const mk = (gap, extra = {}) => () => {
-        const a = new CamContour(rect(0, 0, 30, 30), { name: 'A', cuttingMode: 'disc', kerfWidth: 0.8, isClosed: true, leadInLength: 6, leadOutLength: 6, ...extra });
-        const b = new CamContour(rect(30 + gap, 0, 30, 30), { name: 'B', cuttingMode: 'disc', kerfWidth: 0.8, isClosed: true, leadInLength: 6, leadOutLength: 6, ...extra });
-        const c = new CamContour(rect(0, 30 + gap, 30, 30), { name: 'C', cuttingMode: 'disc', kerfWidth: 0.8, isClosed: true, leadInLength: 6, leadOutLength: 6, ...extra });
+        const a = new CamContour(rect(0, 0, 30, 30), { name: 'A', cuttingMode: 'disc', kerfWidth, isClosed: true, leadInLength: 6, leadOutLength: 6, ...extra });
+        const b = new CamContour(rect(30 + gap, 0, 30, 30), { name: 'B', cuttingMode: 'disc', kerfWidth, isClosed: true, leadInLength: 6, leadOutLength: 6, ...extra });
+        const c = new CamContour(rect(0, 30 + gap, 30, 30), { name: 'C', cuttingMode: 'disc', kerfWidth, isClosed: true, leadInLength: 6, leadOutLength: 6, ...extra });
         return [a, b, c];
     };
     return [{ name: 'multi/gap1', make: mk(1) }, { name: 'multi/gap3', make: mk(3) }, { name: 'multi/gap8', make: mk(8) },

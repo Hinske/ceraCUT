@@ -213,7 +213,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Lead Profiles** | `lead-profiles.js` | **V1.1** | 8 Built-in Profile (inkl. Intarsien), Benutzerdefiniert (localStorage), Batch-Engine (disc/hole/smallHole/slit) |
 | **CeraJet Engine** | `cerajet-engine.js` | — | Technologie-Engine (Piercing, Speed-Ramping) |
 | **Renderer** | `canvas-renderer.js` | **V3.60** | Canvas-Rendering, Hit-Testing (Kante+Fläche), Arc-Leads, DPR-Fix, Grip-Editing, Window-Selection-Rect, Lead-Differenzierung, Trackpad-Navigation, Disc-Füllung (nur CAM-Modi), Intarsien-Overlay (Multi-Material), Entry-Pfeil, Hatch-Entity-Rendering, Hatch-Live-Preview, Locked-Layer-Guard, Cycle-Selection (findAllContoursAtPoint) |
-| **Postprozessor** | `sinumerik-postprocessor.js` | **V2.7** | Sinumerik 840D MPF, 3-in-1, G41/G42, Piercing-Types, Multi-Head, Machine-Profile, Safety-Guards, Hatch-Filter |
+| **Postprozessor** | `sinumerik-postprocessor.js` | **V2.8** | Sinumerik 840D MPF, 3-in-1, G41/G42, Piercing-Types, Multi-Head, Machine-Profile, Safety-Guards, Hatch-Filter |
 | **UndoManager** | `undo-manager.js` | **V1.4** | Command Pattern, Undo/Redo, Clipboard, WizardStepUndo |
 | **Arc-Fitting** | `arc-fitting.js` | **V3.4** | Polylinie → G02/G03 Bogen (fur PP-Ausgabe) |
 | **Pipeline** | `ceracut-pipeline.js` | **V3.11** | Topologie (disc/hole/reference/slit/none), Kerf-Offset, interiorPoint-basierte Nesting-Erkennung, Validation Engine (Pre-Export), Hatch-Konturen ausgeschlossen |
@@ -297,7 +297,7 @@ ceraCUT/
 │   ├── canvas-renderer.js             ← Canvas Rendering V3.60 (Flächen-Hit, Disc-Fill Fix, Cycle-Selection)
 │   ├── arc-fitting.js                 ← Arc Fitting V3.4
 │   ├── undo-manager.js               ← Undo/Redo + Clipboard V1.4 (WizardStepUndo)
-│   ├── sinumerik-postprocessor.js     ← Sinumerik PP V2.7 (Safety-Guards, Hatch-Filter)
+│   ├── sinumerik-postprocessor.js     ← Sinumerik PP V2.8 (Safety-Guards, Hatch-Filter)
 │   ├── command-line.js                ← Command-Line UI V1.6 (History, Validation-Feedback)
 │   ├── dynamic-input.js              ← Dynamic Input HUD V1.1
 │   ├── snap-manager.js               ← Snap-System V1.9
@@ -528,7 +528,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   cam-contour: V5.27 (20261106-clearfix)
   canvas-renderer: V3.60 (20261106-leadview)
   undo-manager: V1.4 (20261104-reviewfix)
-  sinumerik-pp: V2.7 (20261106-kerfside)
+  sinumerik-pp: V2.8 (20261106-leadseg)
   command-line: V1.6 (20261104-reviewfix)
   snap-manager: V1.9 (20261105-acmarker)
   geometry-ops: V2.7 (20261104-reviewfix)

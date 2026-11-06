@@ -1,5 +1,8 @@
 /**
- * CeraCUT Sinumerik 840D Postprozessor V2.6
+ * CeraCUT Sinumerik 840D Postprozessor V2.8
+ * V2.8: AP1 S4 — Lead-In/-Out kommen 1:1 aus den Lead-Segmenten (lead-geometry.js): G01/G02/G03 identisch zur
+ *       Darstellung, auch gekuerzte Boegen bleiben exakte Boegen (kein Refitting mehr, _processArcLeadExact entfernt).
+ *       Fix: negativer Ueberschnitt kuerzt jetzt die gefahrene Kontur (vorher volle Kontur, Lead-Out am gekuerzten Ende).
  *
  * Erzeugt CNC-Code im MPF-Format für Sinumerik 840D Steuerungen.
  * Format-Vorlage: 7 echte CNC-Referenzdateien (KERNKREIS, ERBEN, SCHWEDEN, etc.)
@@ -62,7 +65,7 @@
 
 class SinumerikPostprocessor {
 
-    static VERSION = '2.6';
+    static VERSION = '2.8';
 
     constructor(options = {}) {
         // ═══ Formatierung ═══
@@ -554,8 +557,14 @@ class SinumerikPostprocessor {
             ? BridgeCutting.getBridgedPath(contour)
             : null;
 
+        // V2.8: Negativer Ueberschnitt (Kontur bleibt offen): Geometrie endet shortenBy frueher —
+        // vorher wurde die volle Kontur gefahren, waehrend der Lead-Out am gekuerzten Ende ansetzte.
+        const _ocNeg = contour.getOvercutPath?.();
+        const contourPts = (_ocNeg?.type === 'negative' && _ocNeg.shortenBy > 0)
+            ? this._truncateFromEnd(pts, _ocNeg.shortenBy) : pts;
+
         if (!bridgeSegs || bridgeSegs.length <= 1) {
-            const contourSegments = this._processContourPoints(pts, minArcR);
+            const contourSegments = this._processContourPoints(contourPts, minArcR);
             for (let i = 0; i < contourSegments.length; i++) {
                 const seg = contourSegments[i];
                 const feedSuffix = (i === 0) ? ` F=${contourFeedParam}` : '';
@@ -777,68 +786,54 @@ class SinumerikPostprocessor {
     // ARC-FITTING & SEGMENT-VERARBEITUNG
     // ════════════════════════════════════════════════════════════════
 
-    /**
-     * Verarbeitet Lead-In/Out-Pfade zu G-Code-Segmenten.
-     */
-    _processLeadPath(leadPath) {
-        if (!leadPath?.points || leadPath.points.length < 2) return [];
-
-        // V5.12: Bei unveraendertem Arc-Lead die exakten Geometrie-Metadaten
-        // (arcCenter/arcRadius/arcSweepCCW aus cam-contour.js) direkt fuer G02/G03
-        // verwenden — wie der Renderer. Vermeidet Diskrepanz zwischen Vorschau und
-        // Maschinencode an der Linie→Bogen-Nahtstelle, die ein erneutes Fitten der
-        // 12-Punkte-Tessellierung (ArcFitting.fitPolyline) erzeugen kann.
-        // Gekuerzte/alternative/dog_leg-Leads haben diese Metadaten nicht mehr
-        // konsistent zur Punktliste und fallen daher weiter auf das Refitting zurueck.
-        if (leadPath.type === 'arc' && !leadPath.shortened && leadPath.arcCenter
-            && typeof leadPath.arcRadius === 'number' && leadPath.arcRadius > 1e-6
-            && Number.isFinite(leadPath.arcCenter.x) && Number.isFinite(leadPath.arcCenter.y)) {
-            return this._processArcLeadExact(leadPath);
+    /** V2.8: Polylinie um `dist` mm am Ende kuerzen (Schnittpunkt wird Endpunkt). */
+    _truncateFromEnd(pts, dist) {
+        if (!pts || pts.length < 2 || !(dist > 0)) return pts;
+        let rem = dist;
+        for (let i = pts.length - 1; i > 0; i--) {
+            const a = pts[i - 1], b = pts[i];
+            const len = Math.hypot(b.x - a.x, b.y - a.y);
+            if (len < 1e-9) continue;
+            if (rem < len) {
+                const t = rem / len;
+                return [...pts.slice(0, i), { x: b.x + (a.x - b.x) * t, y: b.y + (a.y - b.y) * t }];
+            }
+            rem -= len;
         }
-
-        return this._processContourPoints(leadPath.points);
+        return pts;
     }
 
     /**
-     * V5.12: Erzeugt G-Code-Segmente direkt aus den exakten Arc-Lead-Metadaten
-     * statt aus der Tessellierung zu refitten. Pendant zum Renderer (ctx.arc()).
+     * Verarbeitet Lead-In/Out-Pfade zu G-Code-Segmenten.
+     *
+     * V2.8 (AP1 S4): Leads liefern echte Segmente (lead-geometry.js, `leadPath.segments`).
+     * G01/G02/G03 entstehen 1:1 daraus — identisch zur Darstellung im Renderer, kein erneutes
+     * Fitten einer Tessellierung, auch gekuerzte Boegen bleiben exakte G02/G03.
+     * Nur Leads ohne Segmente (Alt-Daten) fallen auf Punkt-Verarbeitung zurueck.
      */
-    _processArcLeadExact(leadPath) {
-        const pts = leadPath.points;
-        if (!pts || pts.length < 2) return this._processContourPoints(pts);
-        const center = leadPath.arcCenter;
-        const clockwise = !leadPath.arcSweepCCW;
-        if (leadPath.hasLinePortion && pts.length < 3) return this._processContourPoints(pts);
-        const isLeadIn = leadPath.entryPoint !== undefined;
-        const segs = [];
-
-        if (isLeadIn) {
-            // Lead-In: [optional pierce], arcStart, ...tessellation..., entry(letzter Punkt)
-            const arcStart = leadPath.hasLinePortion ? pts[1] : pts[0];
-            const entry = pts[pts.length - 1];
-            if (leadPath.hasLinePortion) {
-                segs.push({ type: 'line', x: arcStart.x, y: arcStart.y });
+    _processLeadPath(leadPath) {
+        const segs = leadPath?.segments;
+        if (Array.isArray(segs) && segs.length) {
+            const MIN_SEG = 0.005;   // wie _processContourPoints: Nullweg-Saetze vermeiden (G41/G42)
+            const out = [];
+            for (const sg of segs) {
+                const len = sg.kind === 'arc' ? sg.radius * sg.span : Math.hypot(sg.p1.x - sg.p0.x, sg.p1.y - sg.p0.y);
+                if (!(len >= MIN_SEG)) continue;
+                if (sg.kind === 'arc') {
+                    // I/J inkrementell: Mittelpunkt relativ zum Bogenstart. ccw (Welt, steigender Winkel) = G03.
+                    out.push({
+                        type: 'arc', x: sg.p1.x, y: sg.p1.y,
+                        i: sg.center.x - sg.p0.x, j: sg.center.y - sg.p0.y,
+                        clockwise: !sg.ccw
+                    });
+                } else {
+                    out.push({ type: 'line', x: sg.p1.x, y: sg.p1.y });
+                }
             }
-            segs.push({
-                type: 'arc', x: entry.x, y: entry.y,
-                i: center.x - arcStart.x, j: center.y - arcStart.y,
-                clockwise
-            });
-        } else {
-            // Lead-Out: exit(erster Punkt), ...tessellation..., [optional endPoint]
-            const exit = pts[0];
-            const arcEnd = leadPath.hasLinePortion ? pts[pts.length - 2] : pts[pts.length - 1];
-            segs.push({
-                type: 'arc', x: arcEnd.x, y: arcEnd.y,
-                i: center.x - exit.x, j: center.y - exit.y,
-                clockwise
-            });
-            if (leadPath.hasLinePortion) {
-                const end = pts[pts.length - 1];
-                segs.push({ type: 'line', x: end.x, y: end.y });
-            }
+            return out;
         }
-        return segs;
+        if (!leadPath?.points || leadPath.points.length < 2) return [];
+        return this._processContourPoints(leadPath.points);
     }
 
     /**

@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'e20874a',
+        hash: 'aae1360',
         date: '2026-11-06',
-        message: 'feat: AP1 S3 Lead-Darstellung Waricam-Stil (Renderer V3.60), Schnittfugenband; f'
+        message: 'feat: AP1 S4 Postprozessor liest Lead-Segmente (V2.8), Roundtrip-Tests, negative'
     },
 
     modules: {
@@ -27,7 +27,7 @@ const CERACUT_BUILD = {
         'cam-contour':        { version: '5.27', build: '20261106-clearfix' },
         'canvas-renderer':    { version: '3.60', build: '20261106-leadview' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
-        'sinumerik-pp':       { version: '2.7', build: '20261106-kerfside' },
+        'sinumerik-pp':       { version: '2.8', build: '20261106-leadseg' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
         'snap-manager':       { version: '1.9', build: '20261105-acmarker' },
         'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.05: Feat — AP1 S4 Postprozessor (sinumerik-pp V2.8): Leads kommen 1:1 aus den Lead-Segmenten (G01/G02/G03 identisch zur Darstellung, gekuerzte Boegen bleiben exakte Boegen). Fix: negativer Ueberschnitt kuerzt jetzt die gefahrene Kontur (vorher volle Kontur). Roundtrip-Test G-Code == Zeichnung (273 Szenarien, 165 Boegen). BEFUND offen: Leads liegen auf Kerf-Offset-Bahn, Kontur im G-Code auf Teilegeometrie -> Sprung kerf/2 zwischen Lead-Ende und Konturstart (Entscheidung noetig).',
         'V7.04: Feat — AP1 S3 Lead-Darstellung im Waricam-Stil (canvas-renderer V3.60): Leads aus echten Segmenten (Bogen immer ctx.arc), Anschnitt rot, Ausschnitt/Ueberschnitt blau, Pfeile in Schneidrichtung, einheitlicher Anschusspunkt, Warnsymbol (!) statt Zustandsfarben, Schnittfuge massstaeblich als Band (Schalter Fuge An/Aus, app V6.61). Fix (cam-contour V5.27): _minSelfClearance() hielt eigene Kruemmung/Ecken fuer Kanalwaende — Leads wurden auf Kreisen und fast alle Lead-Outs (auch an Rechteckecken) auf ~0.5 mm gekappt; jetzt voller konfigurierter Lead, echte Engstellen bleiben gekappt. Visuell per Headless-Chromium geprueft.',
         'V7.03: Fix — _isAtCorner() (cam-contour V5.26) rechnete mit Supplementwinkel (gerade=175 Grad): Arc-Leads wurden im Default nie erzeugt. Jetzt Drehwinkel; Arc-Leads erscheinen auf glatten Konturen/Kantenmitten wieder, Ecken weiter linear. Golden neu erfasst (nur Kreis-Szenarien aendern sich: linear/tangent -> arc)',
         'V7.02: Refactor — AP1 S2 Lead-Kern angebunden: cam-contour V5.25 baut Leads ueber lead-geometry (segments), Kuerzen trimmt Boegen als Boegen. Golden-Regressionstest (279 Szenarien + Multi-Kontur) bestaetigt unveraendertes Verhalten. BEFUND (noch nicht behoben): _isAtCorner() liefert fuer fast jede Stelle >60 Grad -> Arc-Leads werden im Default IMMER zu linear degradiert (cam-contour V5.25)',
