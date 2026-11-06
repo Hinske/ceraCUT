@@ -123,3 +123,15 @@ Quelle: `/mnt/cnc/HEIDE6000101587.CNC` (= Kopie in `Sonstiges/Screenshots/Warica
 - Kontur 2/4 (offene Kontur mit R25-Boegen): Lead-In 2,85 mm linear, Schnitt, Ende per `L205` + `G91 G40 G01 X1.0 Y0.0` + `G90` (wie unser Slit-Pfad).
 - Stuecktyp: pro Kontur `R957`, `R923=9`, `L201`, `VAKT=R940+0.45*(R938-R940)` und `FLIN H1/H0` — entspricht dem, was unser PP bereits erzeugt.
 - Folgerung: Lead-Basis fuer den G-Code = **Geometrie**, nicht Kerf-Offset. Offene Entscheidung zur Umsetzung siehe Abschnitt 8.
+
+### 8.2 Umsetzung S4b (2026-11-06, cam-contour V5.28 / canvas-renderer V3.61 / lead-geometry V1.1)
+
+- Leads und Ueberschnitt werden auf der **Teilegeometrie** berechnet (`_leadBasisPts()`); der G-Code endet den Lead-In exakt auf dem Konturstart (Rechteck: `G42 G01 X0.000 Y0.000`, Ueberschnitt 3 mm `G01 X3.000 Y0.000`, Lead-Out `G40 G01 X3.000 Y-3.000`).
+- Anzeige: Leads/Ueberschnitt/Startmarke auf der Geometrie (wie Waricam), Fugenband entlang der **realen Strahlmitte** (`getLeadInToolSegments`, `getLeadOutToolSegments`, `overcut.toolPoints`): Anfahrsatz unkompensiert -> kompensierte Bahn, Rest um kerf/2 versetzt (Bogenradius -/+ kerf/2), G40-Satz endet unkompensiert.
+- Abstaende vorher implizit durch die Offset-Bahn, jetzt explizit: Nachbar-Margin + Fugenbreite, Engstellen-Kappung (Abstand - Fugenbreite)/2.
+- Abnahme: `tests/waricam-reference.test.js` (Langloch aus `Heide6000101587.dxf`, Waricam: Lead-In 3 mm senkrecht, Ueberschnitt 3 mm, Lead-Out 1 mm senkrecht, G41/G40) und `tests/pp-leads.test.js` (Roundtrip G-Code == Zeichnung mit kerf 0.8, 273 Szenarien).
+- Die Waricam-Referenz zeigt: Lead-In ist **90 Grad** (senkrecht), nicht 45 Grad — in der Auswertung 8.1 stand irrtuemlich 45 Grad (Weltrichtung).
+
+**Offen / Folgethemen (ausserhalb S4b):**
+- G-Code-Kontur entsteht aus **tesselliertem DXF + Arc-Fitting**: gerade Kanten werden teils als Riesenbogen (z. B. R134) ausgegeben und der Konturstart rastet auf einen Tessellierungspunkt ein (Waricam: exakte G01/G03 aus den DXF-Elementen). Praktisch innerhalb 0,01 mm, aber unsauber -> eigenes Paket "Entity-erhaltender G-Code".
+- Der Simulator (S5) liest weiterhin die Punkte der Leads, noch nicht die Segmente.
