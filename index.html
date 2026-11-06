@@ -656,9 +656,14 @@
                             <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
                         </div>
                         <span class="ribbon-field-label">°</span>
-                        <input type="checkbox" id="prefer-corners" checked>
-                        <label for="prefer-corners" class="ribbon-cb-label lead-tip"
-                               data-tip="Startpunkt bevorzugt an Kontur-Ecken setzen">Ecken</label>
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Bogenwinkel&#10;Länge des Anfahrbogens (nur Typ Arc): 90° = Viertelkreis, 270° = 3/4-Kreis">⌒:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="lead-arc-angle" value="90" step="15" min="30" max="270" style="width:30px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
+                        <span class="ribbon-field-label">°</span>
                     </div>
                 </div>
                 <!-- ▼ Ausfahrt-Spalte (orange) -->
@@ -797,6 +802,14 @@
                             <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
                         </div>
                         <span class="ribbon-field-label">°</span>
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Bogenwinkel (Innen, nur Typ Arc): 90° = Viertelkreis, 270° = 3/4-Kreis">⌒:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="int-lead-arc-angle" value="90" step="15" min="30" max="270" style="width:30px" disabled>
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
+                        <span class="ribbon-field-label">°</span>
                     </div>
                     <div class="ribbon-inline-row int-lead-field">
                         <span class="ribbon-field-label lead-tip lead-col-out"
@@ -822,6 +835,51 @@
                 </div>
             </div>
             <div class="ribbon-group-label">Innen-Lead</div>
+        </div>
+
+        <!-- ═══ Ecken-Lead (AP2: Anfahrt an Ecken — Form · Winkel · ab Eckwinkel) ═══ -->
+        <div class="ribbon-group lead-group lead-adv">
+            <div class="ribbon-group-content">
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row">
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Ecken-Lead&#10;Anfahrtform, wenn der Startpunkt an einer Ecke liegt">Ecke:</span>
+                        <select class="ribbon-select" id="corner-lead-type" style="width:70px">
+                            <option value="linear" selected>╱ Linear</option>
+                            <option value="tangent">↗ Tang.</option>
+                            <option value="arc">⌒ Arc</option>
+                        </select>
+                    </div>
+                    <div class="ribbon-inline-row">
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Ecken-Anfahrwinkel&#10;0° = entlang der Kante, 90° = senkrecht">∠:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="corner-lead-angle" value="0" step="5" min="0" max="90" style="width:30px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
+                        <span class="ribbon-field-label">°</span>
+                    </div>
+                    <div class="ribbon-inline-row">
+                        <span class="ribbon-field-label lead-tip lead-col-in"
+                              data-tip="Der Ecken-Lead gilt ab diesem Eckwinkel (Standard 60°)">ab:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="corner-degrade" value="60" step="5" min="10" max="170" style="width:30px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
+                        <span class="ribbon-field-label">°</span>
+                    </div>
+                </div>
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row">
+                        <input type="checkbox" id="prefer-corners" checked>
+                        <label for="prefer-corners" class="ribbon-cb-label lead-tip"
+                               data-tip="Startpunkt bevorzugt an Kontur-Ecken setzen">Start an Ecke</label>
+                    </div>
+                </div>
+            </div>
+            <div class="ribbon-group-label">Ecken-Lead</div>
         </div>
 
         <!-- ═══ Flächenklassen-Popup (B.3) ═══ -->
@@ -1700,8 +1758,8 @@
 <script src="js/arc-fitting.js?v=20261105-meander"></script>
 <script src="js/dxf-parser.js?v=20261106-fliese4"></script>
 <script src="js/lead-geometry.js?v=20261106-toolpath"></script>
-<script src="js/cam-contour.js?v=20261106-s7clean"></script>
-<script src="js/lead-profiles.js?v=20260625-cornerleadslot"></script>
+<script src="js/cam-contour.js?v=20261106-arcangle"></script>
+<script src="js/lead-profiles.js?v=20261106-arcangle"></script>
 <script src="js/cerajet-engine.js?v=20261104-reviewfix"></script>
 <script src="js/ceracut-pipeline.js?v=20261106-fliese4"></script>
 <script src="js/canvas-renderer.js?v=20261106-geombasis"></script>
@@ -1741,7 +1799,7 @@
 <script src="js/quality-zones.js?v=20261104-reviewfix"></script>
 <script src="js/project-manager.js?v=20261104-pushexecuted"></script>
 <script src="js/dxf-browser.js?v=20261105-sort2"></script>
-<script src="js/app.js?v=20261106-kerfband"></script>
+<script src="js/app.js?v=20261106-arcangle"></script>
 
 <!-- Hidden Image Input -->
 <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/bmp,image/webp" hidden>

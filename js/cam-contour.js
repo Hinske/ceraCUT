@@ -1,5 +1,7 @@
 /**
- * CeraCUT CamContour V5.29 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.30 - IGEMS-konformes Lead-In/Out System
+ * V5.30: Feat — AP2 Bogenwinkel (leadInArcAngle/leadOutArcAngle, Default 90): Arc-Lead als Viertel- bis 3/4-Kreis
+ *        (Waricam "3/4 Kreis"); toJSON/clone mitgefuehrt.
  * V5.29: Refactor — AP1 S7: alte Bogen-Metadaten der Leads (arcCenter/arcRadius/arcStartAngle/arcEndAngle/
  *        arcSweepCCW/hasLinePortion) entfernt; kein Konsument mehr (Renderer/PP/Simulator nutzen segments).
  * V5.28: Feat — AP1 S4b: Leads und Ueberschnitt werden auf der TEILEGEOMETRIE berechnet (_leadBasisPts) statt auf der
@@ -116,7 +118,7 @@
  * V5.6: Hatch als eigenständige CamContour (cuttingMode='none', isHatchContour)
  * V5.7: Gap Detection — gaps[], healedGaps[] Properties + hasGaps()/clearGapData()
  * Last Modified: 2026-11-06
- * Build: 20261106-s7clean
+ * Build: 20261106-arcangle
  */
 
 class CamContour {
@@ -141,12 +143,14 @@ class CamContour {
         this.leadInLength = options.leadInLength ?? 4.0;
         this.leadInRadius = options.leadInRadius ?? 2.0;
         this.leadInAngle = options.leadInAngle ?? 90;
+        this.leadInArcAngle = options.leadInArcAngle ?? 90;   // V5.30: Bogenwinkel (Grad) des Arc-Leads: 90 = Viertelkreis, 270 = 3/4-Kreis
 
         // ═══ LEAD-OUT Parameter ═══
         this.leadOutType = options.leadOutType || 'arc';
         this.leadOutLength = options.leadOutLength ?? 4.0;
         this.leadOutRadius = options.leadOutRadius ?? 2.0;
         this.leadOutAngle = options.leadOutAngle ?? 90;
+        this.leadOutArcAngle = options.leadOutArcAngle ?? this.leadInArcAngle;
 
         // ═══ CORNER-LEAD (eigener Slot analog IGEMS External/Internal/Corner/Alternative,
         // Kap. 10.13.2) — vorher als Magic Numbers (60°, 0°) mitten in getLeadInPath()/
@@ -740,13 +744,19 @@ class CamContour {
      * V5.25: Geometrie liegt in lead-geometry.js (echte Segmente). V5.29: alte Bogen-Metadaten
      * (arcCenter/arcRadius/...) entfernt — Renderer, Postprozessor und Simulator lesen `segments`.
      */
+    /** V5.30: Bogenwinkel (Grad) -> Spannweite (rad), auf 30..300 Grad begrenzt, Default 90. */
+    _arcSpan(deg) {
+        const d = Number.isFinite(+deg) && +deg > 0 ? +deg : 90;
+        return Math.min(300, Math.max(30, d)) * Math.PI / 180;
+    }
+
     _calcArcLeadIn(entry, tangent, normal) {
         const radius = this.leadInRadius;
         const totalLength = this.leadInLength;
         // Radius <= 0: tangentialer Lead (V5.12), Typ bleibt 'arc'
         const segs = (radius <= 1e-6)
             ? LeadGeometry.leadInTangent({ join: entry, tangent, length: totalLength })
-            : LeadGeometry.leadInArc({ join: entry, tangent, normal, radius, length: totalLength });
+            : LeadGeometry.leadInArc({ join: entry, tangent, normal, radius, length: totalLength, span: this._arcSpan(this.leadInArcAngle) });
         return this._leadFromSegments(segs, 'in', 'arc');
     }
 
@@ -1346,7 +1356,7 @@ class CamContour {
         const totalLength = this.leadOutLength;
         const segs = (radius <= 1e-6)
             ? LeadGeometry.leadOutTangent({ join: exit, tangent, length: totalLength })
-            : LeadGeometry.leadOutArc({ join: exit, tangent, normal, radius, length: totalLength });
+            : LeadGeometry.leadOutArc({ join: exit, tangent, normal, radius, length: totalLength, span: this._arcSpan(this.leadOutArcAngle) });
         return this._leadFromSegments(segs, 'out', 'arc');
     }
 
@@ -2492,6 +2502,7 @@ class CamContour {
             leadInLength: this.leadInLength,
             leadInRadius: this.leadInRadius,
             leadInAngle: this.leadInAngle,
+            leadInArcAngle: this.leadInArcAngle,
             leadOutLength: this.leadOutLength,
             overcutLength: this.overcutLength,
             piercingType: this.piercingType,
@@ -2523,6 +2534,8 @@ class CamContour {
             leadInLength: this.leadInLength,
             leadInRadius: this.leadInRadius,
             leadInAngle: this.leadInAngle,
+            leadInArcAngle: this.leadInArcAngle,
+            leadOutArcAngle: this.leadOutArcAngle,
             leadOutType: this.leadOutType,
             leadOutLength: this.leadOutLength,
             leadOutRadius: this.leadOutRadius,

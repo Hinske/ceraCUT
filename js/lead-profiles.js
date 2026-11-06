@@ -1,5 +1,6 @@
 /**
- * CeraCUT Lead Profiles V1.4
+ * CeraCUT Lead Profiles V1.5
+ * V1.5: Feat — AP2 Bogenwinkel (leadInArcAngle) je Profil-Sektion (Default 90), Migration, isModified, Batch-Apply.
  *
  * Profil-basierte Lead-Verwaltung für Wasserstrahl-CAM.
  * Built-in Profile für typische Material/Dicke-Kombinationen.
@@ -28,7 +29,7 @@
 const LeadProfiles = (() => {
     'use strict';
 
-    const VERSION = '1.4';
+    const VERSION = '1.5';
     const STORAGE_KEY = 'ceracut_lead_profiles';
     const ACTIVE_KEY = 'ceracut_active_lead_profile';
     const PREFIX = `[LeadProfiles V${VERSION}]`;
@@ -304,11 +305,19 @@ const LeadProfiles = (() => {
         p.smallHole = p.smallHole || { ...defaults.smallHole };
         p.slit = p.slit || { ...defaults.slit };
         p.corner = p.corner || { ...defaults.corner };
+        // V1.5: Bogenwinkel (Default 90 = Viertelkreis) fuer alte/Built-in-Profile ergaenzen
+        if (p.ext && p.ext.leadInArcAngle === undefined) p.ext.leadInArcAngle = 90;
+        if (p.int && p.int.leadInArcAngle === undefined) p.int.leadInArcAngle = 90;
         return p;
     }
 
     function init() {
         _profiles = _createBuiltinProfiles();
+        // V1.5: Built-ins bekommen den Bogenwinkel-Default (90) explizit
+        _profiles.forEach(p => {
+            if (p.ext && p.ext.leadInArcAngle === undefined) p.ext.leadInArcAngle = 90;
+            if (p.int && p.int.leadInArcAngle === undefined) p.int.leadInArcAngle = 90;
+        });
         const defaults = _profiles.find(p => p.id === DEFAULT_PROFILE_ID) || _profiles[0];
 
         // Custom-Profile aus localStorage laden
@@ -414,7 +423,7 @@ const LeadProfiles = (() => {
      */
     function isModified(profile, extVals, intVals, altVals) {
         if (!profile) return false;
-        const extKeys = ['leadInType', 'leadInLength', 'leadInRadius', 'leadInAngle',
+        const extKeys = ['leadInType', 'leadInLength', 'leadInRadius', 'leadInAngle', 'leadInArcAngle',
                          'leadOutLength', 'overcutLength', 'piercingType', 'preferCorners',
                          'leadInDynamic', 'piercingStationaryTime', 'piercingCircularRadius',
                          'piercingCircularTime', 'leadInLengthMin', 'leadInLengthMax'];
@@ -570,6 +579,8 @@ const LeadProfiles = (() => {
         c.leadInLength = section.leadInLength;
         c.leadInRadius = section.leadInRadius;
         c.leadInAngle = section.leadInAngle;
+        c.leadInArcAngle = section.leadInArcAngle ?? 90;   // V1.5: Bogenwinkel
+        c.leadOutArcAngle = section.leadInArcAngle ?? 90;
         c.leadOutType = section.leadInType;
         c.leadOutLength = section.leadOutLength;
         c.leadOutRadius = section.leadInRadius;

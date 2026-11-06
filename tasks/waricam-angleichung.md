@@ -80,7 +80,17 @@ Ziel: Was auf dem Bildschirm steht = was geschnitten wird. Richtung, Form, Ueber
 - [ ] **1.7 Zoom-Verhalten:** Leads auch bei kleinen Fahnen (z. B. 1 mm) in korrekter Proportion; Mindestdicke der Linie, aber Geometrie unveraendert.
 - [ ] **1.8 Verifikation:** Referenzteile (Quadrat aussen/innen, Kreis, Ecke, Schlitz). Screenshot-Vergleich CeraCUT vs. Waricam. Pruefung: gezeichneter Pfad == MPF-Code (G-Code per Skript zurueck in Geometrie wandeln und ueberlagern).
 
-### AP2 — Fahnenkatalog (PRIO 1, haengt an E1–E3)
+### AP2 — Lead-Formen statt Fahnenkatalog (ERLEDIGT 2026-11-06)
+
+**Entscheidung:** Kein Katalog. Die Waricam-Fahnen sind Presets bereits vorhandener Parameter (linear mit Winkel, senkrecht = 90 Grad, Bogen, 3/4-Kreis). Haken, Schleife und "unter" entfallen (nicht benoetigt / durch Winkel und Rotationsanschuss abgedeckt). Umgesetzt statt dessen (cam-contour V5.30, lead-profiles V1.5, app V6.63):
+- [x] **Bogenwinkel** fuer Arc-Leads (30–270 Grad, Default 90; Feld "⌒" Aussen/Innen), in Profilen, Undo, clone/toJSON.
+- [x] **Ecken-Lead-Oberflaeche** (Gruppe "Ecken-Lead": Typ, Winkel, ab Eckwinkel, "Start an Ecke") + in Profilen speicherbar.
+- [x] **Lead-Out folgt dem Lead-In** (Typ/Winkel/Radius/Bogenwinkel; Laenge und Ueberschnitt getrennt) — war im Bestand schon so, jetzt dokumentiert/getestet.
+- Tests: `tests/arc-angle.test.js`; UI-Verdrahtung per Headless-Chromium geprueft.
+
+_(Urspruenglicher Plan unten nur noch als Historie.)_
+
+### AP2 (historisch) — Fahnenkatalog
 
 - [ ] **2.0 Auswahl Phase 1 (Fliesenzuschnitt, entschieden):** Fliese = sproedes Material, Anschuss immer im Abfall, flacher Einlauf, keine Ruecklaeufe in der Kontur. Daher nur diese Fahnen:
   - **Aussen (9 von 19):** 01 kurz+knapp (kleine Teile, Mosaik), 02 Linear 10, 03 Linear 20, 04 Linear 30, 05 Linear 45 (Standard-Einlauf), 07 Gerade, 09 tangential 1, 10 tangential 2 (sanfter Einlauf, bruchschonend), 18 senkrecht (Ecken/enge Abfallstege).

@@ -1,5 +1,6 @@
 /**
  * CeraCUT V6.50 - Main Application
+ * V6.63: Feat — AP2 Bogenwinkel (Feld ⌒°, Aussen/Innen) und Ecken-Lead (Typ/Winkel/ab Eckwinkel) im Lead-Ribbon, in Profilen und Undo-Snapshots
  * V6.61: Feat — Schnittfugenband An/Aus (btn-kerf-band, renderer.showKerfBand, localStorage ceracut_kerf_band)
  * V6.60: Feat — Schnittreihenfolge manuell: Schnitte anklicken, Auswahl Anfang/↑/↓/Ende/Position N (je Fliese, Undo); alte Schnittliste war seit V5.7 nicht mehr im HTML
  * V6.59: Feat — Fliesen-Reihenfolge im Tab Reihenfolge: Presets (Zeile/Spalte/Schlangenlinie/Nachbar, Startecke, umkehren), Anklick-Modus, Drag&Drop, Sperre bei manueller Reihenfolge; Button "Fliesen erkennen" entfällt (Erkennung automatisch)
@@ -4597,14 +4598,15 @@ class CeraCutApp {
         // V3.14: Außen-Lead + Innen-Lead Felder
         // V5.3 Phase B: +piercing params, +dynamic lead
         const extInputs = [
-            'lead-type', 'lead-in-length', 'lead-in-radius', 'lead-in-angle',
+            'lead-type', 'lead-in-length', 'lead-in-radius', 'lead-in-angle', 'lead-arc-angle',
+            'corner-lead-type', 'corner-lead-angle', 'corner-degrade',
             'overcut-length', 'lead-out-length',
             'prefer-corners', 'piercing-type',
             'piercing-stationary-time', 'piercing-circular-radius', 'piercing-circular-time',
             'dynamic-lead-ext', 'dyn-lead-min', 'dyn-lead-max'
         ];
         const intInputs = [
-            'int-lead-type', 'int-lead-in-length', 'int-lead-in-radius', 'int-lead-in-angle',
+            'int-lead-type', 'int-lead-in-length', 'int-lead-in-radius', 'int-lead-in-angle', 'int-lead-arc-angle',
             'int-overcut-length', 'int-lead-out-length'
         ];
         const allInputs = [...extInputs, ...intInputs];
@@ -4677,6 +4679,11 @@ class CeraCutApp {
             leadInLength:  parseFloat(document.getElementById('lead-in-length')?.value) || 4.0,
             leadInRadius:  parseFloat(document.getElementById('lead-in-radius')?.value) || 2.0,
             leadInAngle:   parseFloat(document.getElementById('lead-in-angle')?.value) || 90,
+            // V6.63: Bogenwinkel + Ecken-Lead (vorher kein UI-Feld)
+            leadInArcAngle: parseFloat(document.getElementById('lead-arc-angle')?.value) || 90,
+            cornerLeadType: document.getElementById('corner-lead-type')?.value || 'linear',
+            cornerLeadAngle: (() => { const v = parseFloat(document.getElementById('corner-lead-angle')?.value); return isNaN(v) ? 0 : v; })(),
+            cornerDegradeThreshold: parseFloat(document.getElementById('corner-degrade')?.value) || 60,
             overcutLength: (() => { const v = parseFloat(document.getElementById('overcut-length')?.value); return isNaN(v) ? 1.0 : v; })(),
             leadOutLength: parseFloat(document.getElementById('lead-out-length')?.value) || 4.0,
             preferCorners: document.getElementById('prefer-corners')?.checked ?? true,
@@ -4703,6 +4710,8 @@ class CeraCutApp {
             leadInLength:  parseFloat(document.getElementById('int-lead-in-length')?.value) || ext.leadInLength,
             leadInRadius:  parseFloat(document.getElementById('int-lead-in-radius')?.value) || ext.leadInRadius,
             leadInAngle:   parseFloat(document.getElementById('int-lead-in-angle')?.value) || ext.leadInAngle,
+            leadInArcAngle: parseFloat(document.getElementById('int-lead-arc-angle')?.value) || ext.leadInArcAngle,
+            cornerLeadType: ext.cornerLeadType, cornerLeadAngle: ext.cornerLeadAngle, cornerDegradeThreshold: ext.cornerDegradeThreshold,   // Ecken-Lead gilt fuer Innen wie Aussen
             overcutLength: (() => { const v = parseFloat(document.getElementById('int-overcut-length')?.value); return isNaN(v) ? ext.overcutLength : v; })(),
             leadOutLength: parseFloat(document.getElementById('int-lead-out-length')?.value) || ext.leadOutLength,
             preferCorners: ext.preferCorners, // Gleiche Ecken-Präferenz für Innen
@@ -4736,6 +4745,8 @@ class CeraCutApp {
         c.leadOutLength = vals.leadOutLength;
         c.leadOutRadius = vals.leadInRadius;
         c.leadOutAngle = vals.leadInAngle;
+        c.leadInArcAngle = vals.leadInArcAngle ?? 90;     // V6.63: Bogenwinkel
+        c.leadOutArcAngle = vals.leadInArcAngle ?? 90;
         c.preferCorners = vals.preferCorners;
         c.piercingType = vals.piercingType;
         // B.1: Piercing R-Parameter
@@ -4748,9 +4759,7 @@ class CeraCutApp {
             c.leadInLengthMin  = vals.leadInLengthMin;
             c.leadInLengthMax  = vals.leadInLengthMax;
         }
-        // V6.44: Corner-Lead (eigener Slot, cam-contour.js) — noch kein UI-Feld, daher
-        // bisher immer undefined; Pass-Through analog zu den anderen optionalen Feldern
-        // schon vorbereitet, sobald Properties-Panel/Profil-Editor das liefern.
+        // V6.44/V6.63: Corner-Lead (eigener Slot, cam-contour.js) — Felder jetzt im Ribbon (Ecke:)
         if (vals.cornerLeadType !== undefined) {
             c.cornerLeadType = vals.cornerLeadType;
             c.cornerLeadAngle = vals.cornerLeadAngle;
@@ -4790,6 +4799,10 @@ class CeraCutApp {
             leadInLength:  c.leadInLength,
             leadInRadius:  c.leadInRadius,
             leadInAngle:   c.leadInAngle,
+            leadInArcAngle: c.leadInArcAngle,
+            cornerLeadType: c.cornerLeadType,
+            cornerLeadAngle: c.cornerLeadAngle,
+            cornerDegradeThreshold: c.cornerDegradeThreshold,
             overcutLength: c.overcutLength,
             leadOutLength: c.leadOutLength,
             preferCorners: c.preferCorners,
@@ -5065,6 +5078,7 @@ class CeraCutApp {
                         profile.ext.leadInLength === profile.int.leadInLength &&
                         profile.ext.leadInRadius === profile.int.leadInRadius &&
                         profile.ext.leadInAngle === profile.int.leadInAngle &&
+                        (profile.ext.leadInArcAngle ?? 90) === (profile.int.leadInArcAngle ?? 90) &&
                         profile.ext.leadOutLength === profile.int.leadOutLength &&
                         profile.ext.overcutLength === profile.int.overcutLength;
 
@@ -5080,6 +5094,12 @@ class CeraCutApp {
 
         // Int-Werte setzen (auch wenn disabled — werden bei Bedarf gelesen)
         this._setLeadUIValues(profile.int, 'int');
+
+        // V6.63: Ecken-Lead aus dem Profil in die UI
+        if (profile.corner) {
+            const cf = { 'corner-lead-type': profile.corner.leadType, 'corner-lead-angle': profile.corner.leadAngle, 'corner-degrade': profile.corner.degradeThreshold };
+            for (const [id, val] of Object.entries(cf)) { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; }
+        }
 
         // Alt-Lead-Werte
         if (profile.alt) {
@@ -5115,6 +5135,7 @@ class CeraCutApp {
                 'lead-in-length': section.leadInLength,
                 'lead-in-radius': section.leadInRadius,
                 'lead-in-angle': section.leadInAngle,
+                'lead-arc-angle': section.leadInArcAngle ?? 90,
                 'lead-out-length': section.leadOutLength,
                 'overcut-length': section.overcutLength,
                 'piercing-type': section.piercingType,
@@ -5138,6 +5159,7 @@ class CeraCutApp {
                 'int-lead-in-length': section.leadInLength,
                 'int-lead-in-radius': section.leadInRadius,
                 'int-lead-in-angle': section.leadInAngle,
+                'int-lead-arc-angle': section.leadInArcAngle ?? 90,
                 'int-lead-out-length': section.leadOutLength,
                 'int-overcut-length': section.overcutLength
             };
@@ -5184,6 +5206,7 @@ class CeraCutApp {
             ext: { ...extVals },
             int: { ...intVals },
             alt: { ...altVals },
+            corner: { leadType: extVals.cornerLeadType, leadAngle: extVals.cornerLeadAngle, degradeThreshold: extVals.cornerDegradeThreshold },
             smallHole: { thresholdDiameter: 8.0, strategy: 'center_pierce' },
             slit: { leadInType: 'on_geometry', overcutLength: 0 }
         };

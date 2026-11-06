@@ -15,16 +15,16 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '322b60f',
+        hash: '150da04',
         date: '2026-11-06',
-        message: 'refactor: AP1 S6/S7 Roundtrip Ueberschnitt/Kontur, alte Lead-Bogen-Metadaten ent'
+        message: 'feat: AP2 Bogenwinkel (3/4-Kreis) + Ecken-Lead-Oberflaeche statt Fahnenkatalog ('
     },
 
     modules: {
         'dxf-parser':         { version: '3.20', build: '20261106-fliese4' },
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.11', build: '20261106-fliese4' },
-        'cam-contour':        { version: '5.29', build: '20261106-s7clean' },
+        'cam-contour':        { version: '5.30', build: '20261106-arcangle' },
         'canvas-renderer':    { version: '3.61', build: '20261106-geombasis' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.8', build: '20261106-leadseg' },
@@ -40,9 +40,9 @@ const CERACUT_BUILD = {
         'layer-manager':      { version: '1.3', build: '20261104-reviewfix' },
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
-        'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
+        'lead-profiles':      { version: '1.5', build: '20261106-arcangle' },
         'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
-        'app':                { version: '6.61', build: '20261106-kerfband' },
+        'app':                { version: '6.63', build: '20261106-arcangle' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.09: Feat — AP2 (statt Fahnenkatalog): Bogenwinkel fuer Arc-Leads (90 bis 270 Grad, Waricam 3/4-Kreis) und Ecken-Lead-Oberflaeche (Typ/Winkel/ab Eckwinkel) im Ribbon, in Lead-Profilen und Undo; Lead-Out folgt dem Lead-In (cam-contour V5.30, lead-profiles V1.5, app V6.63). Entscheidung: kein Katalog — Waricam-Fahnen sind Presets der vorhandenen Parameter.',
         'V7.08: Refactor — AP1 S6/S7 abgeschlossen: Roundtrip-Tests G-Code == Zeichnung inkl. Ueberschnitt (10 mm = 10 mm) und negativer Ueberschnitt; alte Bogen-Metadaten der Leads entfernt (cam-contour V5.29). AP1 Lead-Kern fertig.',
         'V7.07: Feat — AP1 S5 Simulator (toolpath-simulator V1.5): Lead-Laengen exakt aus Segmenten (Bogenlaenge), Kollisions-/Plattenrand-Pruefung der Leads gegen die reale Strahlmitte (kerf/2 versetzt), Animationspfad Lead-In -> Kontur -> Ueberschnitt -> Lead-Out ohne Sprung (Test).',
         'V7.06: Feat — AP1 S4b Geometrie-basierte Leads (Waricam-Referenz HEIDE6000101587.CNC): Leads/Ueberschnitt auf der Teilegeometrie, Lead-In endet exakt auf dem Konturstart (vorher Sprung kerf/2 im G-Code), Controller versetzt per G41/G42. Anzeige: Leads/Startmarke auf der Geometrie, Fugenband entlang der realen Strahlmitte (cam-contour V5.28, canvas-renderer V3.61, lead-geometry V1.1). Abnahme-Test gegen die Waricam-CNC (Lead-In 3 mm senkrecht, Ueberschnitt 3 mm, Lead-Out 1 mm). Roundtrip G-Code == Zeichnung mit kerf 0.8.',
