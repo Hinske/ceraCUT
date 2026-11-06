@@ -2540,8 +2540,8 @@ html, body {
 .ribbon-panel[data-ribbon="bearbeitung"].lead-adv-open #btn-lead-adv-toggle { color: #f0a030; font-weight: 600; }
 
 /* V6.47: Setup/Technologie — Düse, Druck, Optimierung eingeklappt */
-.ribbon-panel[data-ribbon="setup"]:not(.tech-adv-open) .tech-adv { display: none !important; }
-.ribbon-panel[data-ribbon="setup"].tech-adv-open #btn-tech-adv-toggle { color: #f0a030; font-weight: 600; }
+.ribbon-panel:not(.tech-adv-open) .tech-adv { display: none !important; }
+.ribbon-panel.tech-adv-open #btn-tech-adv-toggle { color: #f0a030; font-weight: 600; }
 
 /* ═══════════════════════════════════════════════════════════════
    CLASSIC THEME (V7.10) — schlicht, flach, grau (angelehnt an WARICAM / Windows-Klassik)

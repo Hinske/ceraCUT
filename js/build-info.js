@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '07967b3',
+        hash: '686cef2',
         date: '2026-11-06',
-        message: 'fix: Auto-Setup erkennt Fliesenbogen auch ohne Layer Fliese (keine Auto-Referenz'
+        message: 'refactor: Setup-Tab entfaellt - Referenz/Nullpunkt im Tab Datei, Technologie in '
     },
 
     modules: {
@@ -42,7 +42,7 @@ const CERACUT_BUILD = {
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.5', build: '20261106-arcangle' },
         'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
-        'app':                { version: '6.66', build: '20261106-tilesheet' },
+        'app':                { version: '6.67', build: '20261106-nosetup' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.15: Refactor — Setup-Tab entfaellt (Referenz/Nullpunkt laufen beim Import automatisch): Referenz + Nullpunkt im Tab Datei (fuer manuelle Korrektur), Technologie (Material/Dicke/Druck/Duese) als Gruppe ③ Technologie im Tab Bearbeitung (app V6.67, styles.css).',
         'V7.14: Fix — Auto-Setup: Fliesenbogen auch ohne Layer Fliese erkannt (mehrere aeussere Rechtecke mit Schnitten, Fallback der Fliesen-Erkennung): keine Auto-Referenz mehr, sonst fehlte eine Fliese (app V6.66).',
         'V7.13: Fix — Regression durch AP4-Auto-Setup: bei Fliesen-Rastern (Layer Fliese, 4 Einzellinien) wurde per Auto-Referenz EINE Fliese zur Referenz gemacht und fehlte danach in Fliesen-Erkennung und Schnitt. Auto-Setup setzt bei Fliesen/vorhandenen Referenzen nur noch den Nullpunkt (app V6.65).',
         'V7.12: Feat — AP3/AP4 Feinschliff: Import-Hinweise zu einer Meldung zusammengefasst (Einzelmeldungen von autoDetectReference unterdrueckt), Gruppen Reihenfolge/Export als ④/⑤ nummeriert, Setup-Gruppen als (auto) gekennzeichnet, Classic-Theme fuer F1-Hilfe und Flyouts/Dialoge mit festen Dunkelfarben (app V6.64, styles.css).',

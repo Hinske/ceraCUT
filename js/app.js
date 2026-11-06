@@ -1,5 +1,6 @@
 /**
  * CeraCUT V6.50 - Main Application
+ * V6.67: Refactor — Setup-Tab entfaellt: Referenz + Nullpunkt (Checkbox "Auto beim Import") wandern in den Tab Datei, Technologie (Material/Dicke/Druck) als ③ Technologie in Bearbeitung
  * V6.66: Fix — Auto-Setup erkennt Fliesenbogen auch OHNE Layer Fliese (mehrere aeussere Rechtecke mit Schnitten) und setzt dort keine Auto-Referenz (eine Fliese ging verloren)
  * V6.65: Fix — Auto-Setup beim Import fasst Fliesen (Layer Fliese) und vorhandene Referenzen nicht mehr an (setzte sonst EINE Fliese als Referenz, eine Fliese fehlte in Erkennung/Schnitt); nur Nullpunkt
  * V6.64: Feat — AP4 Waricam-Workflow: Auto-Setup beim Import (Referenz + Nullpunkt), danach direkt in Bearbeitung; Bearbeitung-Tab in Workflow-Reihenfolge ① Loch/Scheibe ② Leads ③ Schnittfuge
@@ -3263,7 +3264,7 @@ class CeraCutApp {
         document.getElementById('btn-next').textContent = this.currentStep === this.totalSteps ? '✓ Fertig' : 'Weiter →';
         
         // Wizard-Indikator aktualisieren
-        const stepToRibbon = { 1: 'file', 2: 'setup', 3: 'setup', 4: 'bearbeitung', 5: 'order', 6: 'export' };
+        const stepToRibbon = { 1: 'file', 2: 'file', 3: 'file', 4: 'bearbeitung', 5: 'order', 6: 'export' };   // V6.67: Setup-Tab entfaellt (Referenz/Nullpunkt im Tab Datei)
         const stepNames = ['', 'Datei laden', 'Referenz', 'Nullpunkt', 'Schneiden', 'Reihenfolge', 'Export'];
         const stepNameEl = document.getElementById('wizard-step-name');
         if (stepNameEl) stepNameEl.textContent = stepNames[this.currentStep] || '';
@@ -3851,7 +3852,7 @@ class CeraCutApp {
         this.showToast = () => {};
         // Fliesen (Layer "Fliese"/"Fliesen") und vorhandene Referenzen NICHT anfassen: autoDetectReference() verkettet
         // Einzellinien und macht EINE Kontur zur Referenz -> eine Fliese verschwindet aus Schnitt/Fliesen-Erkennung.
-        // Dann nur den Nullpunkt setzen (unten links der Referenzen bzw. aller Konturen), wie ein Klick im Setup-Tab.
+        // Dann nur den Nullpunkt setzen (unten links der Referenzen bzw. aller Konturen), wie ein Klick auf einen Nullpunkt-Preset (Tab Datei).
         const isTileLayer = c => ['fliese', 'fliesen'].includes(String(c.layer || '').trim().toLowerCase());
         // Auch ohne Layer "Fliese": mehrere aeussere Rechtecke mit Schnitten (Fallback der Fliesen-Erkennung) = Fliesenbogen.
         // Eine Auto-Referenz wuerde dort ein Rechteck herausnehmen -> Fliese fehlt in Erkennung/Schnitt.
@@ -5027,9 +5028,9 @@ class CeraCutApp {
             });
         }
 
-        // V6.47: Technologie-Toggle (Setup-Tab)
-        const techPanel = document.querySelector('.ribbon-panel[data-ribbon="setup"]');
+        // V6.47/V6.67: Technologie-Toggle (Gruppe ③ Technologie im Tab Bearbeitung)
         const techBtn = document.getElementById('btn-tech-adv-toggle');
+        const techPanel = techBtn?.closest('.ribbon-panel');
         if (techPanel && techBtn) {
             try { if (localStorage.getItem('ceracut_tech_adv') === '1') techPanel.classList.add('tech-adv-open'); } catch (e) { /* ignore */ }
             techBtn.addEventListener('click', () => {
