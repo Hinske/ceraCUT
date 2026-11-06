@@ -3845,12 +3845,16 @@ class CeraCutApp {
         if (cb && !cb.checked) return false;
         if (this.isSetupComplete()) return true;
         if (!this.contours?.length) return false;
+        // Einzelmeldungen von autoDetectReference() unterdruecken — es gibt EINE Zusammenfassung unten
+        this.showToast = () => {};
         try {
             this.autoDetectReference();
             this.undoManager?.clear();
         } catch (e) {
             console.warn('[App V6.64] Auto-Setup fehlgeschlagen', e);
             return false;
+        } finally {
+            delete this.showToast;   // zurueck auf die Prototyp-Methode
         }
         const ok = this.isSetupComplete();
         if (ok) this.showToast?.('Auto-Setup: Referenz + Nullpunkt gesetzt — jetzt pruefen: ① Loch/Scheibe ② Leads ③ Schnittfuge', 'success');

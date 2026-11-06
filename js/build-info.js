@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '0d49707',
+        hash: '650a7be',
         date: '2026-11-06',
-        message: 'feat: AP4 Waricam-Workflow - Auto-Setup beim Import (Referenz+Nullpunkt), Bearbe'
+        message: 'feat: AP3/AP4 Feinschliff - eine Import-Meldung, Reihenfolge/Export nummeriert, '
     },
 
     modules: {
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.12: Feat — AP3/AP4 Feinschliff: Import-Hinweise zu einer Meldung zusammengefasst (Einzelmeldungen von autoDetectReference unterdrueckt), Gruppen Reihenfolge/Export als ④/⑤ nummeriert, Setup-Gruppen als (auto) gekennzeichnet, Classic-Theme fuer F1-Hilfe und Flyouts/Dialoge mit festen Dunkelfarben (app V6.64, styles.css).',
         'V7.11: Feat — AP4 Waricam-Workflow: Referenz + Nullpunkt laufen beim Import automatisch (Checkbox "Auto beim Import" im Setup-Tab), danach oeffnet sich Bearbeitung; Bearbeitung-Tab in Workflow-Reihenfolge ① Loch/Scheibe pruefen, ② Leads (Art/Laenge), ③ Schnittfuge/Qualitaet kontrollieren, danach Reihenfolge und Export (app V6.64).',
         'V7.10: Feat — AP3 Classic-Theme (Standard): schlichte graue Oberflaeche wie Waricam/Windows-Klassik (flach, keine Rundungen/Schatten/Blur/Animationen), mittelgraue Zeichenflaeche ohne Raster. Hell/Dunkel bleiben waehlbar (Ansicht > Design). Theme wird vor dem ersten Paint gesetzt (canvas-renderer V3.62, styles.css).',
         'V7.09: Feat — AP2 (statt Fahnenkatalog): Bogenwinkel fuer Arc-Leads (90 bis 270 Grad, Waricam 3/4-Kreis) und Ecken-Lead-Oberflaeche (Typ/Winkel/ab Eckwinkel) im Ribbon, in Lead-Profilen und Undo; Lead-Out folgt dem Lead-In (cam-contour V5.30, lead-profiles V1.5, app V6.63). Entscheidung: kein Katalog — Waricam-Fahnen sind Presets der vorhandenen Parameter.',

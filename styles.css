@@ -2646,3 +2646,39 @@ html, body {
 [data-theme="classic"] .status-snap-modes { color: rgba(0,0,0,0.4); }
 [data-theme="classic"] .status-snap-modes .snap-active { color: #0a246a; }
 [data-theme="classic"] .status-label { color: #404040; }
+
+/* Dialoge/Flyouts mit festen Dunkel-Inline-Farben (F1-Hilfe, CNC-/SVG-Import, Flyouts) -> klassisch hell */
+[data-theme="classic"] div[style*="background:#2d2d30"],
+[data-theme="classic"] div[style*="background:#1e1e1e"],
+[data-theme="classic"] div[style*="background: #2d2d30"],
+[data-theme="classic"] div[style*="background: #1e1e1e"] {
+    background: #d4d0c8 !important;
+    color: #000000 !important;
+    border-color: #808080 !important;
+}
+[data-theme="classic"] input[style*="background"],
+[data-theme="classic"] select[style*="background"],
+[data-theme="classic"] textarea[style*="background"] {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border-color: #808080 !important;
+}
+[data-theme="classic"] button[style*="background:#22c55e"] { background: #d4d0c8 !important; color: #000 !important; border: 1px solid #808080 !important; }
+[data-theme="classic"] [style*="color:#4fc3f7"],
+[data-theme="classic"] #shortcut-modal h2,
+[data-theme="classic"] #shortcut-modal h3 { color: #0a246a !important; }
+[data-theme="classic"] #shortcut-modal span[style*="background"],
+[data-theme="classic"] #shortcut-modal kbd { background: #ffffff !important; color: #000000 !important; border: 1px solid #808080 !important; }
+[data-theme="classic"] #shortcut-modal div { color: #000000; }
+[data-theme="classic"] #shortcut-modal button { color: #000000 !important; }
+[data-theme="classic"] #shortcut-modal *:not(h2):not(h3):not(button) { color: #000000 !important; }
+/* Nach JS-Zugriff serialisiert der Browser Inline-Farben als rgb(...) — gleiche Regeln dafuer */
+[data-theme="classic"] div[style*="background: rgb(45, 45, 48)"],
+[data-theme="classic"] div[style*="background: rgb(30, 30, 30)"],
+[data-theme="classic"] div[style*="background: rgb(37, 37, 38)"] {
+    background: #d4d0c8 !important;
+    color: #000000 !important;
+    border-color: #808080 !important;
+}
+[data-theme="classic"] .ribbon-flyout * { color: #000000 !important; }
+[data-theme="classic"] .ribbon-flyout [style*="opacity"] { opacity: 0.5; }
