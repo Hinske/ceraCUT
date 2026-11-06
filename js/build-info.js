@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'dc99a69',
+        hash: '805e0ce',
         date: '2026-11-06',
-        message: 'feat: AP1 S4b Leads auf Teilegeometrie (Waricam-konform), reale Strahlmitte als Fugenband, Abna'
+        message: 'feat: AP1 S5 Simulator nutzt Lead-Segmente und reale Strahlmitte (V1.5)'
     },
 
     modules: {
@@ -48,7 +48,7 @@ const CERACUT_BUILD = {
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
         'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
         'nesting':            { version: '1.2', build: '20261104-reviewfix' },
-        'toolpath-simulator': { version: '1.6', build: '20261105-simplayer' },
+        'toolpath-simulator': { version: '1.5', build: '20261106-leadseg' },
         'cost-calculator':    { version: '1.3', build: '20261104-reviewfix' },
         'machine-profiles':   { version: '1.2', build: '20261104-reviewfix' },
         'bridge-cutting':     { version: '1.1', build: '20261104-reviewfix' },
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.07: Feat — AP1 S5 Simulator (toolpath-simulator V1.5): Lead-Laengen exakt aus Segmenten (Bogenlaenge), Kollisions-/Plattenrand-Pruefung der Leads gegen die reale Strahlmitte (kerf/2 versetzt), Animationspfad Lead-In -> Kontur -> Ueberschnitt -> Lead-Out ohne Sprung (Test).',
         'V7.06: Feat — AP1 S4b Geometrie-basierte Leads (Waricam-Referenz HEIDE6000101587.CNC): Leads/Ueberschnitt auf der Teilegeometrie, Lead-In endet exakt auf dem Konturstart (vorher Sprung kerf/2 im G-Code), Controller versetzt per G41/G42. Anzeige: Leads/Startmarke auf der Geometrie, Fugenband entlang der realen Strahlmitte (cam-contour V5.28, canvas-renderer V3.61, lead-geometry V1.1). Abnahme-Test gegen die Waricam-CNC (Lead-In 3 mm senkrecht, Ueberschnitt 3 mm, Lead-Out 1 mm). Roundtrip G-Code == Zeichnung mit kerf 0.8.',
         'V7.05: Feat — AP1 S4 Postprozessor (sinumerik-pp V2.8): Leads kommen 1:1 aus den Lead-Segmenten (G01/G02/G03 identisch zur Darstellung, gekuerzte Boegen bleiben exakte Boegen). Fix: negativer Ueberschnitt kuerzt jetzt die gefahrene Kontur (vorher volle Kontur). Roundtrip-Test G-Code == Zeichnung (273 Szenarien, 165 Boegen). BEFUND offen: Leads liegen auf Kerf-Offset-Bahn, Kontur im G-Code auf Teilegeometrie -> Sprung kerf/2 zwischen Lead-Ende und Konturstart (Entscheidung noetig).',
         'V7.04: Feat — AP1 S3 Lead-Darstellung im Waricam-Stil (canvas-renderer V3.60): Leads aus echten Segmenten (Bogen immer ctx.arc), Anschnitt rot, Ausschnitt/Ueberschnitt blau, Pfeile in Schneidrichtung, einheitlicher Anschusspunkt, Warnsymbol (!) statt Zustandsfarben, Schnittfuge massstaeblich als Band (Schalter Fuge An/Aus, app V6.61). Fix (cam-contour V5.27): _minSelfClearance() hielt eigene Kruemmung/Ecken fuer Kanalwaende — Leads wurden auf Kreisen und fast alle Lead-Outs (auch an Rechteckecken) auf ~0.5 mm gekappt; jetzt voller konfigurierter Lead, echte Engstellen bleiben gekappt. Visuell per Headless-Chromium geprueft.',

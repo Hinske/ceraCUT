@@ -1,5 +1,8 @@
 /**
- * CeraCUT Toolpath Simulator V1.4
+ * CeraCUT Toolpath Simulator V1.5
+ * V1.5: AP1 S5 — Lead-Laengen exakt aus Segmenten (Bogenlaenge statt Sehnenzug), Kollisions-/Plattenrand-Pruefung der
+ *       Leads gegen die REALE Strahlmitte (getLeadIn/OutToolSegments, kerf/2 versetzt); Leads liegen jetzt wie die
+ *       Kontur auf der Teilegeometrie (cam-contour V5.28) -> Animation ohne Sprung zwischen Lead und Kontur.
  * Simulation und Verifikation des Schneidpfads vor dem Export.
  *
  * Erkennt: Rapid-Moves durch Material, Lead-In/Out-Kollisionen,
@@ -31,9 +34,9 @@
 
 const ToolpathSimulator = {
 
-    VERSION: '1.3',
-    BUILD: '20260629-rapidfix',
-    PREFIX: '[ToolpathSim V1.3]',
+    VERSION: '1.5',
+    BUILD: '20261106-leadseg',
+    PREFIX: '[ToolpathSim V1.5]',
 
     // ════════════════════════════════════════════════════════════════
     // KONFIGURATION
@@ -247,7 +250,7 @@ const ToolpathSimulator = {
             // Lead-In prüfen
             const leadIn = c.getLeadInPath?.();
             if (leadIn?.points) {
-                const oobLead = this._findOutOfBoundsPoints(leadIn.points, bounds);
+                const oobLead = this._findOutOfBoundsPoints(this._leadToolPoints(c, 'in'), bounds);
                 if (oobLead.length > 0) {
                     result.errors.push(
                         `Lead-In von "${c.name}" liegt außerhalb der Platte ` +
@@ -259,7 +262,7 @@ const ToolpathSimulator = {
             // Lead-Out prüfen
             const leadOut = c.getLeadOutPath?.();
             if (leadOut?.points) {
-                const oobLead = this._findOutOfBoundsPoints(leadOut.points, bounds);
+                const oobLead = this._findOutOfBoundsPoints(this._leadToolPoints(c, 'out'), bounds);
                 if (oobLead.length > 0) {
                     result.warnings.push(
                         `Lead-Out von "${c.name}" liegt außerhalb der Platte ` +
@@ -312,7 +315,7 @@ const ToolpathSimulator = {
 
                 // Lead-In gegen andere Kontur
                 if (leadIn?.points && leadIn.points.length >= 2) {
-                    if (this._pathCrossesContour(leadIn.points, other.points)) {
+                    if (this._pathCrossesContour(this._leadToolPoints(c, 'in'), other.points)) {
                         collisionCount.leadIn++;
                         result.errors.push(
                             `Lead-In von "${c.name}" kreuzt Kontur "${other.name}"`
@@ -322,7 +325,7 @@ const ToolpathSimulator = {
 
                 // Lead-Out gegen andere Kontur
                 if (leadOut?.points && leadOut.points.length >= 2) {
-                    if (this._pathCrossesContour(leadOut.points, other.points)) {
+                    if (this._pathCrossesContour(this._leadToolPoints(c, 'out'), other.points)) {
                         collisionCount.leadOut++;
                         result.warnings.push(
                             `Lead-Out von "${c.name}" kreuzt Kontur "${other.name}"`
@@ -631,7 +634,7 @@ const ToolpathSimulator = {
 
             // Lead-In Länge
             const leadIn = c.getLeadInPath?.();
-            const leadInLen = leadIn?.points ? this._polylineLength(leadIn.points) : 0;
+            const leadInLen = this._leadLength(leadIn);
 
             // Overcut Länge
             const overcut = c.getOvercutPath?.();
@@ -639,7 +642,7 @@ const ToolpathSimulator = {
 
             // Lead-Out Länge
             const leadOut = c.getLeadOutPath?.();
-            const leadOutLen = leadOut?.points ? this._polylineLength(leadOut.points) : 0;
+            const leadOutLen = this._leadLength(leadOut);
 
             // Gesamte Schnittlänge dieser Kontur
             const cutLen = leadInLen + contourLen + overcutLen + leadOutLen;
@@ -1131,7 +1134,7 @@ const ToolpathSimulator = {
 
                 // Lead-In gegen Target
                 if (leadIn?.points?.length >= 2) {
-                    if (this._pathCrossesContour(leadIn.points, target.points)) {
+                    if (this._pathCrossesContour(this._leadToolPoints(source, 'in'), target.points)) {
                         collisions.push({
                             source: source.name,
                             target: target.name,
@@ -1143,7 +1146,7 @@ const ToolpathSimulator = {
 
                 // Lead-Out gegen Target
                 if (leadOut?.points?.length >= 2) {
-                    if (this._pathCrossesContour(leadOut.points, target.points)) {
+                    if (this._pathCrossesContour(this._leadToolPoints(source, 'out'), target.points)) {
                         collisions.push({
                             source: source.name,
                             target: target.name,
@@ -1192,8 +1195,8 @@ const ToolpathSimulator = {
                 const leadOut = c.getLeadOutPath?.();
                 const overcut = c.getOvercutPath?.();
 
-                const leadInLen = leadIn?.points ? this._polylineLength(leadIn.points) : 0;
-                const leadOutLen = leadOut?.points ? this._polylineLength(leadOut.points) : 0;
+                const leadInLen = this._leadLength(leadIn);
+                const leadOutLen = this._leadLength(leadOut);
                 const overcutLen = overcut?.points ? this._polylineLength(overcut.points) : 0;
 
                 return {
@@ -1211,6 +1214,26 @@ const ToolpathSimulator = {
     // ════════════════════════════════════════════════════════════════
     // GEOMETRIE-HILFSFUNKTIONEN
     // ════════════════════════════════════════════════════════════════
+
+    /** V1.5: exakte Lead-Laenge aus den Segmenten (Bogen = echte Bogenlaenge), Fallback Polylinie. */
+    _leadLength(lp) {
+        if (!lp) return 0;
+        if (Array.isArray(lp.segments) && lp.segments.length && typeof LeadGeometry !== 'undefined') {
+            return LeadGeometry.pathLength(lp.segments);
+        }
+        return lp.points ? this._polylineLength(lp.points) : 0;
+    },
+
+    /**
+     * V1.5: Polylinie der REALEN Strahlmitte eines Leads (Teilegeometrie + G41/G42-Versatz kerf/2) fuer
+     * Kollisions- und Plattenrand-Pruefung. Fallback: programmierte Lead-Punkte.
+     */
+    _leadToolPoints(c, role) {
+        const lp = role === 'in' ? c.getLeadInPath?.() : c.getLeadOutPath?.();
+        const tool = role === 'in' ? c.getLeadInToolSegments?.() : c.getLeadOutToolSegments?.();
+        if (tool?.length && typeof LeadGeometry !== 'undefined') return LeadGeometry.toPolyline(tool, 0.01);
+        return lp?.points || [];
+    },
 
     /** Euklidischer Abstand zweier Punkte */
     _dist(p1, p2) {
