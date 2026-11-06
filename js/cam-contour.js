@@ -1,5 +1,9 @@
 /**
- * CeraCUT CamContour V5.25 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.26 - IGEMS-konformes Lead-In/Out System
+ * V5.26: Fix — _isAtCorner() lieferte Supplementwinkel (gerade = 175 Grad statt 0) -> fast jede Stelle
+ *        galt als Ecke, JEDER Arc-Lead wurde zu linear degradiert. Jetzt Drehwinkel (gerade 0,
+ *        90-Grad-Ecke 90). Effekt: Arc-Leads entstehen wieder auf glatten Konturen/Kanten-
+ *        mitten; an echten Ecken (> cornerDegradeThreshold) weiter cornerLeadType.
  * V5.25: Refactor — AP1 S2: Lead-Builder (linear/arc/tangent In+Out, Center-Pierce/-Exit) erzeugen
  *        jetzt echte Segmente ueber lead-geometry.js (leadPath.segments = Wahrheit, points nur
  *        abgeleitet via toPolyline, Tess-Tol 0.005 mm). Kollisions-Kuerzen trimmt die Segmente
@@ -102,7 +106,7 @@
  * V5.6: Hatch als eigenständige CamContour (cuttingMode='none', isHatchContour)
  * V5.7: Gap Detection — gaps[], healedGaps[] Properties + hasGaps()/clearGapData()
  * Last Modified: 2026-11-06
- * Build: 20261106-leadseg
+ * Build: 20261106-cornerfix
  */
 
 class CamContour {
@@ -465,11 +469,14 @@ class CamContour {
         const len1 = Math.hypot(dx1, dy1), len2 = Math.hypot(dx2, dy2);
         if (len1 < 0.001 || len2 < 0.001) return 0;
 
+        // V5.26 Fix: dot der beiden RICHTUNGSvektoren (prev->curr, curr->next) ergibt den
+        // DREHWINKEL (gerade = 0 Grad, 90-Grad-Ecke = 90 Grad). Vorher wurde pi - Drehwinkel
+        // verwendet (gerade = 180 Grad) -> fast jede Stelle galt als Ecke und JEDER Arc-Lead
+        // wurde zu cornerLeadType (linear) degradiert.
         const dot = (dx1 * dx2 + dy1 * dy2) / (len1 * len2);
-        const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
-        const deviationDeg = (Math.PI - angle) * 180 / Math.PI;
+        const turnDeg = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
 
-        return deviationDeg > this.cornerAngleThreshold ? deviationDeg : 0;
+        return turnDeg > this.cornerAngleThreshold ? turnDeg : 0;
     }
 
     // ════════════════════════════════════════════════════════════════

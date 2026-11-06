@@ -97,4 +97,4 @@ Danach AP2 (Katalog) setzt direkt auf `buildFlag()` auf.
 ## 7. Befund waehrend S2: Arc-Leads werden nie erzeugt (offen, Entscheidung noetig)
 
 `CamContour._isAtCorner()` (seit Initial-Import) berechnet `deviation = 180° - Drehwinkel`. Eine **gerade** Stelle liefert damit ~175°, ein 90°-Eck 90°. Der Schwellenvergleich (`> cornerDegradeThreshold`, Default 60°) ist damit fuer fast jeden Startpunkt wahr, und `getLeadInPath/getLeadOutPath` degradieren `arc` auf `cornerLeadType` (Default `linear`, Winkel 0). Folge: **der Default-Arc-Lead wird praktisch nie erzeugt**, auch nicht auf Kreisen/Geraden. Nachgewiesen im Golden-Capture (Default-Szenarien: 0 Arc-Leads, erst mit `cornerDegradeThreshold: 999` entstehen sie).
-Vorschlag S2b: Drehwinkel statt Supplementwinkel verwenden (gerade = 0°, 90°-Ecke = 90°). Aendert das Verhalten sichtbar (Arcs erscheinen wieder) und muss mit dem Fahnenkatalog (AP2) abgestimmt werden.
+**ERLEDIGT (cam-contour V5.26):** Drehwinkel statt Supplementwinkel verwenden (gerade = 0°, 90°-Ecke = 90°). Aendert das Verhalten sichtbar (Arcs erscheinen wieder) und muss mit dem Fahnenkatalog (AP2) abgestimmt werden.

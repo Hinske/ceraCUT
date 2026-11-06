@@ -141,3 +141,21 @@ test('Kuerzen durch Nachbarkontur: Arc-Lead bleibt echter Bogen (In und Out)', (
         assert.ok(Math.hypot(free.x - hit.x, free.y - hit.y) < 0.1 * before, `${role}: freies Ende bei Wand`);
     }
 });
+
+test('Eckenerkennung (V5.26): gerade/glatt -> Arc bleibt, echte Ecke -> degradiert', () => {
+    const mk = (pts, mode = 'disc') => new F.CamContour(pts, { cuttingMode: mode, kerfWidth: 0.8, isClosed: true, leadInType: 'arc', leadOutType: 'arc' });
+    // Kreis (5 Grad Drehung je Punkt) -> Arc
+    const circ = mk(F.circle(0, 0, 30));
+    assert.equal(circ._isAtCorner(circ.points), 0);
+    assert.equal(circ.getLeadInPath().type, 'arc');
+    assert.equal(circ.getLeadOutPath().type, 'arc');
+    // Rechteck mit Start auf Kantenmitte (gerade Stelle) -> Arc
+    const r = [{ x: 50, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 60 }, { x: 0, y: 60 }, { x: 0, y: 0 }, { x: 50, y: 0 }];
+    const mid = mk(r);
+    assert.equal(mid._isAtCorner(mid.points), 0);
+    assert.equal(mid.getLeadInPath().type, 'arc');
+    // 90-Grad-Ecke -> degradiert zu cornerLeadType (linear)
+    const corner = mk(F.rect(0, 0, 100, 60));
+    assert.ok(Math.abs(corner._isAtCorner(corner.points) - 90) < 1e-6);
+    assert.equal(corner.getLeadInPath().type, 'linear');
+});

@@ -15,16 +15,16 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '1d48f48',
+        hash: '7922540',
         date: '2026-11-06',
-        message: 'refactor: AP1 S2 cam-contour baut Leads ueber lead-geometry (Segmente), Golden-R'
+        message: 'fix: _isAtCorner Drehwinkel statt Supplementwinkel - Arc-Leads werden wieder erz'
     },
 
     modules: {
         'dxf-parser':         { version: '3.20', build: '20261106-fliese4' },
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.11', build: '20261106-fliese4' },
-        'cam-contour':        { version: '5.25', build: '20261106-leadseg' },
+        'cam-contour':        { version: '5.26', build: '20261106-cornerfix' },
         'canvas-renderer':    { version: '3.59', build: '20261106-kerfside' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.7', build: '20261106-kerfside' },
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.03: Fix — _isAtCorner() (cam-contour V5.26) rechnete mit Supplementwinkel (gerade=175 Grad): Arc-Leads wurden im Default nie erzeugt. Jetzt Drehwinkel; Arc-Leads erscheinen auf glatten Konturen/Kantenmitten wieder, Ecken weiter linear. Golden neu erfasst (nur Kreis-Szenarien aendern sich: linear/tangent -> arc)',
         'V7.02: Refactor — AP1 S2 Lead-Kern angebunden: cam-contour V5.25 baut Leads ueber lead-geometry (segments), Kuerzen trimmt Boegen als Boegen. Golden-Regressionstest (279 Szenarien + Multi-Kontur) bestaetigt unveraendertes Verhalten. BEFUND (noch nicht behoben): _isAtCorner() liefert fuer fast jede Stelle >60 Grad -> Arc-Leads werden im Default IMMER zu linear degradiert (cam-contour V5.25)',
         'V7.01: Feat — AP1 S1 Lead-Kern: neues Modul lead-geometry.js V1.0 (reine Segment-Geometrie fuer Lead-In/-Out: Linie/Bogen lueckenlos, Kuerzen als echter Bogen, einzige Tessellierung toPolyline, validate). Noch NICHT an cam-contour/Renderer/PP angebunden (folgt in S2-S5). 22 Node-Tests (npm test). Siehe tasks/ap1-lead-kern-design.md (lead-geometry V1.0)',
         'V6.92: Feat — Fliesen-Raster FLI (tile-grid V1.0): Raster aus Fliesen (je 4 Einzellinien, NICHT zu geschlossener Kontur verkettet (Parser V3.20), nie geschnitten; Layer Fliese blau; Dateiname frei waehlbar, Fuge 100 mm), optional Nummerierung (A1/lfd.) auf Layer Beschriftung (gruen) und Maserungspfeil auf Layer Konstruktion (rosa); Layer Schnitt (rot) nur angelegt. Pipeline V3.11: Layer Konstruktion + Beschriftung werden nie geschnitten; Renderer V3.52 zeichnet sie als duenne Linie in Layerfarbe (vorher unsichtbar) (cuttingMode none).',
