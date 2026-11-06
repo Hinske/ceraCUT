@@ -1,5 +1,10 @@
 /**
- * CeraCUT CamContour V5.27 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.28 - IGEMS-konformes Lead-In/Out System
+ * V5.28: Feat — AP1 S4b: Leads und Ueberschnitt werden auf der TEILEGEOMETRIE berechnet (_leadBasisPts) statt auf der
+ *        Kerf-Offset-Bahn. Waricam-Referenz (HEIDE6000101587.CNC): Geometrie + G41/G42, Lead-In endet exakt auf dem
+ *        Konturstart. Neu: getLeadInToolSegments()/getLeadOutToolSegments()/overcut.toolPoints = reale Strahlmitte
+ *        (nur Anzeige: Anfahrsatz unkompensiert, Rest um kerf/2 versetzt, G40-Satz unkompensiert). Abstaende:
+ *        Nachbar-Margin + Fugenbreite, Engstellen-Kappung minus Fugenbreite (vorher implizit durch Offset-Bahn).
  * V5.27: Fix — _minSelfClearance() wertete Nachbarsegmente einer glatten Kurve als gegenueberliegende
  *        Wand: auf Kreisen/Rundungen wurde jeder Lead auf ~0.5 mm gekappt (V6.43-Kappung). Jetzt zaehlen
  *        nur Segmente, deren Weg ENTLANG der Kontur > 2x ihres direkten Abstands ist (echte Engstelle).
@@ -109,7 +114,7 @@
  * V5.6: Hatch als eigenständige CamContour (cuttingMode='none', isHatchContour)
  * V5.7: Gap Detection — gaps[], healedGaps[] Properties + hasGaps()/clearGapData()
  * Last Modified: 2026-11-06
- * Build: 20261106-clearfix
+ * Build: 20261106-geombasis
  */
 
 class CamContour {
@@ -590,9 +595,7 @@ class CamContour {
             return this._cachedLeadInPath;
         }
 
-        const offsetResult = this.getKerfOffsetPolyline();
-        const pts = (offsetResult?.points?.length > 2 && !this.compensationSkipped)
-            ? offsetResult.points : this.points;
+        const pts = this._leadBasisPts();   // V5.28: Leads auf der Teilegeometrie (Controller versetzt per G41/G42)
         if (!pts || pts.length < 3) return null;
 
         // SMALL HOLE: Pierce im Zentrum der Bohrung
@@ -1002,9 +1005,7 @@ class CamContour {
         if (!this.isClosed) return null;
 
         // Bei Ecken: kein Overcut (IGEMS-Verhalten)
-        const offsetResult = this.getKerfOffsetPolyline();
-        const checkPts = (offsetResult?.points?.length > 2 && !this.compensationSkipped)
-            ? offsetResult.points : this.points;
+        const checkPts = this._leadBasisPts();
 
         const overcutLen = this.overcutLength;
         if (overcutLen === 0) return null;
@@ -1016,6 +1017,7 @@ class CamContour {
             // POSITIVER Overcut: Entlang der Kontur über Startpunkt hinaus
             const overcutPoints = [{ x: pts[0].x, y: pts[0].y }];
             let remaining = overcutLen;
+            let endSeg = 0, endT = 0;
 
             for (let i = 0; i < pts.length - 1 && remaining > 0; i++) {
                 const p1 = pts[i];
@@ -1025,6 +1027,7 @@ class CamContour {
                 if (segLen <= remaining) {
                     overcutPoints.push({ x: p2.x, y: p2.y });
                     remaining -= segLen;
+                    endSeg = i + 1; endT = 0;
                 } else {
                     const t = remaining / segLen;
                     overcutPoints.push({
@@ -1032,14 +1035,24 @@ class CamContour {
                         y: p1.y + t * (p2.y - p1.y)
                     });
                     remaining = 0;
+                    endSeg = i; endT = t;
                 }
             }
 
             this._cachedOvercutPath = {
                 points: overcutPoints,
                 endPoint: overcutPoints[overcutPoints.length - 1],
-                type: 'positive'
+                type: 'positive',
+                endSeg, endT   // V5.28: Lage des Endes auf der Geometrie (fuer Werkzeugbahn-Abbildung)
             };
+            // V5.28: versetzte Punkte (Anzeige der realen Strahlmitte), Index-gleich zur Geometrie
+            const kp = this.getKerfOffsetPolyline();
+            if (kp?.points && !this.compensationSkipped && kp.points.length === pts.length && this._compensation()) {
+                const tp = [];
+                for (let i = 0; i < overcutPoints.length - 1; i++) tp.push({ x: kp.points[i].x, y: kp.points[i].y });
+                const e = this._offsetPointAt(endSeg, endT);
+                if (e) { tp.push(e); this._cachedOvercutPath.toolPoints = tp; }
+            }
         } else {
             // NEGATIVER Overcut: Kontur wird nicht ganz geschlossen
             this._cachedOvercutPath = {
@@ -1056,6 +1069,81 @@ class CamContour {
     // LEAD-OUT - Ab Overcut-Ende
     // ════════════════════════════════════════════════════════════════
 
+    /**
+     * V5.28: Basis-Polylinie fuer alle Lead-/Ueberschnitt-Berechnungen = TEILEGEOMETRIE.
+     * Waricam (Referenz HEIDE6000101587.CNC) programmiert die Geometrie mit G41/G42, der Controller
+     * versetzt um kerf/2; der Lead-In endet exakt auf dem Konturstart. Vorher lagen Leads auf der
+     * Kerf-Offset-Bahn -> Sprung kerf/2 zwischen Lead-Ende und Konturstart im G-Code.
+     */
+    _leadBasisPts() { return this.points; }
+
+    /** Kompensationsseite wie im Postprozessor (_getKerfCode): { d, left } oder null (online/kein Kerf). */
+    _compensation() {
+        if (this.kerfComp === 'online' || this.kerfSide === 'online' || !(this.kerfWidth > 0)) return null;
+        if (!this.cuttingMode || this.cuttingMode === 'none') return null;
+        const flipped = this._effectiveFlip();
+        const g41 = this.cuttingMode === 'hole' ? !flipped : flipped;   // hole: G41, disc/slit: G42 (flip kehrt um)
+        return { d: this.kerfWidth / 2, left: g41 };
+    }
+
+    /** Versetzter (kompensierter) Punkt auf Segment idx..idx+1 bei Parameter u (0..1), sonst null. */
+    _offsetPointAt(idx, u) {
+        const kp = this.getKerfOffsetPolyline();
+        const pts = this.points;
+        if (!kp?.points || this.compensationSkipped || kp.points.length !== pts.length) return null;
+        const a = kp.points[idx], b = kp.points[Math.min(idx + 1, kp.points.length - 1)];
+        if (!a || !b) return null;
+        return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
+    }
+
+    /** Fallback fuer den versetzten Punkt: Geometriepunkt + d * Verschnitt-Normale. */
+    _offsetFallback(point, tangent, d) {
+        const n = this._getWasteSideNormal(point, tangent);
+        return { x: point.x + n.x * d, y: point.y + n.y * d };
+    }
+
+    /**
+     * V5.28: Reale Strahlmitte des Lead-In (nur Anzeige). Programmiert ist die Geometrie (getLeadInPath().segments);
+     * der Controller versetzt. Anfahrsatz unkompensiert -> kompensierte Bahn, Rest um kerf/2 versetzt.
+     */
+    getLeadInToolSegments() {
+        const lp = this.getLeadInPath();
+        if (!lp?.segments?.length) return [];
+        const c = this._compensation();
+        if (!c) return lp.segments;
+        const join = lp.segments[lp.segments.length - 1].p1;
+        let joinOff = this._offsetPointAt(0, 0);
+        if (!joinOff) {
+            const t = LeadGeometry.tangentAt(lp.segments[lp.segments.length - 1], 'end');
+            joinOff = this._offsetFallback(join, t, c.d);
+        }
+        return LeadGeometry.toolPathIn(lp.segments, { d: c.d, left: c.left, joinOff });
+    }
+
+    /** V5.28: Reale Strahlmitte des Lead-Out (nur Anzeige). */
+    getLeadOutToolSegments() {
+        const lp = this.getLeadOutPath();
+        if (!lp?.segments?.length) return [];
+        const c = this._compensation();
+        if (!c) return lp.segments;
+        let exitOff = null;
+        const oc = this.getOvercutPath();
+        const pts = this._leadBasisPts();
+        if (oc?.type === 'positive' && oc.toolPoints?.length) {
+            exitOff = oc.toolPoints[oc.toolPoints.length - 1];
+        } else if (oc?.type === 'negative' && oc.shortenBy > 0) {
+            const r = this._pointAtDistanceFromEnd(pts, oc.shortenBy);
+            if (r) exitOff = this._offsetPointAt(r.segIndex, r.u);
+        } else {
+            exitOff = this._offsetPointAt(0, 0);
+        }
+        if (!exitOff) {
+            const first = lp.segments[0];
+            exitOff = this._offsetFallback(first.p0, LeadGeometry.tangentAt(first, 'start'), c.d);
+        }
+        return LeadGeometry.toolPathOut(lp.segments, { d: c.d, left: c.left, exitOff });
+    }
+
     /** Punkt + Tangente in Abstand dist (entlang der Kontur) vor dem Konturende. */
     _pointAtDistanceFromEnd(pts, dist) {
         let rem = dist;
@@ -1067,7 +1155,8 @@ class CamContour {
                 const t = rem / len;
                 return {
                     point: { x: b.x + (a.x - b.x) * t, y: b.y + (a.y - b.y) * t },
-                    tangent: { x: (b.x - a.x) / len, y: (b.y - a.y) / len }
+                    tangent: { x: (b.x - a.x) / len, y: (b.y - a.y) / len },
+                    segIndex: i - 1, u: 1 - t   // V5.28: Lage auf Segment a->b (fuer Offset-Abbildung)
                 };
             }
             rem -= len;
@@ -1082,9 +1171,7 @@ class CamContour {
         // (siehe SinumerikPostprocessor._calcSlitRetractDirection / G91 G40).
         if (!this.isClosed) return null;
 
-        const offsetResult = this.getKerfOffsetPolyline();
-        const pts = (offsetResult?.points?.length > 2 && !this.compensationSkipped)
-            ? offsetResult.points : this.points;
+        const pts = this._leadBasisPts();   // V5.28: Leads auf der Teilegeometrie (Controller versetzt per G41/G42)
         if (!pts || pts.length < 3) return null;
 
         // SMALL HOLE: Lead-Out Richtung Zentrum
@@ -1558,7 +1645,8 @@ class CamContour {
         if (!(requestedLength > 0)) return requestedLength;
         const minDist = this._minSelfClearance(point, contourPts);
         if (!(minDist < Infinity)) return requestedLength;
-        return Math.min(requestedLength, minDist / 2);
+        // V5.28: Geometrie-Abstand abzueglich Fugenbreite (vorher durch die Offset-Bahn implizit)
+        return Math.min(requestedLength, Math.max(0, minDist - (this.kerfWidth > 0 ? this.kerfWidth : 0)) / 2);
     }
 
     /**
@@ -1596,6 +1684,10 @@ class CamContour {
      */
     checkMultiContourCollision(allContours, safetyMargin = 0.5) {
         if (!allContours || allContours.length < 2) return false;
+
+        // V5.28: Leads/Nachbarn liegen jetzt auf der Teilegeometrie (vorher Kerf-Offset-Bahn, was
+        // implizit die Fugenbreite von der Luecke abzog) -> Fugenbreite explizit zum Abstand addieren.
+        safetyMargin = safetyMargin + (this.kerfWidth > 0 ? this.kerfWidth : 0);
 
         // Nachbar-Konturen mit BBox vorfiltern (einmalig)
         const neighbors = this._getNeighborContours(allContours, safetyMargin);
@@ -1694,7 +1786,7 @@ class CamContour {
             neighbors.push({
                 contour: other,
                 bbox,
-                pts: other.getKerfOffsetPolyline()?.points || other.points
+                pts: other.points
             });
         }
         return neighbors;
@@ -1768,7 +1860,7 @@ class CamContour {
         // gegenueberliegende, eng benachbarte Kante selbst ausgeschlossen werden (siehe
         // _minSelfClearance / Lessons 2026-06-25, derselbe Bug-Typ). Gleicher Radius wie
         // _minSelfClearance, fuer konsistentes Verhalten beider Engstellen-Pruefungen.
-        const selfPts = this.getKerfOffsetPolyline()?.points || this.points;
+        const selfPts = this.points;
         const skipRadius = Math.max(this.kerfWidth * 2, 1.0);
         const entry = leadPts[leadPts.length - 1]; // Letzter Punkt = Entry
         for (let i = 0; i < selfPts.length - 1; i++) {
@@ -1874,7 +1966,7 @@ class CamContour {
     _tryDogLegLeadIn(neighbors, margin) {
         if (!this.isClosed) return null;
 
-        const pts = this.getKerfOffsetPolyline()?.points || this.points;
+        const pts = this._leadBasisPts();
         if (!pts || pts.length < 3) return null;
 
         const entry = pts[0];
@@ -1955,9 +2047,7 @@ class CamContour {
     _tryDogLegLeadOut(neighbors, margin) {
         if (!this.isClosed) return null;
 
-        const offsetResult = this.getKerfOffsetPolyline();
-        const pts = (offsetResult?.points?.length > 2 && !this.compensationSkipped)
-            ? offsetResult.points : this.points;
+        const pts = this._leadBasisPts();   // V5.28: Leads auf der Teilegeometrie (Controller versetzt per G41/G42)
         if (!pts || pts.length < 3) return null;
 
         const overcut = this.getOvercutPath();

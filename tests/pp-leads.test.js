@@ -66,12 +66,10 @@ function checkContour(name, c) {
     return { eIn: eIn.length, eOut: eOut.length, arcs: [...eIn, ...eOut].filter(s => s.kind === 'arc').length };
 }
 
-// HINWEIS (Befund S4): Mit kerfWidth > 0 liegen die Leads auf der Kerf-Offset-Bahn, die Kontur im G-Code aber auf der
-// Teilegeometrie (Controller-Kompensation G41/G42) -> Lead-Ende != Konturstart (Sprung = kerf/2). Siehe unten (skip).
-// Diese Roundtrip-Tests pruefen daher die Segment->G-Code-Uebersetzung selbst mit kerfWidth = 0.
-test('Roundtrip (kerf 0): G-Code der Leads == Segmente der Zeichnung (alle Einzel-Szenarien)', () => {
+// Roundtrip G-Code == gezeichnete (programmierte) Lead-Segmente, mit realer Schnittfuge (kerf 0.8).
+test('Roundtrip: G-Code der Leads == Segmente der Zeichnung (alle Einzel-Szenarien)', () => {
     let n = 0, arcs = 0, withLeads = 0;
-    for (const s of F.buildScenarios(0)) {
+    for (const s of F.buildScenarios()) {
         const c = s.make();
         if (!c.isClosed) continue;
         const r = checkContour(s.name, c);
@@ -81,15 +79,15 @@ test('Roundtrip (kerf 0): G-Code der Leads == Segmente der Zeichnung (alle Einze
     assert.ok(n > 200 && arcs > 100);
 });
 
-test('Roundtrip (kerf 0): Mehr-Kontur-Szenarien (gekuerzt/rotiert/Dog-Leg)', () => {
-    for (const s of F.buildMultiScenarios(0)) {
+test('Roundtrip: Mehr-Kontur-Szenarien (gekuerzt/rotiert/Dog-Leg)', () => {
+    for (const s of F.buildMultiScenarios()) {
         const cs = s.make();
         cs.forEach(c => c.checkMultiContourCollision(cs, 0.5));
         cs.forEach((c, i) => checkContour(`${s.name}#${i}`, c));
     }
 });
 
-test('Lead-Ende trifft den Konturstart im G-Code (kerf > 0)', { skip: 'OFFEN (Befund S4): Leads auf Kerf-Offset-Bahn, Kontur auf Geometrie -> Sprung kerf/2; Entscheidung noetig' }, () => {
+test('Lead-Ende trifft den Konturstart im G-Code (kerf > 0, Waricam-Verhalten)', () => {
     const c = new F.CamContour(F.rect(0, 0, 100, 60), { cuttingMode: 'disc', kerfWidth: 0.8, isClosed: true, leadInType: 'linear', leadInLength: 5, leadInAngle: 45 });
     const act = parseContour(pp.generate([c], [0], { planName: 'T' }).code, 1);
     // Lead-In endet im Konturstart (0,0); danach laeuft die erste Kante nach (100,0)

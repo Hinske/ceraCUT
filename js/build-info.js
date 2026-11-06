@@ -15,17 +15,17 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'aae1360',
+        hash: 'dc99a69',
         date: '2026-11-06',
-        message: 'feat: AP1 S4 Postprozessor liest Lead-Segmente (V2.8), Roundtrip-Tests, negative'
+        message: 'feat: AP1 S4b Leads auf Teilegeometrie (Waricam-konform), reale Strahlmitte als Fugenband, Abna'
     },
 
     modules: {
         'dxf-parser':         { version: '3.20', build: '20261106-fliese4' },
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.11', build: '20261106-fliese4' },
-        'cam-contour':        { version: '5.27', build: '20261106-clearfix' },
-        'canvas-renderer':    { version: '3.60', build: '20261106-leadview' },
+        'cam-contour':        { version: '5.28', build: '20261106-geombasis' },
+        'canvas-renderer':    { version: '3.61', build: '20261106-geombasis' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.8', build: '20261106-leadseg' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
@@ -41,7 +41,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'lead-geometry':      { version: '1.0', build: '20261106-leadgeom' },
+        'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
         'app':                { version: '6.61', build: '20261106-kerfband' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.06: Feat — AP1 S4b Geometrie-basierte Leads (Waricam-Referenz HEIDE6000101587.CNC): Leads/Ueberschnitt auf der Teilegeometrie, Lead-In endet exakt auf dem Konturstart (vorher Sprung kerf/2 im G-Code), Controller versetzt per G41/G42. Anzeige: Leads/Startmarke auf der Geometrie, Fugenband entlang der realen Strahlmitte (cam-contour V5.28, canvas-renderer V3.61, lead-geometry V1.1). Abnahme-Test gegen die Waricam-CNC (Lead-In 3 mm senkrecht, Ueberschnitt 3 mm, Lead-Out 1 mm). Roundtrip G-Code == Zeichnung mit kerf 0.8.',
         'V7.05: Feat — AP1 S4 Postprozessor (sinumerik-pp V2.8): Leads kommen 1:1 aus den Lead-Segmenten (G01/G02/G03 identisch zur Darstellung, gekuerzte Boegen bleiben exakte Boegen). Fix: negativer Ueberschnitt kuerzt jetzt die gefahrene Kontur (vorher volle Kontur). Roundtrip-Test G-Code == Zeichnung (273 Szenarien, 165 Boegen). BEFUND offen: Leads liegen auf Kerf-Offset-Bahn, Kontur im G-Code auf Teilegeometrie -> Sprung kerf/2 zwischen Lead-Ende und Konturstart (Entscheidung noetig).',
         'V7.04: Feat — AP1 S3 Lead-Darstellung im Waricam-Stil (canvas-renderer V3.60): Leads aus echten Segmenten (Bogen immer ctx.arc), Anschnitt rot, Ausschnitt/Ueberschnitt blau, Pfeile in Schneidrichtung, einheitlicher Anschusspunkt, Warnsymbol (!) statt Zustandsfarben, Schnittfuge massstaeblich als Band (Schalter Fuge An/Aus, app V6.61). Fix (cam-contour V5.27): _minSelfClearance() hielt eigene Kruemmung/Ecken fuer Kanalwaende — Leads wurden auf Kreisen und fast alle Lead-Outs (auch an Rechteckecken) auf ~0.5 mm gekappt; jetzt voller konfigurierter Lead, echte Engstellen bleiben gekappt. Visuell per Headless-Chromium geprueft.',
         'V7.03: Fix — _isAtCorner() (cam-contour V5.26) rechnete mit Supplementwinkel (gerade=175 Grad): Arc-Leads wurden im Default nie erzeugt. Jetzt Drehwinkel; Arc-Leads erscheinen auf glatten Konturen/Kantenmitten wieder, Ecken weiter linear. Golden neu erfasst (nur Kreis-Szenarien aendern sich: linear/tangent -> arc)',

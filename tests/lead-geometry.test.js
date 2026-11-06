@@ -131,3 +131,41 @@ test('validate erkennt Luecken und kaputte Boegen', () => {
     assert.equal(LG.validate([bad]).ok, false);
     assert.equal(LG.validate([]).ok, false);
 });
+
+// ─── Werkzeugbahn (G41/G42) ───
+test('offsetSegment: Linie parallel, Bogenradius -d/+d je nach Seite und Drehsinn', () => {
+    const l = LG.line({ x: 0, y: 0 }, { x: 10, y: 0 });
+    const lo = LG.offsetSegment(l, 0.4, true);   // links von +X = +Y
+    nearPt(lo.p0, { x: 0, y: 0.4 }); nearPt(lo.p1, { x: 10, y: 0.4 });
+    const ro = LG.offsetSegment(l, 0.4, false);
+    nearPt(ro.p0, { x: 0, y: -0.4 });
+    for (const ccw of [true, false]) for (const left of [true, false]) {
+        const a = LG.arc({ x: 0, y: 0 }, 5, 0, Math.PI / 2, ccw);
+        const o = LG.offsetSegment(a, 0.4, left);
+        // Mittelpunkt liegt bei CCW links, bei CW rechts -> Versatz zur Mittelpunktseite = kleiner
+        near(o.radius, (ccw === left) ? 4.6 : 5.4, 1e-12);
+        nearPt(o.center, a.center);
+        assert.equal(o.ccw, ccw);
+        // Abstand zum Original-Bogen = 0.4 an jedem Endpunkt
+        near(Math.hypot(o.p0.x - a.center.x, o.p0.y - a.center.y), o.radius, 1e-12);
+    }
+    assert.equal(LG.offsetSegment(LG.arc({ x: 0, y: 0 }, 0.3, 0, 1, true), 0.4, true), null);
+});
+
+test('toolPathIn/Out: unkompensierter Anfahr-/G40-Satz, Rest um d versetzt', () => {
+    const c = { join: { x: 0, y: 0 }, tangent: { x: 1, y: 0 }, normal: { x: 0, y: -1 } };
+    const segs = LG.leadInLinear({ ...c, angleDeg: 45, length: 3 });
+    const joinOff = { x: 0, y: -0.4 };
+    const tp = LG.toolPathIn(segs, { d: 0.4, left: false, joinOff });
+    nearPt(tp[0].p0, segs[0].p0);            // Anschuss unkompensiert
+    nearPt(tp[0].p1, joinOff);               // endet auf kompensierter Bahn
+    const out = LG.leadOutLinear({ ...c, angleDeg: 90, length: 1 });
+    const to = LG.toolPathOut(out, { d: 0.4, left: false, exitOff: { x: 0, y: -0.4 } });
+    nearPt(to[0].p0, { x: 0, y: -0.4 });
+    nearPt(to[0].p1, out[0].p1);             // G40: Ende unkompensiert
+    // Bogen-Lead: alle Segmente versetzt, Radius passt
+    const arcs = LG.leadInArc({ ...c, radius: 3, length: 9 });
+    const ta = LG.toolPathIn(arcs, { d: 0.4, left: false, joinOff });
+    const a = ta.find(s => s.kind === 'arc');
+    assert.ok(Math.abs(a.radius - 3) > 0.39 && Math.abs(a.radius - 3) < 0.41);
+});

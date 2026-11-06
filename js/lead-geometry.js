@@ -1,5 +1,6 @@
 /**
- * CeraCUT Lead Geometry V1.0
+ * CeraCUT Lead Geometry V1.1
+ * V1.1: offsetSegment/toolPathIn/toolPathOut — reale Strahlmitte nach G41/G42-Kompensation (nur Anzeige).
  *
  * Reine Geometrie fuer Lead-In / Lead-Out / Ueberschnitt (Fahnen): jeder Lead ist eine
  * lueckenlose Liste ECHTER Segmente (Linie oder Kreisbogen). Keine Polylinien-Metadaten-
@@ -18,13 +19,13 @@
  *   Lead-Out : Segmente laufen join (Kontur-Austritt) -> Ende
  *
  * Last Modified: 2026-11-06
- * Build: 20261106-leadgeom
+ * Build: 20261106-toolpath
  */
 
 const LeadGeometry = (() => {
     'use strict';
 
-    const VERSION = '1.0';
+    const VERSION = '1.1';
     const EPS = 1e-9;
     const TWO_PI = Math.PI * 2;
 
@@ -253,11 +254,76 @@ const LeadGeometry = (() => {
         return { ok: errors.length === 0, errors };
     }
 
+    // ──────────────────────────────────────────────────────────────
+    // Werkzeugbahn nach Controller-Kompensation (G41/G42)
+    // ──────────────────────────────────────────────────────────────
+
+    /**
+     * Parallelversatz eines Segments um d (>0) nach links (left=true) oder rechts der Laufrichtung.
+     * Linie: verschoben. Bogen: gleicher Mittelpunkt, Radius -d (Mittelpunkt auf der Versatzseite)
+     * bzw. +d. Rueckgabe null, wenn der Bogenradius dabei verschwindet.
+     */
+    function offsetSegment(s, d, left) {
+        if (s.kind === 'line') {
+            const t = tangentAt(s, 'start');
+            const k = left ? 1 : -1;
+            const n = { x: -t.y * k, y: t.x * k };
+            return line(_pt(s.p0.x + n.x * d, s.p0.y + n.y * d), _pt(s.p1.x + n.x * d, s.p1.y + n.y * d));
+        }
+        const toward = (s.ccw === !!left);   // CCW-Bogen: Mittelpunkt links; CW-Bogen: rechts
+        const r2 = toward ? s.radius - d : s.radius + d;
+        if (!(r2 > 1e-6)) return null;
+        return arc(s.center, r2, startAngle(s), s.span, s.ccw);
+    }
+
+    /**
+     * Reale Strahlmitte eines Lead-In unter G41/G42: Anfahrsatz startet unkompensiert am Anschuss
+     * und endet auf der kompensierten Bahn (joinOff = versetzter Konturstart); Folgesaetze laufen
+     * um d versetzt. Rueckgabe: neue Segmentliste (nicht lueckenlos validiert, nur zur Anzeige).
+     */
+    function toolPathIn(segs, { d, left, joinOff }) {
+        if (!segs || !segs.length) return [];
+        const out = [];
+        for (const s of segs) {
+            const o = offsetSegment(s, d, left);
+            if (!o) return segs.map(_cloneSeg);
+            out.push(o);
+        }
+        const last = out.length - 1;
+        if (out[0].kind === 'line') out[0].p0 = _pt(segs[0].p0.x, segs[0].p0.y);   // unkompensierter Anfahrpunkt
+        if (out[last].kind === 'line' && joinOff) out[last].p1 = _pt(joinOff.x, joinOff.y);
+        for (let i = 1; i < out.length; i++) {
+            if (out[i].kind === 'line') out[i].p0 = _pt(out[i - 1].p1.x, out[i - 1].p1.y);
+        }
+        return out;
+    }
+
+    /**
+     * Reale Strahlmitte eines Lead-Out: startet auf der kompensierten Bahn (exitOff = versetzter
+     * Kontur-/Ueberschnitt-Endpunkt), der G40-Satz endet unkompensiert am programmierten Ende.
+     */
+    function toolPathOut(segs, { d, left, exitOff }) {
+        if (!segs || !segs.length) return [];
+        const out = [];
+        for (const s of segs) {
+            const o = offsetSegment(s, d, left);
+            if (!o) return segs.map(_cloneSeg);
+            out.push(o);
+        }
+        if (out[0].kind === 'line' && exitOff) out[0].p0 = _pt(exitOff.x, exitOff.y);
+        const last = out.length - 1;
+        if (out[last].kind === 'line') out[last].p1 = _pt(segs[last].p1.x, segs[last].p1.y);   // G40: unkompensiertes Ende
+        for (let i = 1; i < out.length; i++) {
+            if (out[i].kind === 'line') out[i].p0 = _pt(out[i - 1].p1.x, out[i - 1].p1.y);
+        }
+        return out;
+    }
+
     const api = {
         VERSION, line, arc, segLength, pathLength, tangentAt, startAngle, endAngle,
         leadInLinear, leadInTangent, leadInArc,
         leadOutLinear, leadOutTangent, leadOutArc,
-        trim, toPolyline, validate
+        trim, toPolyline, validate, offsetSegment, toolPathIn, toolPathOut
     };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     return api;

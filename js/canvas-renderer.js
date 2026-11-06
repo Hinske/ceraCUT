@@ -1,5 +1,6 @@
 /**
  * CeraCUT V3.52 - Canvas Renderer
+ * V3.61: Feat — AP1 S4b: Leads/Ueberschnitt/Startmarke auf der Teilegeometrie (wie G-Code), Fugenband entlang der realen Strahlmitte (getLeadIn/OutToolSegments, overcut.toolPoints).
  * V3.60: Feat — AP1 S3 (Waricam-Stil): Leads aus echten Segmenten (Bogen immer ctx.arc, kein Polylinien-Fallback), Anschnitt rot / Ausschnitt+Ueberschnitt blau, Pfeil in Schneidrichtung, einheitlicher Anschusspunkt, Warnsymbol (!) statt Zustandsfarben, Schnittfuge massstaeblich als Band (showKerfBand, Schalter btn-kerf-band). Typ-Farben/-Dashes/-Labels entfernt.
  * V3.58: Feat — Reihenfolge-Nummern: Anklick-Modus (cutSeq) grün/gedimmt, ausgewählte Schnitte gelb umrandet
  * V3.57: Feat — Fliesennummer gross mittig, Anklick-Modus zeigt Klick-Reihenfolge (app.tileSeq)
@@ -1250,12 +1251,14 @@ class CanvasRenderer {
             const markerPoints = kerfPoints || points;
 
             // V3.10: Anschussfahnen nur in CAM-Modi (nicht im CAD-Zeichenmodus)
+            // V3.61: Leads/Ueberschnitt liegen auf der Teilegeometrie (wie im G-Code, Controller versetzt per G41/G42);
+            // das Fugenband zeigt die reale Strahlmitte.
             if (this.currentMode === 'anschuss' || this.currentMode === 'reihenfolge') {
-                this.drawStartTriangle(ctx, markerPoints[0], this.colors.leadIn);
-                this.drawSingleDirectionArrow(ctx, markerPoints, contour);
-                this.drawLeadIn(ctx, contour, markerPoints);
-                this.drawOvercut(ctx, contour, markerPoints);
-                this.drawLeadOut(ctx, contour, markerPoints);
+                this.drawStartTriangle(ctx, points[0], this.colors.leadIn);
+                this.drawSingleDirectionArrow(ctx, points, contour);
+                this.drawLeadIn(ctx, contour, points);
+                this.drawOvercut(ctx, contour, points);
+                this.drawLeadOut(ctx, contour, points);
 
                 if (contour.microjoints && contour.microjoints.length > 0) {
                     this.drawMicrojoints(ctx, contour, markerPoints);
@@ -1801,7 +1804,10 @@ class CanvasRenderer {
         const color = this.colors.leadIn;
         const lw = CanvasRenderer.LINE_WIDTH.LEAD / this.scale;
 
-        if (this.showKerfBand) this._strokeBand(ctx, segs, contour.kerfWidth);
+        if (this.showKerfBand) {
+            const tool = contour.getLeadInToolSegments?.();
+            this._strokeBand(ctx, tool && tool.length ? tool : segs, contour.kerfWidth);
+        }
 
         ctx.save();
         ctx.setLineDash([]);
@@ -1825,7 +1831,10 @@ class CanvasRenderer {
         const color = this.colors.leadOut;
         const lw = CanvasRenderer.LINE_WIDTH.LEAD / this.scale;
 
-        if (this.showKerfBand) this._strokeBand(ctx, segs, contour.kerfWidth);
+        if (this.showKerfBand) {
+            const tool = contour.getLeadOutToolSegments?.();
+            this._strokeBand(ctx, tool && tool.length ? tool : segs, contour.kerfWidth);
+        }
 
         ctx.save();
         ctx.setLineDash([]);
@@ -1890,7 +1899,7 @@ class CanvasRenderer {
         const pts = overcutPath.points;
         if (!pts || pts.length < 2) return;
 
-        if (this.showKerfBand) this._strokeBand(ctx, pts, contour.kerfWidth);
+        if (this.showKerfBand) this._strokeBand(ctx, overcutPath.toolPoints || pts, contour.kerfWidth);
 
         ctx.save();
         ctx.setLineDash([]);
