@@ -113,3 +113,13 @@ N15 G01 X0.600 Y-0.400         <- Lead-Out beginnt auf der Offset-Bahn
 ```
 Folge: Sprung kerf/2 (0,4 mm) zwischen Lead-Ende und Konturstart, erste Kante leicht schraeg. Bei Kreisen entstehen verzerrte Verbindungsboegen. Bestand seit vor dem Umbau (alter PP erzeugt identischen Code). Test: `tests/pp-leads.test.js` ("Lead-Ende trifft den Konturstart", skip).
 Loesungsvorschlag: Leads fuer den G-Code auf der Geometrie berechnen (Controller versetzt sie), Darstellung zeigt zusaetzlich die versetzte Werkzeugbahn (Segmente um kerf/2 verschoben bzw. Bogenradius +-kerf/2).
+
+### 8.1 Bestaetigung durch Waricam-Referenz `HEIDE6000101587.CNC` (2026-11-06)
+
+Quelle: `/mnt/cnc/HEIDE6000101587.CNC` (= Kopie in `Sonstiges/Screenshots/Waricam/`), DXF: `Output Waricam/HEIDE6000101587.DXF` (Langloecher aus R14-Boegen, Offene Kontur aus R25-Boegen).
+
+- **Waricam programmiert die Teilegeometrie** (Boegen r = 14,000 wie im DXF, nicht 14 +- 0,4) mit G41/G42; der Controller versetzt. Der Lead-In endet **exakt** auf dem Konturstart: `G41 G01 X134.399 Y22.101` -> `G03 ... I-9.899 J9.899` (Mittelpunkt 124.5/32.0, r = 14,000, Startpunkt liegt auf dem Kreis).
+- Kontur 1 (Langloch, Loch/G41): **Lead-In linear 45 Grad, 3,0 mm** (Pierce 132.278/24.222 -> 134.399/22.101), danach Kontur, **Ueberschnitt 3,0 mm** weiter auf demselben Kreisbogen (`G03 X136.278 Y24.432`, Bogenlaenge 3,0), danach **Lead-Out 1,0 mm senkrecht** zur Kontur in den Abfall (`G40 G01 X135.437 Y24.973`).
+- Kontur 2/4 (offene Kontur mit R25-Boegen): Lead-In 2,85 mm linear, Schnitt, Ende per `L205` + `G91 G40 G01 X1.0 Y0.0` + `G90` (wie unser Slit-Pfad).
+- Stuecktyp: pro Kontur `R957`, `R923=9`, `L201`, `VAKT=R940+0.45*(R938-R940)` und `FLIN H1/H0` — entspricht dem, was unser PP bereits erzeugt.
+- Folgerung: Lead-Basis fuer den G-Code = **Geometrie**, nicht Kerf-Offset. Offene Entscheidung zur Umsetzung siehe Abschnitt 8.
