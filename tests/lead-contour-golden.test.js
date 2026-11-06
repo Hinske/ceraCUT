@@ -44,14 +44,11 @@ function compareLead(name, role, g, n) {
         for (const p of n.points) assert.ok(distToPoly(p, g.points) < HAUS_TOL, `${name} ${role}: neu->alt`);
     }
     if (g.arc && !g.shortened) {
-        assert.ok(n.arcCenter, `${name} ${role}: arc-Metadaten fehlen`);
-        assert.ok(Math.hypot(n.arcCenter.x - g.arc.c.x, n.arcCenter.y - g.arc.c.y) < 1e-6, `${name} ${role}: Mitte`);
-        assert.ok(Math.abs(n.arcRadius - g.arc.r) < 1e-6, `${name} ${role}: Radius`);
-        assert.equal(n.arcSweepCCW, g.arc.ccw, `${name} ${role}: Drehsinn`);
-        if (g.arc.r > 0) {
-            assert.ok(angEq(n.arcStartAngle, g.arc.a0), `${name} ${role}: Startwinkel`);
-            assert.ok(angEq(n.arcEndAngle, g.arc.a1), `${name} ${role}: Endwinkel`);
-        }
+        const a = (n.segments || []).find(x => x.kind === 'arc');
+        assert.ok(a, `${name} ${role}: Bogen-Segment fehlt`);
+        assert.ok(Math.hypot(a.center.x - g.arc.c.x, a.center.y - g.arc.c.y) < 1e-6, `${name} ${role}: Mitte`);
+        assert.ok(Math.abs(a.radius - g.arc.r) < 1e-6, `${name} ${role}: Radius`);
+        assert.equal(a.ccw, g.arc.ccw, `${name} ${role}: Drehsinn`);
     }
     // Neue Invarianten
     if (n.type !== 'on_geometry' && role !== 'overcut') {

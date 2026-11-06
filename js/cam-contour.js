@@ -1,5 +1,7 @@
 /**
- * CeraCUT CamContour V5.28 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.29 - IGEMS-konformes Lead-In/Out System
+ * V5.29: Refactor — AP1 S7: alte Bogen-Metadaten der Leads (arcCenter/arcRadius/arcStartAngle/arcEndAngle/
+ *        arcSweepCCW/hasLinePortion) entfernt; kein Konsument mehr (Renderer/PP/Simulator nutzen segments).
  * V5.28: Feat — AP1 S4b: Leads und Ueberschnitt werden auf der TEILEGEOMETRIE berechnet (_leadBasisPts) statt auf der
  *        Kerf-Offset-Bahn. Waricam-Referenz (HEIDE6000101587.CNC): Geometrie + G41/G42, Lead-In endet exakt auf dem
  *        Konturstart. Neu: getLeadInToolSegments()/getLeadOutToolSegments()/overcut.toolPoints = reale Strahlmitte
@@ -114,7 +116,7 @@
  * V5.6: Hatch als eigenständige CamContour (cuttingMode='none', isHatchContour)
  * V5.7: Gap Detection — gaps[], healedGaps[] Properties + hasGaps()/clearGapData()
  * Last Modified: 2026-11-06
- * Build: 20261106-geombasis
+ * Build: 20261106-s7clean
  */
 
 class CamContour {
@@ -735,34 +737,17 @@ class CamContour {
 
     /**
      * ARC LEAD-IN (IGEMS Standard) - Kreisbogen tangential in die Kontur.
-     * V5.25: Geometrie liegt in lead-geometry.js (echte Segmente). Die alten Metadaten
-     * (arcCenter/arcRadius/arcStartAngle/arcEndAngle/arcSweepCCW/hasLinePortion) werden
-     * fuer bestehende Konsumenten (Renderer/PP) weiter aus dem Bogen-Segment befuellt.
+     * V5.25: Geometrie liegt in lead-geometry.js (echte Segmente). V5.29: alte Bogen-Metadaten
+     * (arcCenter/arcRadius/...) entfernt — Renderer, Postprozessor und Simulator lesen `segments`.
      */
     _calcArcLeadIn(entry, tangent, normal) {
         const radius = this.leadInRadius;
         const totalLength = this.leadInLength;
-
-        // Radius <= 0: tangentialer Lead (V5.12), Typ bleibt 'arc' fuer Konsumenten
-        if (radius <= 1e-6) {
-            const lp = this._leadFromSegments(
-                LeadGeometry.leadInTangent({ join: entry, tangent, length: totalLength }), 'in', 'arc');
-            lp.arcCenter = { x: entry.x, y: entry.y };
-            lp.arcRadius = 0; lp.arcStartAngle = 0; lp.arcEndAngle = 0; lp.arcSweepCCW = true;
-            lp.hasLinePortion = totalLength > 0.1;
-            return lp;
-        }
-
-        const segs = LeadGeometry.leadInArc({ join: entry, tangent, normal, radius, length: totalLength });
-        const lp = this._leadFromSegments(segs, 'in', 'arc');
-        const a = segs[segs.length - 1];
-        lp.arcCenter = { x: a.center.x, y: a.center.y };
-        lp.arcRadius = a.radius;
-        lp.arcStartAngle = LeadGeometry.startAngle(a);
-        lp.arcEndAngle = LeadGeometry.endAngle(a);
-        lp.arcSweepCCW = a.ccw;
-        lp.hasLinePortion = segs.length > 1;
-        return lp;
+        // Radius <= 0: tangentialer Lead (V5.12), Typ bleibt 'arc'
+        const segs = (radius <= 1e-6)
+            ? LeadGeometry.leadInTangent({ join: entry, tangent, length: totalLength })
+            : LeadGeometry.leadInArc({ join: entry, tangent, normal, radius, length: totalLength });
+        return this._leadFromSegments(segs, 'in', 'arc');
     }
 
     /**
@@ -1359,27 +1344,10 @@ class CamContour {
     _calcArcLeadOut(exit, tangent, normal) {
         const radius = this.leadOutRadius;
         const totalLength = this.leadOutLength;
-
-        // Radius <= 0: tangentialer Lead (V5.12), Typ bleibt 'arc'
-        if (radius <= 1e-6) {
-            const lp = this._leadFromSegments(
-                LeadGeometry.leadOutTangent({ join: exit, tangent, length: totalLength }), 'out', 'arc');
-            lp.arcCenter = { x: exit.x, y: exit.y };
-            lp.arcRadius = 0; lp.arcStartAngle = 0; lp.arcEndAngle = 0; lp.arcSweepCCW = true;
-            lp.hasLinePortion = totalLength > 0.1;
-            return lp;
-        }
-
-        const segs = LeadGeometry.leadOutArc({ join: exit, tangent, normal, radius, length: totalLength });
-        const lp = this._leadFromSegments(segs, 'out', 'arc');
-        const a = segs[0];
-        lp.arcCenter = { x: a.center.x, y: a.center.y };
-        lp.arcRadius = a.radius;
-        lp.arcStartAngle = LeadGeometry.startAngle(a);
-        lp.arcEndAngle = LeadGeometry.endAngle(a);
-        lp.arcSweepCCW = a.ccw;
-        lp.hasLinePortion = segs.length > 1;
-        return lp;
+        const segs = (radius <= 1e-6)
+            ? LeadGeometry.leadOutTangent({ join: exit, tangent, length: totalLength })
+            : LeadGeometry.leadOutArc({ join: exit, tangent, normal, radius, length: totalLength });
+        return this._leadFromSegments(segs, 'out', 'arc');
     }
 
     /**

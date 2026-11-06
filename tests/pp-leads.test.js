@@ -93,3 +93,29 @@ test('Lead-Ende trifft den Konturstart im G-Code (kerf > 0, Waricam-Verhalten)',
     // Lead-In endet im Konturstart (0,0); danach laeuft die erste Kante nach (100,0)
     assert.ok(d(act[0].p1, { x: 0, y: 0 }) < 0.005, `Lead-Ende ${JSON.stringify(act[0].p1)} != Konturstart (0,0)`);
 });
+
+// S6: Ueberschnitt/Kontur im G-Code massgenau (10 mm Ueberschnitt = 10 mm)
+function glen(s) {
+    if (s.kind === 'line') return d(s.p0, s.p1);
+    const r = Math.hypot(s.p0.x - s.center.x, s.p0.y - s.center.y);
+    let a = Math.atan2(s.p1.y - s.center.y, s.p1.x - s.center.x) - Math.atan2(s.p0.y - s.center.y, s.p0.x - s.center.x);
+    const M = 2 * Math.PI; a = s.cw ? (((-a) % M) + M) % M : ((a % M) + M) % M;
+    if (d(s.p0, s.p1) < 1e-3 && a < 1e-3) a = M;   // Vollkreis: Start == Ende
+    return r * a;
+}
+test('G-Code: Ueberschnitt exakt, Kontur schliesst, negativer Ueberschnitt verkuerzt', () => {
+    const shapes = [[F.rect(0, 0, 100, 60), 'disc'], [F.rect(10, 10, 40, 25), 'hole'], [F.circle(0, 0, 30), 'disc'], [F.circle(0, 0, 15), 'hole']];
+    for (const [pts, mode] of shapes) {
+        for (const oc of [10, 2.5, -3]) {
+            const c = new F.CamContour(pts.map(p => ({ ...p })), { cuttingMode: mode, kerfWidth: 0.8, isClosed: true,
+                leadInType: 'linear', leadInAngle: 90, leadInLength: 3, leadOutType: 'linear', leadOutAngle: 90, leadOutLength: 1, overcutLength: oc });
+            const act = parseContour(pp.generate([c], [0], { planName: 'T' }).code, 1);
+            const nIn = 1;                                   // Lead-In: genau ein Linearsatz
+            const mid = act.slice(nIn, act.length - 1);      // Kontur + Ueberschnitt (ohne Lead-Out)
+            const perimeter = (() => { let l = 0; for (let i = 1; i < pts.length; i++) l += d(pts[i - 1], pts[i]); return l; })();
+            const total = mid.reduce((a, s) => a + glen(s), 0);
+            assert.ok(Math.abs(total - (perimeter + oc)) < 0.1, `${mode} oc=${oc}: Weg ${total.toFixed(3)} vs ${(perimeter + oc).toFixed(3)}`);
+            assert.ok(d(act[nIn].p0, c.points[0]) < 0.005, 'Lead-In endet auf dem Konturstart');
+        }
+    }
+});

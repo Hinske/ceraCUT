@@ -15,16 +15,16 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '805e0ce',
+        hash: '322b60f',
         date: '2026-11-06',
-        message: 'feat: AP1 S5 Simulator nutzt Lead-Segmente und reale Strahlmitte (V1.5)'
+        message: 'refactor: AP1 S6/S7 Roundtrip Ueberschnitt/Kontur, alte Lead-Bogen-Metadaten ent'
     },
 
     modules: {
         'dxf-parser':         { version: '3.20', build: '20261106-fliese4' },
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.11', build: '20261106-fliese4' },
-        'cam-contour':        { version: '5.28', build: '20261106-geombasis' },
+        'cam-contour':        { version: '5.29', build: '20261106-s7clean' },
         'canvas-renderer':    { version: '3.61', build: '20261106-geombasis' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.8', build: '20261106-leadseg' },
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.08: Refactor — AP1 S6/S7 abgeschlossen: Roundtrip-Tests G-Code == Zeichnung inkl. Ueberschnitt (10 mm = 10 mm) und negativer Ueberschnitt; alte Bogen-Metadaten der Leads entfernt (cam-contour V5.29). AP1 Lead-Kern fertig.',
         'V7.07: Feat — AP1 S5 Simulator (toolpath-simulator V1.5): Lead-Laengen exakt aus Segmenten (Bogenlaenge), Kollisions-/Plattenrand-Pruefung der Leads gegen die reale Strahlmitte (kerf/2 versetzt), Animationspfad Lead-In -> Kontur -> Ueberschnitt -> Lead-Out ohne Sprung (Test).',
         'V7.06: Feat — AP1 S4b Geometrie-basierte Leads (Waricam-Referenz HEIDE6000101587.CNC): Leads/Ueberschnitt auf der Teilegeometrie, Lead-In endet exakt auf dem Konturstart (vorher Sprung kerf/2 im G-Code), Controller versetzt per G41/G42. Anzeige: Leads/Startmarke auf der Geometrie, Fugenband entlang der realen Strahlmitte (cam-contour V5.28, canvas-renderer V3.61, lead-geometry V1.1). Abnahme-Test gegen die Waricam-CNC (Lead-In 3 mm senkrecht, Ueberschnitt 3 mm, Lead-Out 1 mm). Roundtrip G-Code == Zeichnung mit kerf 0.8.',
         'V7.05: Feat — AP1 S4 Postprozessor (sinumerik-pp V2.8): Leads kommen 1:1 aus den Lead-Segmenten (G01/G02/G03 identisch zur Darstellung, gekuerzte Boegen bleiben exakte Boegen). Fix: negativer Ueberschnitt kuerzt jetzt die gefahrene Kontur (vorher volle Kontur). Roundtrip-Test G-Code == Zeichnung (273 Szenarien, 165 Boegen). BEFUND offen: Leads liegen auf Kerf-Offset-Bahn, Kontur im G-Code auf Teilegeometrie -> Sprung kerf/2 zwischen Lead-Ende und Konturstart (Entscheidung noetig).',

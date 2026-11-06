@@ -102,7 +102,7 @@ function snapshot(lp) {
         shortened: !!lp.shortened, isRotated: !!lp.isRotated, isAlternative: !!lp.isAlternative,
         isFallbackCenterPierce: !!lp.isFallbackCenterPierce, isFallbackCenterExit: !!lp.isFallbackCenterExit,
         points: pts,
-        arc: lp.arcCenter ? { c: lp.arcCenter, r: lp.arcRadius, ccw: lp.arcSweepCCW, a0: lp.arcStartAngle, a1: lp.arcEndAngle } : null
+        arc: (() => { const a = (lp.segments || []).find(x => x.kind === 'arc'); return a ? { c: a.center, r: a.radius, ccw: a.ccw } : null; })()
     };
 }
 function snapshotContour(c) {
