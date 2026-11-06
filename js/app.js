@@ -1,5 +1,13 @@
 /**
  * CeraCUT V6.50 - Main Application
+ * V6.60: Feat — Schnittreihenfolge manuell: Schnitte anklicken, Auswahl Anfang/↑/↓/Ende/Position N (je Fliese, Undo); alte Schnittliste war seit V5.7 nicht mehr im HTML
+ * V6.59: Feat — Fliesen-Reihenfolge im Tab Reihenfolge: Presets (Zeile/Spalte/Schlangenlinie/Nachbar, Startecke, umkehren), Anklick-Modus, Drag&Drop, Sperre bei manueller Reihenfolge; Button "Fliesen erkennen" entfällt (Erkennung automatisch)
+ * V6.58: Fix — Fliesen nach Auto-Referenz neu zuordnen, Nullpunkt-Gedaechtnis, Rechteck-Erkennung tolerant (verkettete Linien)
+ * V6.57: Feat — Konturgeometrie nur im Tab CAD änderbar (isGeometryEditAllowed: Tools, Grips, Löschen); Schnittliste hält Fliesengruppen
+ * V6.56: Fix — Fliesen-Zuordnung bleibt nach Konturaenderungen aktuell (_ensureTilesFresh, Signatur), vorher veraltete Indizes
+ * V6.55: Fix — Schnittliste fliesenweise gruppiert (regroupCutOrderByTile), Nummern/Fahrwege je Fliese ab Fliesen-Nullpunkt
+ * V6.54: Fix — Sortierung pro Fliese (eigener Nullpunkt, eigener Rand zuletzt), Fliesen-Badge in der Schnittliste
+ * V6.53: Feat — Fliesen-Liste (Bearbeitung-Tab): Nullpunkt je Fliese, Reihenfolge, Kontrolldialog vor Export, Dateiname mit Massen
  * V6.50: Feat — Konturen vereinfachen (simplify.js): Toleranz-Slider mit Live-Vorschau, Ecken/Startpunkt erhalten, Schutz vor Nachbar-Kollision, Undo
  * V6.49: Feat — Strahlbreiten-Check (feasibility.js): Pruefen/Halo, Auswahl nach Kriterien (schmal/nah/Breite/Flaeche), Typ aus Schachtelung
  * V6.48: Feat — Richtungspfeile-Umschalter (Auto/An/Aus) im Bearbeitung-Tab; Konturauswahl-Fix siehe canvas-renderer V3.49
@@ -13,8 +21,8 @@
  * V6.40: Feat — Druck/Bereichsdruck uebernimmt Layerfarben (helle Farben werden abgedunkelt)
  * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
- * Last Modified: 2026-11-05
- * Build: 20261105-simp1
+ * Last Modified: 2026-11-06
+ * Build: 20261106-cutorder
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -238,6 +246,7 @@ class CeraCutApp {
         this.currentProjectName = ''; // Projektname (für suggestedName)
         this.isDirty = false;      // Ungespeicherte Änderungen
         this._lastDirHandle = null; // Letzter Ordner (für "Speichern unter")
+        this._dxfServerName = null; // V6.93: Dateiname im Server-DXF-Ordner
         this._dxfFileHandle = null; // FileHandle für "Speichern" direkt (FSAPI)
         this._isSaving = false;     // Mutex gegen gleichzeitige FSAPI-Schreibvorgänge
 
@@ -468,6 +477,7 @@ class CeraCutApp {
         
         // Canvas click callback (Klick auf leere Fläche)
         this.renderer.onClick = (worldPoint) => {
+            if (this.cutSeqMode) return;   // V6.60: Leerklick beendet den Anklick-Modus nicht und löscht keine Auswahl
             // Messmodus hat höchste Priorität
             if (this.measureMode) {
                 this.handleMeasureClick(worldPoint);
@@ -483,6 +493,11 @@ class CeraCutApp {
                 if (contour && (contour.isClosed || contour.cuttingMode === 'slit') && !contour.isReference) {
                     this.setStartpointOnContour(contour, worldPoint);
                 }
+                return;
+            }
+            if (this.tileSeqMode) { this._handleTileSeqClick(worldPoint); return; }   // V6.59
+            if (this.tilePickIdx != null) {   // V6.95: Nullpunkt einer Fliese setzen
+                this._finishTilePick(this.currentSnapPoint || worldPoint);
                 return;
             }
             if (this.currentStep === 3) {
@@ -505,6 +520,7 @@ class CeraCutApp {
         
         // Contour click callback
         this.renderer.onContourClick = (contour, worldPoint, isShift) => {
+            if (this.cutSeqMode) { this._handleCutSeqClick(contour); return; }   // V6.60: Schnitte anklicken
             // V3.5: Aktives Tool hat Priorität (Zeichnen + Modifikation)
             if (this.toolManager?.isToolActive()) {
                 this.toolManager.handleClick(worldPoint);
@@ -525,6 +541,11 @@ class CeraCutApp {
             // Step-spezifische Logik
             if (this.currentStep === 2) {
                 this.toggleReference(contour);
+                return;
+            }
+            if (this.tileSeqMode) { this._handleTileSeqClick(worldPoint); return; }   // V6.59
+            if (this.tilePickIdx != null) {   // V6.95: Nullpunkt einer Fliese setzen
+                this._finishTilePick(this.currentSnapPoint || worldPoint);
                 return;
             }
             if (this.currentStep === 3) {
@@ -1484,6 +1505,7 @@ class CeraCutApp {
         this.renderer?.render();
         this.updateContourPanel();
         this.rebuildCutOrder?.();
+        if (this._tilesActive) this.refreshTiles(true);   // V6.58: Fliesen nach Auto-Referenz neu zuordnen
         this.updateStepUI();
     }
     
@@ -1515,7 +1537,19 @@ class CeraCutApp {
         this.showToast(`🗑️ "${name}" gelöscht (STRG+Z = Rückgängig)`, 'success');
     }
     
+    /** V6.57: Konturgeometrie nur im Ribbon-Tab "CAD" änderbar (Zeichnen/Ändern, Grips, Löschen). CAM-Funktionen mit eigenen Buttons bleiben möglich. */
+    isGeometryEditAllowed() {
+        const tab = document.querySelector('.ribbon-tab.active[data-ribbon]');
+        return !tab || tab.dataset.ribbon === 'cad';
+    }
+
+    _denyGeometryEdit() {
+        this.showToast('Konturen sind nur im Tab „CAD“ änderbar', 'warning');
+        return false;
+    }
+
     deleteSelectedContours() {
+        if (!this.isGeometryEditAllowed()) return this._denyGeometryEdit();
         const selected = this.contours.filter(c => c.isSelected);
         
         if (selected.length === 0) {
@@ -1790,36 +1824,8 @@ class CeraCutApp {
         this.renderer?.render();
     }
     
-    autoSortContours() {
-        const method = document.getElementById('sort-method')?.value || 'inside-out';
-        
-        // Nur schneidbare Konturen
-        this._normalizeOpenContours();
-        const cuttable = this.contours
-            .map((c, i) => ({ contour: c, index: i }))
-            .filter(item => !item.contour.isReference && (item.contour.isClosed || item.contour.cuttingMode === 'slit'));
-        
-        if (cuttable.length === 0) {
-            this.showToast('Keine schneidbaren Konturen', 'warning');
-            return;
-        }
-        
-        if (method === 'mosaic-meander') {
-            this.applyMosaicMeander(cuttable);
-            return;
-        }
-
-        // Für "shortest-path-selected": Prüfe ob eine Kontur ausgewählt ist
-        let startContour = null;
-        if (method === 'shortest-path-selected') {
-            const selected = cuttable.find(item => item.contour.isSelected);
-            if (!selected) {
-                this.showToast('⚠️ Bitte erst eine Startkontur auswählen', 'warning');
-                return;
-            }
-            startContour = selected;
-        }
-        
+    /** V6.96: Sortiermethode auf eine Konturliste anwenden (in place) */
+    _applySortMethod(method, cuttable, startContour) {
         switch (method) {
             case 'inside-out': {
                 this._applyInsideOutSort(cuttable);
@@ -1863,6 +1869,64 @@ class CeraCutApp {
                 break;
         }
         
+    }
+
+    autoSortContours() {
+        const method = document.getElementById('sort-method')?.value || 'inside-out';
+        
+        // Nur schneidbare Konturen
+        this._normalizeOpenContours();
+        const cuttable = this.contours
+            .map((c, i) => ({ contour: c, index: i }))
+            .filter(item => !item.contour.isReference && (item.contour.isClosed || item.contour.cuttingMode === 'slit'));
+        
+        if (cuttable.length === 0) {
+            this.showToast('Keine schneidbaren Konturen', 'warning');
+            return;
+        }
+        
+        if (method === 'mosaic-meander') {
+            this.applyMosaicMeander(cuttable);
+            return;
+        }
+
+        // Für "shortest-path-selected": Prüfe ob eine Kontur ausgewählt ist
+        let startContour = null;
+        if (method === 'shortest-path-selected') {
+            const selected = cuttable.find(item => item.contour.isSelected);
+            if (!selected) {
+                this.showToast('⚠️ Bitte erst eine Startkontur auswählen', 'warning');
+                return;
+            }
+            startContour = selected;
+        }
+        
+        // V6.96: Mit Fliesen wird JEDE Fliese einzeln sortiert (eigener Nullpunkt, eigener Rand zuletzt),
+        // danach werden die Fliesen in der Fliesen-Reihenfolge aneinandergehängt.
+        const tiles = (method !== 'mosaic-meander') ? this.refreshTiles(true) : [];
+        if (tiles.length > 0) {
+            const out = [], allReversed = [];
+            for (const t of tiles) {
+                const idxSet = new Set(t.contourIdx);
+                const sub = cuttable.filter(it => idxSet.has(it.index));
+                if (sub.length === 0) continue;
+                this._sortOriginOverride = t.origin;
+                this._lastReversedContours = [];
+                this._applySortMethod(method, sub, startContour && idxSet.has(startContour.index) ? startContour : null);
+                this._sortOriginOverride = null;
+                allReversed.push(...(this._lastReversedContours || []));
+                out.push(...sub);
+            }
+            const used = new Set(out);
+            const rest = cuttable.filter(it => !used.has(it));   // Konturen ohne Fliese ans Ende
+            cuttable.length = 0;
+            cuttable.push(...out, ...rest);
+            this._lastReversedContours = allReversed;
+            this.showToast(`Sortiert pro Fliese: ${tiles.length} Fliese(n), je eigene Reihenfolge ab eigenem Nullpunkt`, 'success');
+        } else {
+            this._applySortMethod(method, cuttable, startContour);
+        }
+
         // Nur TSP-Sortierung setzt _lastReversedContours neu; sonst veraltete Refs verwerfen
         if (method !== 'shortest-path' && method !== 'shortest-path-selected' && method !== 'mosaic') {
             this._lastReversedContours = [];
@@ -1936,6 +2000,7 @@ class CeraCutApp {
     }
 
     _mosaicOrigin() {
+        if (this._sortOriginOverride) return { x: this._sortOriginOverride.x, y: this._sortOriginOverride.y };   // V6.96: Fliesen-Nullpunkt
         const o = (this.settings && this.settings.originSet && this.settings.origin) ? this.settings.origin : { x: 0, y: 0 };
         return { x: o.x, y: o.y };
     }
@@ -2255,6 +2320,119 @@ class CeraCutApp {
         console.log(`[SORT] ${sorted.length} Konturen, ${reversals} Richtungsumkehrungen (Serpentine)`);
     }
     
+    // ════════════════════════════════════════════════════════════════
+    // V6.60: SCHNITTREIHENFOLGE MANUELL (Tab Reihenfolge) — die alte Schnittliste (#cut-order-list)
+    // existiert seit V5.7 nicht mehr im HTML. Bedienung jetzt direkt im Bild (CAM-Standard):
+    //   • Schnitte anklicken = Reihenfolge festlegen   • Auswahl: Anfang / ↑ / ↓ / Ende / auf Position N
+    // Verschoben wird immer innerhalb der Fliese (Export je Fliese; Fliesen-Reihenfolge siehe Fliesenliste).
+    // ════════════════════════════════════════════════════════════════
+
+    /** Neue Schnittreihenfolge setzen (Undo/Redo) */
+    _setCutOrder(newOrder, label) {
+        const oldOrder = [...this.cutOrder];
+        if (oldOrder.join(',') === newOrder.join(',')) return false;
+        this.cutOrder = [...newOrder];
+        const app = this, frozen = [...newOrder];
+        const refresh = () => { app.updateCutOrderList?.(); app.updateOrderStats?.(); app.renderer?.render(); };
+        this.undoManager.pushExecuted(new FunctionCommand(`Reihenfolge: ${label}`,
+            () => { app.cutOrder = [...frozen]; refresh(); },
+            () => { app.cutOrder = [...oldOrder]; refresh(); }));
+        this.undoManager.redoStack.length = 0;
+        this.undoManager._notifyStateChange();
+        refresh();
+        return true;
+    }
+
+    /** Positionen der cutOrder je Fliese (Schlüssel -1 = ohne Fliese): Map<key, number[] Positionen> */
+    _cutGroups() {
+        const tileOf = this.getTileOfMap();
+        const groups = new Map();
+        this.cutOrder.forEach((ci, pos) => {
+            const k = tileOf.has(ci) ? tileOf.get(ci) : -1;
+            if (!groups.has(k)) groups.set(k, []);
+            groups.get(k).push(pos);
+        });
+        return groups;
+    }
+
+    /** Ausgewählte Schnitte verschieben: 'first' | 'up' | 'down' | 'last' | {pos:n (1-basiert, in der Fliese)} */
+    moveSelectedCuts(how) {
+        const sel = new Set(this.cutOrder.filter(ci => this.contours[ci]?.isSelected));
+        if (!sel.size) { this.showToast('Erst Schnitt(e) im Bild auswählen (Klick, Shift = mehrere)', 'warning'); return; }
+        const order = [...this.cutOrder];
+        for (const positions of this._cutGroups().values()) {
+            let L = positions.map(p => order[p]);
+            if (!L.some(ci => sel.has(ci))) continue;
+            const S = L.filter(ci => sel.has(ci)), R = L.filter(ci => !sel.has(ci));
+            if (how === 'first') L = [...S, ...R];
+            else if (how === 'last') L = [...R, ...S];
+            else if (how === 'up') { for (let i = 1; i < L.length; i++) if (sel.has(L[i]) && !sel.has(L[i - 1])) [L[i - 1], L[i]] = [L[i], L[i - 1]]; }
+            else if (how === 'down') { for (let i = L.length - 2; i >= 0; i--) if (sel.has(L[i]) && !sel.has(L[i + 1])) [L[i], L[i + 1]] = [L[i + 1], L[i]]; }
+            else if (how?.pos != null) { const at = Math.max(0, Math.min(R.length, how.pos - 1)); L = [...R.slice(0, at), ...S, ...R.slice(at)]; }
+            positions.forEach((p, k) => { order[p] = L[k]; });
+        }
+        this._setCutOrder(order, typeof how === 'string' ? how : 'Position');
+    }
+
+    /** Modus „Schnitte anklicken“: angeklickte Schnitte werden je Fliese an den Anfang gesetzt, in Klick-Reihenfolge */
+    startCutSeq() {
+        if (!this.cutOrder?.length) { this.showToast('Keine Schnitte vorhanden', 'warning'); return; }
+        if (this.tileSeqMode) this.endTileSeq(false);
+        this.cutSeqMode = true; this.cutSeq = [];
+        this._cutSeqKey = (e) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.endCutSeq(true); }
+            else if (e.key === 'Backspace' && e.target?.tagName !== 'INPUT') { e.preventDefault(); e.stopPropagation(); this.cutSeq.pop(); this._cutSeqUI(); }
+        };
+        document.addEventListener('keydown', this._cutSeqKey, true);
+        this.showToast('Schnitte in gewünschter Reihenfolge anklicken · Esc = übernehmen · Rücktaste = zurück', 'info');
+        this._cutSeqUI();
+    }
+
+    _handleCutSeqClick(contour) {
+        const ci = this.contours.indexOf(contour);
+        if (ci < 0 || !this.cutOrder.includes(ci)) return;   // nur schneidbare Konturen
+        if (!this.cutSeq.includes(ci)) this.cutSeq.push(ci);
+        this._cutSeqUI();
+    }
+
+    _cutSeqUI() {
+        const b = document.getElementById('btn-cut-seq');
+        if (b) { b.textContent = this.cutSeqMode ? `✔ Fertig (${this.cutSeq.length})` : '🖱 Anklicken'; b.style.background = this.cutSeqMode ? '#0e639c' : ''; b.style.color = this.cutSeqMode ? '#fff' : ''; }
+        this.renderer?.render();
+    }
+
+    endCutSeq(apply) {
+        if (!this.cutSeqMode) return;
+        document.removeEventListener('keydown', this._cutSeqKey, true);
+        const seq = this.cutSeq || [];
+        this.cutSeqMode = false; this.cutSeq = [];
+        if (apply && seq.length) {
+            const order = [...this.cutOrder], picked = new Set(seq);
+            for (const positions of this._cutGroups().values()) {
+                const L = positions.map(p => order[p]);
+                const mine = seq.filter(ci => L.includes(ci));
+                if (!mine.length) continue;
+                const out = [...mine, ...L.filter(ci => !picked.has(ci))];
+                positions.forEach((p, k) => { order[p] = out[k]; });
+            }
+            this._setCutOrder(order, 'angeklickt');
+            this.showToast(`${seq.length} Schnitt(e) an den Anfang (je Fliese) gesetzt — STRG+Z = Rückgängig`, 'success');
+        }
+        this._cutSeqUI();
+    }
+
+    _bindCutOrderUI() {
+        const $ = (id) => document.getElementById(id);
+        $('btn-cut-seq')?.addEventListener('click', () => this.cutSeqMode ? this.endCutSeq(true) : this.startCutSeq());
+        $('btn-cut-first')?.addEventListener('click', () => this.moveSelectedCuts('first'));
+        $('btn-cut-up')?.addEventListener('click', () => this.moveSelectedCuts('up'));
+        $('btn-cut-down')?.addEventListener('click', () => this.moveSelectedCuts('down'));
+        $('btn-cut-last')?.addEventListener('click', () => this.moveSelectedCuts('last'));
+        const go = () => { const n = parseInt($('cut-pos-input')?.value, 10); if (n >= 1) this.moveSelectedCuts({ pos: n }); };
+        $('btn-cut-pos')?.addEventListener('click', go);
+        $('cut-pos-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); e.stopPropagation(); });
+    }
+
     updateCutOrderList() {
         const listEl = document.getElementById('cut-order-list');
         if (!listEl) return;
@@ -2264,9 +2442,18 @@ class CeraCutApp {
             return;
         }
         
+        // V6.96: Fliesen-Zuordnung (Badge "F2" + laufende Nummer je Fliese)
+        this._ensureTilesFresh();
+        this.regroupCutOrderByTile(true);   // manuelles Verschieben über Fliesengrenzen hinweg wird zurückgesetzt
+        const tileOf = new Map();
+        (this.tiles || []).forEach((t, ti) => t.contourIdx.forEach(ci => tileOf.set(ci, ti)));
+        const perTile = new Map();
         const html = this.cutOrder.map((contourIdx, orderIdx) => {
             const c = this.contours[contourIdx];
             if (!c) return '';
+            const ti = tileOf.get(contourIdx);
+            const seq = ti != null ? (perTile.set(ti, (perTile.get(ti) || 0) + 1), perTile.get(ti)) : orderIdx + 1;
+            const tileBadge = ti != null ? `<span class="cut-order-badge" style="background:#5d4d00;color:#ffd54f" title="Fliese ${ti + 1}">F${ti + 1}</span>` : '';
             
             const name = sanitizeHTML(c.name) || `Kontur ${contourIdx + 1}`;
             const mode = c.cuttingMode === 'hole' ? 'hole' : 'disc';
@@ -2280,7 +2467,8 @@ class CeraCutApp {
             return `
                 <div class="cut-order-item" draggable="true" data-order="${orderIdx}" data-index="${contourIdx}">
                     <span class="cut-order-handle">≡</span>
-                    <span class="cut-order-number">${orderIdx + 1}</span>
+                    <span class="cut-order-number">${seq}</span>
+                    ${tileBadge}
                     <span class="cut-order-color" style="background: ${color}"></span>
                     <span class="cut-order-name">${name}</span>
                     <span class="cut-order-badge ${mode}">${modeLabel}</span>
@@ -3179,6 +3367,7 @@ class CeraCutApp {
                 break;
             case 4:
                 if (this.renderer) this.renderer.currentMode = 'anschuss';
+                this.refreshTiles(true);   // V6.95
                 // Undo-fähig: Snapshot vor dem Überschreiben, Commit danach
                 this._captureLeadSnapshot();
                 this._applyLeadValues();
@@ -3334,6 +3523,7 @@ class CeraCutApp {
         // allerersten leeren Start-Tab, der einmalig wiederverwendet wird.
         this.documentManager?.ensureTargetForNewFile();
         this._dxfFileHandle = fileHandle;  // gehört zum (ggf. neuen) Ziel-Tab, Strg+S
+        this._dxfServerName = null;
 
         this.dxfFileName = filename;
         this.loadedFileName = filename;
@@ -4765,6 +4955,9 @@ class CeraCutApp {
 
         // V6.91: Erweitert-Toggle (Zustand pro Browser merken)
         const advPanel = document.querySelector('.ribbon-panel[data-ribbon="bearbeitung"]');
+        // V6.95: Fliesen erkennen (Bearbeitung-Tab)
+        this._bindCutOrderUI();   // V6.60
+        this._bindTileUI();   // V6.59: Fliesen-Reihenfolge (Presets, Anklicken, Drag&Drop)
         const advBtn = document.getElementById('btn-lead-adv-toggle');
         if (advPanel && advBtn) {
             try { if (localStorage.getItem('ceracut_lead_adv') === '1') advPanel.classList.add('lead-adv-open'); } catch (e) { /* ignore */ }
@@ -5118,6 +5311,528 @@ class CeraCutApp {
         return 'unavailable';
     }
 
+    // ════════════════════════════════════════════════════════════════
+    // V6.94: EINZELTEIL-EXPORT — jeder Zuschnitt als eigene CNC-Datei
+    // ════════════════════════════════════════════════════════════════
+
+    /**
+     * Gruppiert schneidbare Konturen nach FLIESE: Fliese = zusammenhängender Umriss auf Layer
+     * "Fliese"/"Fliesen" (4 Einzellinien oder Rechteck), jeder Schnitt gehört zur Fliese, in deren
+     * Umriss sein Mittelpunkt liegt. Sortierung der Fliesen: hinten (max Y) → vorne, je Reihe links → rechts.
+     * @returns {Array<{contourIdx:number[], bbox, length:number, enabled:boolean}>} leer = keine Fliesen erkannt
+     */
+    _groupPartsForExport(silent = false) {
+        const isTileLayer = (c) => ['fliese', 'fliesen'].includes(String(c.layer || '').trim().toLowerCase());
+        const bboxOf = (pts) => {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const q of pts) { if (q.x < minX) minX = q.x; if (q.y < minY) minY = q.y; if (q.x > maxX) maxX = q.x; if (q.y > maxY) maxY = q.y; }
+            return { minX, minY, maxX, maxY };
+        };
+        // 1) Fliesen-Umrisse = achsparallele Rechtecke aus 4 Linien (gemeinsame Ecken/Fuge 0 erlaubt)
+        //    bzw. geschlossene Rechteck-Konturen auf dem Fliesen-Layer
+        const outline = this.contours.filter(c => isTileLayer(c) && c.points?.length >= 2);
+        const E = 0.05, near = (a, b) => Math.abs(a - b) <= E;
+        const hs = [], vs = [], rects = [];
+        for (const c of outline) {
+            const bb = bboxOf(c.points);
+            if (c.isClosed || c.points.length > 2) {
+                const w = bb.maxX - bb.minX, h = bb.maxY - bb.minY;
+                const onEdge = c.points.every(q => near(q.x, bb.minX) || near(q.x, bb.maxX) || near(q.y, bb.minY) || near(q.y, bb.maxY));
+                if (c.isClosed && onEdge && w > 1 && h > 1) rects.push(bb);   // V6.58: auch verkettete Rechtecke mit Zusatzpunkten
+                continue;
+            }
+            const [p0, p1] = c.points;
+            if (near(p0.y, p1.y) && Math.abs(p1.x - p0.x) > 1) hs.push({ y: (p0.y + p1.y) / 2, x1: Math.min(p0.x, p1.x), x2: Math.max(p0.x, p1.x) });
+            else if (near(p0.x, p1.x) && Math.abs(p1.y - p0.y) > 1) vs.push({ x: (p0.x + p1.x) / 2, y1: Math.min(p0.y, p1.y), y2: Math.max(p0.y, p1.y) });
+        }
+        for (const bottom of hs) {                       // untere Kante suchen, dann links/rechts/oben
+            for (const left of vs) {
+                if (!near(left.x, bottom.x1) || !near(left.y1, bottom.y)) continue;
+                for (const right of vs) {
+                    if (!near(right.x, bottom.x2) || !near(right.y1, bottom.y) || !near(right.y2, left.y2)) continue;
+                    const top = hs.find(t => near(t.y, left.y2) && near(t.x1, bottom.x1) && near(t.x2, bottom.x2));
+                    if (top) rects.push({ minX: bottom.x1, minY: bottom.y, maxX: bottom.x2, maxY: left.y2 });
+                }
+            }
+        }
+        // Dubletten entfernen
+        const uniq = [];
+        for (const r of rects) if (!uniq.some(u => near(u.minX, r.minX) && near(u.minY, r.minY) && near(u.maxX, r.maxX) && near(u.maxY, r.maxY))) uniq.push(r);
+        // V6.95: Fallback ohne Fliesen-Layer: aeusserste geschlossene achsparallele Rechtecke (nicht Referenz)
+        let fallback = false;
+        if (uniq.length === 0) {
+            const cand = [];
+            for (const c of this.contours) {
+                if (c.isReference || c.isHatchContour || c.cuttingMode === 'none' || !c.isClosed || !c.points || c.points.length > 5) continue;
+                const bb = bboxOf(c.points);
+                if (bb.maxX - bb.minX <= 1 || bb.maxY - bb.minY <= 1) continue;
+                if (!c.points.every(q => (near(q.x, bb.minX) || near(q.x, bb.maxX)) && (near(q.y, bb.minY) || near(q.y, bb.maxY)))) continue;
+                cand.push(bb);
+            }
+            const areaOf = (r) => (r.maxX - r.minX) * (r.maxY - r.minY);
+            const outer = cand.filter(a => !cand.some(b => b !== a && b.minX <= a.minX + E && b.minY <= a.minY + E &&
+                b.maxX >= a.maxX - E && b.maxY >= a.maxY - E && areaOf(b) > areaOf(a) + 1));
+            for (const r of outer) if (!uniq.some(u => near(u.minX, r.minX) && near(u.minY, r.minY) && near(u.maxX, r.maxX) && near(u.maxY, r.maxY))) uniq.push(r);
+            fallback = true;
+        }
+        const tiles = uniq.map(b => ({ bbox: b, area: (b.maxX - b.minX) * (b.maxY - b.minY), contourIdx: [] }));
+        if (tiles.length === 0) return [];
+
+        // 2) Schnitte den Fliesen zuordnen (kleinste umschließende Fliese)
+        const tol = 0.5;
+        let orphans = 0;
+        for (const i of this.cutOrder) {
+            const c = this.contours[i];
+            if (!c?.points?.length || c.isReference || c.cuttingMode === 'none' || c.isHatchContour || isTileLayer(c)) continue;
+            const b = bboxOf(c.points), cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+            let best = null;
+            for (const t of tiles) {
+                const tb = t.bbox;
+                if (cx < tb.minX - tol || cx > tb.maxX + tol || cy < tb.minY - tol || cy > tb.maxY + tol) continue;
+                if (!best || t.area < best.area) best = t;
+            }
+            if (best) best.contourIdx.push(i); else orphans++;
+        }
+        this._tileOrphans = orphans;
+        if (orphans && !silent) {
+            this.showToast(`⚠️ ${orphans} Schnitt(e) liegen auf keiner Fliese und werden nicht exportiert`, 'warning');
+        }
+        const list = tiles.filter(t => t.contourIdx.length > (fallback ? 1 : 0)).map(t => {
+            let len = 0;
+            for (const ci of t.contourIdx) {
+                const cp = this.contours[ci].points;
+                for (let k = 1; k < cp.length; k++) len += Math.hypot(cp[k].x - cp[k - 1].x, cp[k].y - cp[k - 1].y);
+            }
+            return { contourIdx: t.contourIdx, bbox: t.bbox, length: len, enabled: true };
+        });
+
+        if (fallback && list.length < 2) return [];   // Fallback nur bei mehreren Rechtecken
+        // 3) Reihen von hinten (hohes Y) nach vorne, in der Reihe links→rechts
+        list.sort((a, b) => (b.bbox.minY + b.bbox.maxY) - (a.bbox.minY + a.bbox.maxY));
+        const rows = [];
+        for (const p of list) {
+            const cy = (p.bbox.minY + p.bbox.maxY) / 2, h = p.bbox.maxY - p.bbox.minY;
+            const row = rows.find(r => Math.abs(r.cy - cy) <= 0.5 * Math.min(r.h, h));
+            if (row) row.items.push(p); else rows.push({ cy, h, items: [p] });
+        }
+        return rows.flatMap(r => r.items.sort((a, b) => a.bbox.minX - b.bbox.minX));
+    }
+
+    // ── V6.95: Fliesen-Liste (Bearbeitung-Tab): Nullpunkt + Reihenfolge je Fliese ──
+
+    /** Programmname einer Fliese: BASE_001_300X600 (Masse gerundet, mm) */
+    _tilePlanName(baseName, n, bbox) {
+        const w = Math.round(bbox.maxX - bbox.minX), h = Math.round(bbox.maxY - bbox.minY);
+        return `${baseName}_${String(n).padStart(3, '0')}_${w}X${h}`;
+    }
+
+    /** Fliesen neu erkennen; Nullpunkt, Auswahl und manuelle Reihenfolge bleiben bei gleicher Fliese erhalten */
+    refreshTiles(silent = false) {
+        this._mergeTiles(this._groupPartsForExport(silent));
+        this._tileSigCache = this._tileSig();
+        this.regroupCutOrderByTile();
+        if (this.tilePickIdx != null && this.tilePickIdx >= this.tiles.length) this.tilePickIdx = null;
+        this.renderTilePanel();
+        this.renderer?.render();
+        return this.tiles;
+    }
+
+    /** Erkannte Fliesen mit vorhandenen mergen: Nullpunkt, Auswahl und manuelle Reihenfolge bleiben bei gleicher Fliese erhalten */
+    _mergeTiles(found) {
+        const E = 0.05, same = (a, b) => Math.abs(a.minX - b.minX) <= E && Math.abs(a.minY - b.minY) <= E &&
+            Math.abs(a.maxX - b.maxX) <= E && Math.abs(a.maxY - b.maxY) <= E;
+        const merged = [];
+        for (const o of (this.tiles || [])) {
+            const f = found.find(t => same(t.bbox, o.bbox));
+            if (f && !merged.includes(f)) merged.push(Object.assign(f, { origin: o.origin, originAuto: o.originAuto, enabled: o.enabled }));
+        }
+        for (const f of found) if (!merged.includes(f)) merged.push(f);
+        // V6.58: Nullpunkte merken (Schluessel = Fliesenflaeche) → bleiben erhalten, auch wenn die Erkennung kurz ausfaellt
+        const mem = (this._tileOriginMem = this._tileOriginMem || new Map());
+        const key = (b) => [b.minX, b.minY, b.maxX, b.maxY].map(v => Math.round(v * 10)).join('_');
+        for (const o of (this.tiles || [])) if (o.origin) mem.set(key(o.bbox), { origin: o.origin, originAuto: o.originAuto, enabled: o.enabled });
+        for (const t of merged) {
+            const m = !t.origin && mem.get(key(t.bbox));
+            if (m) { t.origin = m.origin; t.originAuto = m.originAuto; t.enabled = m.enabled; }
+            if (!t.origin) { t.origin = { x: t.bbox.minX, y: t.bbox.minY }; t.originAuto = true; }
+        }
+        this.tiles = merged;
+        if (merged.length) this._tilesActive = true;
+        if (!this.tileOrderManual) this._applyTileOrder();   // V6.59: nur automatische Reihenfolge folgt Geometrie-Änderungen
+    }
+
+    /** Billige Signatur des Konturbestands (Anzahl, Punktzahl, Anfang/Mitte/Ende) → erkennt Edits nach der Erkennung */
+    _tileSig() {
+        let h = this.contours.length + '|' + this.cutOrder.length;
+        for (const c of this.contours) {
+            const pts = c.points; if (!pts?.length) { h += ';0'; continue; }
+            const a = pts[0], m = pts[pts.length >> 1], z = pts[pts.length - 1];
+            h += `;${pts.length},${a.x.toFixed(2)},${a.y.toFixed(2)},${m.x.toFixed(2)},${m.y.toFixed(2)},${z.x.toFixed(2)},${z.y.toFixed(2)}`;
+        }
+        return h;
+    }
+
+    /** Fliesen-Zuordnung aktuell halten, falls Konturen nach der Erkennung geändert wurden (Zeichnen, Verschieben, Löschen …) */
+    _ensureTilesFresh() {
+        if ((!this.tiles?.length && !this._tilesActive) || this._tileSyncing) return;
+        const sig = this._tileSig();
+        if (sig === this._tileSigCache) return;
+        this._tileSyncing = true;
+        try {
+            this._mergeTiles(this._groupPartsForExport(true));
+            this._tileSigCache = this._tileSig();
+            this.regroupCutOrderByTile();
+            this.renderTilePanel();
+        } finally { this._tileSyncing = false; }
+    }
+
+    /** Map Konturindex → Fliesenindex (leer ohne Fliesen) */
+    getTileOfMap() {
+        this._ensureTilesFresh();
+        const m = new Map();
+        (this.tiles || []).forEach((t, ti) => t.contourIdx.forEach(ci => m.set(ci, ti)));
+        return m;
+    }
+
+    /** V6.97: Schnittliste fliesenweise ordnen: Fliese 1 komplett, dann Fliese 2 …; innerhalb jeder Fliese bleibt die Reihenfolge */
+    regroupCutOrderByTile(noUpdate = false) {
+        if (!this.tiles?.length) return;
+        const m = this.getTileOfMap();
+        const rank = (ci) => m.has(ci) ? m.get(ci) : 1e9;
+        const before = this.cutOrder.join(',');
+        this.cutOrder = this.cutOrder.map((ci, k) => ({ ci, k })).sort((a, b) => rank(a.ci) - rank(b.ci) || a.k - b.k).map(o => o.ci);
+        if (!noUpdate && before !== this.cutOrder.join(',')) { this.updateCutOrderList?.(); this.updateOrderStats?.(); }
+    }
+
+    setTileOriginPreset(i, preset) {
+        const t = this.tiles?.[i]; if (!t) return;
+        const b = t.bbox, mx = (b.minX + b.maxX) / 2, my = (b.minY + b.maxY) / 2;
+        const map = { bl: [b.minX, b.minY], br: [b.maxX, b.minY], tl: [b.minX, b.maxY], tr: [b.maxX, b.maxY], c: [mx, my] };
+        if (!map[preset]) return;
+        t.origin = { x: map[preset][0], y: map[preset][1] };
+        t.originAuto = false;
+        this.renderTilePanel(); this.renderer?.render();
+    }
+
+    startTilePick(i) {
+        this.tilePickIdx = (this.tilePickIdx === i) ? null : i;
+        if (this.tilePickIdx != null) this.showToast(`Fliese ${i + 1}: Nullpunkt im Zeichenbereich anklicken (Snap aktiv)`, 'info');
+        this.renderTilePanel();
+    }
+
+    _finishTilePick(point) {
+        const i = this.tilePickIdx, t = this.tiles?.[i];
+        this.tilePickIdx = null;
+        if (!t) return;
+        t.origin = { x: point.x, y: point.y };
+        t.originAuto = false;
+        this.showToast(`Fliese ${i + 1}: Nullpunkt X=${point.x.toFixed(2)}, Y=${point.y.toFixed(2)}`, 'success');
+        this.renderTilePanel(); this.renderer?.render();
+    }
+
+    moveTile(i, d) {
+        const j = i + d;
+        if (!this.tiles || j < 0 || j >= this.tiles.length) return;
+        [this.tiles[i], this.tiles[j]] = [this.tiles[j], this.tiles[i]];
+        this._tileOrderChanged(true);
+    }
+
+    // ── V6.59: Fliesen-Reihenfolge: Presets, Anklicken, Drag&Drop, Sperre (manuell) ──
+
+    /** Nach Reihenfolge-Änderung: manuell → gesperrt (Geometrie-Änderungen ordnen die Fliesen nicht mehr um) */
+    _tileOrderChanged(manual) {
+        this.tileOrderManual = !!manual;
+        this.regroupCutOrderByTile();
+        this.renderTilePanel(); this.renderer?.render();
+    }
+
+    /** Fliese von Index `from` an Position `to` verschieben (Drag&Drop) */
+    moveTileTo(from, to) {
+        const t = this.tiles;
+        if (!t || from === to || from < 0 || to < 0 || from >= t.length || to >= t.length) return;
+        t.splice(to, 0, t.splice(from, 1)[0]);
+        this._tileOrderChanged(true);
+    }
+
+    /** Preset-Reihenfolge berechnen und this.tiles umsortieren (ohne Zustand zu ändern) */
+    _applyTileOrder() {
+        const tiles = this.tiles;
+        if (!tiles || tiles.length < 2) return;
+        const preset = this.tileOrderPreset || 'rows', corner = this.tileOrderCorner || 'tl', rev = !!this.tileOrderReverse;
+        const top = corner[0] === 't', left = corner[1] === 'l';
+        const c = (t) => ({ x: (t.bbox.minX + t.bbox.maxX) / 2, y: (t.bbox.minY + t.bbox.maxY) / 2, w: t.bbox.maxX - t.bbox.minX, h: t.bbox.maxY - t.bbox.minY });
+        let out;
+        if (preset === 'nearest') {
+            // Start: Fliese, die der gewählten Ecke des Gesamtbereichs am nächsten liegt
+            let gx0 = Infinity, gy0 = Infinity, gx1 = -Infinity, gy1 = -Infinity;
+            for (const t of tiles) { gx0 = Math.min(gx0, t.bbox.minX); gy0 = Math.min(gy0, t.bbox.minY); gx1 = Math.max(gx1, t.bbox.maxX); gy1 = Math.max(gy1, t.bbox.maxY); }
+            let px = left ? gx0 : gx1, py = top ? gy1 : gy0;
+            const rest = tiles.slice(); out = [];
+            while (rest.length) {
+                let best = 0, bd = Infinity;
+                rest.forEach((t, k) => { const q = c(t), d = Math.hypot(q.x - px, q.y - py); if (d < bd) { bd = d; best = k; } });
+                const t = rest.splice(best, 1)[0]; out.push(t);
+                const q = c(t); px = q.x; py = q.y;
+            }
+        } else {
+            const byRows = preset.startsWith('rows'), snake = preset.endsWith('snake');
+            const key = (t) => byRows ? c(t).y : c(t).x, ext = (t) => byRows ? c(t).h : c(t).w;
+            const dirMajor = byRows ? (top ? -1 : 1) : (left ? 1 : -1);   // Zeilen: oben→unten = Y fällt
+            const dirMinor = byRows ? (left ? 1 : -1) : (top ? -1 : 1);
+            const minorKey = (t) => byRows ? c(t).x : c(t).y;
+            const sorted = tiles.slice().sort((a, b) => dirMajor * (key(a) - key(b)));
+            const groups = [];
+            for (const t of sorted) {
+                const g = groups.find(g => Math.abs(g.k - key(t)) <= 0.5 * Math.min(g.e, ext(t)));
+                if (g) g.items.push(t); else groups.push({ k: key(t), e: ext(t), items: [t] });
+            }
+            out = groups.flatMap((g, gi) => {
+                const flip = snake && gi % 2 === 1 ? -1 : 1;
+                return g.items.sort((a, b) => dirMinor * flip * (minorKey(a) - minorKey(b)));
+            });
+        }
+        if (rev) out.reverse();
+        this.tiles = out;
+    }
+
+    _bindTileUI() {
+        const $ = (id) => document.getElementById(id);
+        const apply = () => {
+            this.tileOrderPreset = $('tile-order-preset')?.value || 'rows';
+            this.tileOrderCorner = $('tile-order-corner')?.value || 'tl';
+            this.tileOrderReverse = !!$('tile-order-reverse')?.checked;
+            this._ensureTilesFresh();
+            if (!this.tiles?.length) { this.showToast('Keine Fliesen erkannt (Layer "Fliese" oder mehrere Außenrechtecke)', 'warning'); return; }
+            this._applyTileOrder();
+            this._tileOrderChanged(false);   // Preset = automatisch (hebt die Sperre auf)
+        };
+        ['tile-order-preset', 'tile-order-corner', 'tile-order-reverse'].forEach(id => $(id)?.addEventListener('change', apply));
+        $('btn-tile-seq')?.addEventListener('click', () => this.tileSeqMode ? this.endTileSeq(true) : this.startTileSeq());
+    }
+
+    /** Modus „Reihenfolge anklicken“: Fliesen im Bild nacheinander anklicken */
+    startTileSeq() {
+        this._ensureTilesFresh();
+        if (!this.tiles?.length) { this.showToast('Keine Fliesen erkannt (Layer "Fliese" oder mehrere Außenrechtecke)', 'warning'); return; }
+        this.tilePickIdx = null;
+        this.tileSeqMode = true;
+        this.tileSeq = [];
+        this._tileSeqKey = (e) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.endTileSeq(true); }
+            else if (e.key === 'Backspace' && e.target?.tagName !== 'INPUT') { e.preventDefault(); e.stopPropagation(); this.tileSeq.pop(); this._tileSeqUI(); }
+        };
+        document.addEventListener('keydown', this._tileSeqKey, true);
+        this.showToast('Fliesen in gewünschter Reihenfolge anklicken · Esc = fertig · Rücktaste = zurück', 'info');
+        this._tileSeqUI();
+    }
+
+    _tileSeqUI() {
+        const b = document.getElementById('btn-tile-seq');
+        if (b) { b.textContent = this.tileSeqMode ? `✔ Fertig (${this.tileSeq.length}/${this.tiles.length})` : '🖱 Anklicken'; b.style.background = this.tileSeqMode ? '#0e639c' : ''; b.style.color = this.tileSeqMode ? '#fff' : ''; }
+        this.renderTilePanel(); this.renderer?.render();
+    }
+
+    /** Klick im Zeichenbereich im Anklick-Modus (kleinste umschließende Fliese) */
+    _handleTileSeqClick(pt) {
+        let best = -1, area = Infinity;
+        this.tiles.forEach((t, i) => {
+            const b = t.bbox;
+            if (pt.x < b.minX || pt.x > b.maxX || pt.y < b.minY || pt.y > b.maxY) return;
+            const a = (b.maxX - b.minX) * (b.maxY - b.minY);
+            if (a < area) { area = a; best = i; }
+        });
+        if (best >= 0 && !this.tileSeq.includes(best)) {
+            this.tileSeq.push(best);
+            if (this.tileSeq.length >= this.tiles.length) { this.endTileSeq(true); return; }
+        }
+        this._tileSeqUI();
+    }
+
+    endTileSeq(apply) {
+        if (!this.tileSeqMode) return;
+        document.removeEventListener('keydown', this._tileSeqKey, true);
+        const seq = this.tileSeq || [];
+        this.tileSeqMode = false; this.tileSeq = [];
+        if (apply && seq.length) {
+            const picked = seq.map(i => this.tiles[i]);
+            this.tiles = [...picked, ...this.tiles.filter(t => !picked.includes(t))];
+            this._tileOrderChanged(true);
+            this.showToast(`Reihenfolge festgelegt (${seq.length} angeklickt, Rest dahinter) — gesperrt`, 'success');
+        }
+        this._tileSeqUI();
+    }
+
+    renderTilePanel() {
+        const el = document.getElementById('tile-list');
+        if (!el) return;
+        const tiles = this.tiles || [];
+        const st = document.getElementById('tile-order-state');
+        if (st) st.textContent = tiles.length ? `${tiles.length} Fliesen · ${this.tileOrderManual ? '🔒 manuell' : 'auto'}` : '';
+        if (tiles.length === 0) { el.innerHTML = '<span style="color:#888">Keine Fliesen erkannt (Layer „Fliese“ oder Außenrechtecke)</span>'; return; }
+        el.innerHTML = '';
+        tiles.forEach((t, i) => {
+            const w = t.bbox.maxX - t.bbox.minX, h = t.bbox.maxY - t.bbox.minY;
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:4px;padding:1px 2px;white-space:nowrap;';
+            const picking = this.tilePickIdx === i;
+            row.draggable = true;
+            row.innerHTML = `<span title="Ziehen = Reihenfolge ändern" style="cursor:grab;color:#888">⠿</span><b style="width:16px;color:#ffd54f">${i + 1}</b>
+                <span style="width:78px">${w.toFixed(0)}×${h.toFixed(0)}</span>
+                <button class="ribbon-btn-mini" data-a="pick" title="Nullpunkt im Zeichenbereich setzen" style="${picking ? 'background:#0e639c;color:#fff' : ''}">📍</button>
+                <select class="ribbon-select" data-a="preset" style="width:62px" title="Nullpunkt-Preset">
+                    <option value="">${t.originAuto ? 'auto ⌞' : 'frei'}</option>
+                    <option value="bl">⌞ l.u.</option><option value="br">⌟ r.u.</option>
+                    <option value="tl">⌜ l.o.</option><option value="tr">⌝ r.o.</option><option value="c">◎ Mitte</option></select>
+                <button class="ribbon-btn-mini" data-a="up" title="Reihenfolge früher">↑</button>
+                <button class="ribbon-btn-mini" data-a="down" title="Reihenfolge später">↓</button>`;
+            row.querySelector('[data-a=pick]').onclick = () => this.startTilePick(i);
+            row.querySelector('[data-a=preset]').onchange = (e) => this.setTileOriginPreset(i, e.target.value);
+            row.querySelector('[data-a=up]').onclick = () => this.moveTile(i, -1);
+            row.querySelector('[data-a=down]').onclick = () => this.moveTile(i, 1);
+            row.ondragstart = (e) => { e.dataTransfer.setData('text/plain', String(i)); e.dataTransfer.effectAllowed = 'move'; this._tileDragFrom = i; };
+            row.ondragover = (e) => { e.preventDefault(); row.style.outline = '1px solid #ffd54f'; };
+            row.ondragleave = () => { row.style.outline = ''; };
+            row.ondrop = (e) => { e.preventDefault(); row.style.outline = ''; const f = this._tileDragFrom; this._tileDragFrom = null; if (f != null) this.moveTileTo(f, i); };
+            row.onmouseenter = () => { this.tileHighlight = i; this.renderer?.render(); };
+            row.onmouseleave = () => { this.tileHighlight = null; this.renderer?.render(); };
+            el.appendChild(row);
+        });
+    }
+
+    /** Kontrolldialog: Reihenfolge, Nullpunkt, Dateiname je Fliese prüfen. Export erst nach "geprüft" → Promise<tiles|null> */
+    _showPartsDialog(parts, baseName) {
+        return new Promise((resolve) => {
+            const ov = document.createElement('div');
+            ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483000;display:flex;align-items:center;justify-content:center;';
+            ov.innerHTML = `<div style="background:#252526;color:#ddd;border:1px solid #555;border-radius:8px;padding:20px;width:680px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;">
+                <h3 style="margin:0 0 4px;font-size:15px;">✂ CNC-Export: ${parts.length} Fliesen → je eine CNC-Datei</h3>
+                <div style="font-size:12px;color:#999;margin-bottom:10px;">Jede Fliese: eigener Nullpunkt, eigene Schnittreihenfolge, eigene Datei. Reihenfolge der Fliesen hier prüfen und ggf. mit ↑↓ ändern (bestimmt die Dateinummer).</div>
+                <div id="pt-list" style="overflow:auto;border:1px solid #444;border-radius:4px;background:#1e1e1e;font-size:13px;"></div>
+                <div id="pt-warn" style="font-size:12px;color:#ffb74d;margin-top:8px;"></div>
+                <label style="font-size:12px;margin-top:10px;"><input type="checkbox" id="pt-resort"> Schnittreihenfolge je Fliese neu berechnen (innen → außen). Aus: Reihenfolge aus der Schnittliste wird je Fliese übernommen.</label>
+                <label style="font-size:13px;margin-top:8px;color:#8cf;"><input type="checkbox" id="pt-checked"> Reihenfolge, Nullpunkte und Dateinamen geprüft</label>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+                    <button id="pt-all" style="margin-right:auto;padding:6px 12px;">Alle an/aus</button>
+                    <button id="pt-cancel" style="padding:6px 14px;">Abbrechen</button>
+                    <button id="pt-ok" disabled style="padding:6px 14px;background:#0e639c;color:#fff;border:0;border-radius:4px;opacity:.4;">Exportieren</button>
+                </div></div>`;
+            document.body.appendChild(ov);
+            const listEl = ov.querySelector('#pt-list'), chk = ov.querySelector('#pt-checked'), okBtn = ov.querySelector('#pt-ok');
+            const syncOk = () => { const on = chk.checked && parts.some(p => p.enabled); okBtn.disabled = !on; okBtn.style.opacity = on ? '1' : '.4'; };
+            const render = () => {
+                listEl.innerHTML = '';
+                const warns = [];
+                let n = 0;
+                parts.forEach((p, i) => {
+                    const w = p.bbox.maxX - p.bbox.minX, h = p.bbox.maxY - p.bbox.minY;
+                    const name = p.enabled ? this._tilePlanName(baseName, ++n, p.bbox) + '.CNC' : '— nicht exportiert —';
+                    const o = p.origin, tol = 0.01;
+                    const inTile = o.x >= p.bbox.minX - tol && o.x <= p.bbox.maxX + tol && o.y >= p.bbox.minY - tol && o.y <= p.bbox.maxY + tol;
+                    if (p.enabled && !inTile) warns.push(`Fliese ${i + 1}: Nullpunkt liegt außerhalb der Fliese`);
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid #333;';
+                    row.innerHTML = `<input type="checkbox" ${p.enabled ? 'checked' : ''}>
+                        <span style="width:24px;color:#ffd54f;">${i + 1}</span>
+                        <span style="width:110px;">${w.toFixed(1)} × ${h.toFixed(1)} mm</span>
+                        <span style="width:60px;color:#999;">${p.contourIdx.length} Sch.</span>
+                        <span style="width:150px;color:${inTile ? '#9c9' : '#ffb74d'};" title="Nullpunkt">0 = ${o.x.toFixed(2)} / ${o.y.toFixed(2)}${p.originAuto ? ' (auto)' : ''}</span>
+                        <span style="flex:1;color:#8cf;overflow:hidden;text-overflow:ellipsis;" title="${name}">${name}</span>
+                        <button data-d="-1" style="padding:0 8px;">↑</button><button data-d="1" style="padding:0 8px;">↓</button>`;
+                    row.querySelector('input').onchange = (e) => { p.enabled = e.target.checked; chk.checked = false; render(); };
+                    row.querySelectorAll('button').forEach(b => b.onclick = () => {
+                        const j = i + parseInt(b.dataset.d, 10);
+                        if (j < 0 || j >= parts.length) return;
+                        [parts[i], parts[j]] = [parts[j], parts[i]]; this.tileOrderManual = true; chk.checked = false; this.renderTilePanel(); render();
+                    });
+                    row.onmouseenter = () => { row.style.background = '#094771'; this.tileHighlight = i; this.renderer?.render(); };
+                    row.onmouseleave = () => { row.style.background = ''; this.tileHighlight = null; this.renderer?.render(); };
+                    listEl.appendChild(row);
+                });
+                if (this._tileOrphans) warns.push(`${this._tileOrphans} Schnitt(e) liegen auf keiner Fliese und werden nicht exportiert`);
+                ov.querySelector('#pt-warn').innerHTML = warns.join('<br>');
+                syncOk();
+            };
+            render();
+            chk.onchange = syncOk;
+            const done = (v) => { this.tileHighlight = null; this.renderer?.render(); ov.remove(); resolve(v); };
+            ov.querySelector('#pt-all').onclick = () => { const on = !parts.every(p => p.enabled); parts.forEach(p => p.enabled = on); chk.checked = false; render(); };
+            ov.querySelector('#pt-cancel').onclick = () => done(null);
+            okBtn.onclick = () => {
+                if (!chk.checked) return;
+                const resort = ov.querySelector('#pt-resort').checked;
+                done(parts.filter(p => p.enabled).map(p => Object.assign(p, { resort })));
+            };
+            ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') done(null); e.stopPropagation(); });
+            ov.addEventListener('keyup', (e) => e.stopPropagation());
+            ov.tabIndex = -1; ov.focus();
+        });
+    }
+
+    /** Alle Teile als Einzeldateien erzeugen und in den Server-CNC-Ordner schreiben */
+    async _exportParts(parts, baseName) {
+        const chosen = await this._showPartsDialog(parts, baseName);
+        if (!chosen) return;
+        if (chosen.length === 0) { this.showToast('Keine Fliese ausgewählt', 'warning'); return; }
+        this.regroupCutOrderByTile();
+
+        const technologyParams = this.getTechnologyParams();
+        const files = [];
+        for (let n = 0; n < chosen.length; n++) {
+            const part = chosen[n];
+            let order = this.cutOrder.filter(i => part.contourIdx.includes(i));
+            if (part.resort) {
+                const items = order.map(i => ({ contour: this.contours[i], index: i }));
+                this._applyInsideOutSort(items);
+                order = items.map(it => it.index);
+            }
+            const pp = new SinumerikPostprocessor();
+            const res = pp.generateDownload(this.contours, order, {
+                planName: this._tilePlanName(baseName, n + 1, part.bbox),
+                dicke: this.settings.materialThickness || 10.0,
+                material: this._cerajetResult?.material?.name || 'AALLGEMEIN',
+                technologyParams,
+                origin: { x: part.origin.x, y: part.origin.y }   // V6.95: Nullpunkt je Fliese (vom Benutzer gesetzt/geprüft)
+            });
+            if (!res?.code?.trim()) { this.showToast(`Fliese ${n + 1}: kein G-Code erzeugt`, 'error'); return; }
+            files.push({ filename: res.filename, code: res.code, blob: res.blob });
+        }
+
+        // Schreiben: erst ohne Überschreiben, vorhandene gesammelt EINMAL nachfragen
+        const postCNC = async (f, overwrite) => {
+            const resp = await fetch('/api/cnc/save', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: f.filename, content: f.code, overwrite })
+            });
+            return resp.status === 409 ? 'exists' : (resp.ok ? 'ok' : 'error');
+        };
+        let ok = 0, skipped = 0, failed = [];
+        const existing = [];
+        try {
+            for (const f of files) {
+                const r = await postCNC(f, false);
+                if (r === 'ok') ok++; else if (r === 'exists') existing.push(f); else failed.push(f);
+            }
+            if (existing.length) {
+                if (confirm(`${existing.length} von ${files.length} Dateien existieren schon im Ordner CNC.\nAlle überschreiben?`)) {
+                    for (const f of existing) (await postCNC(f, true)) === 'ok' ? ok++ : failed.push(f);
+                } else skipped = existing.length;
+            }
+        } catch (e) {
+            failed = files.slice(ok + skipped);
+        }
+        if (failed.length) {
+            // Ausnahme: Server nicht erreichbar → lokale Downloads
+            this.showToast(`${failed.length} Datei(en) nicht auf Server speicherbar — lokaler Download`, 'warning');
+            for (const f of failed) {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(f.blob); a.download = f.filename;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+            }
+        }
+        this.showToast(`✅ ${ok} CNC-Datei(en) → Server/CNC${skipped ? `, ${skipped} übersprungen` : ''}`, 'success');
+    }
+
     async exportGCode() {
         if (!this.contours || this.contours.length === 0) {
             this.showToast('Keine Konturen zum Exportieren', 'error');
@@ -5145,6 +5860,15 @@ class CeraCutApp {
         const planName = document.getElementById('planname-input')?.value
             || this.dxfFileName?.replace(/\.dxf$/i, '').toUpperCase()
             || 'UNNAMED';
+
+        // V6.94: mehrere Zuschnitte in einer Datei → Einzeldateien
+        const parts = this.refreshTiles(true);
+        if (parts.length === 0) {
+            this.showToast('Keine Fliesen erkannt (Layer "Fliese" oder mehrere Außenrechtecke) — Export als EINE Datei', 'warning');
+        }
+        if (parts.length >= 1) {
+            return this._exportParts(parts, planName.toUpperCase().replace(/[^A-Z0-9_]/g, '_'));
+        }
 
         // V5.0: Technologie-Parameter aus CeraJet-Engine
         const technologyParams = this.getTechnologyParams();
@@ -6355,8 +7079,203 @@ class CeraCutApp {
     // V3.8: DXF SPEICHERN
     // ════════════════════════════════════════════════════════════════
 
+    // ════════════════════════════════════════════════════════════════
+    // V6.93: SPEICHERN-POPUP — neue Dateien sofort im Server-Ordner DXF ablegen
+    // ════════════════════════════════════════════════════════════════
+
+    /** Bytes → Base64 (chunked, vermeidet Stack-Überlauf bei großen Dateien) */
+    _bytesToBase64(bytes) {
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) {
+            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        }
+        return btoa(bin);
+    }
+
+    /** POST /api/dxf/save → { ok } | { exists } | { error } */
+    async _postDxfSave(filename, bytes, overwrite, dir = '') {
+        const resp = await fetch('/api/dxf/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dir, filename, content: this._bytesToBase64(bytes), overwrite: !!overwrite })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (resp.status === 409) return { exists: true };
+        if (!resp.ok) return { error: data.error || resp.statusText || 'Unbekannter Fehler' };
+        return { ok: true, filename: data.filename || filename, dir: data.dir || '' };
+    }
+
+    /** Aktuellen Dokumentinhalt als ANSI-1252-Bytes erzeugen (für Speichern in den DXF-Ordner) */
+    _currentDxfBytes(filename) {
+        const result = this.dxfWriter.generate(this.contours || [], this.layerManager, {
+            filename, imageUnderlayManager: this.imageUnderlayManager
+        });
+        return this.dxfWriter._encodeAnsi1252(result.content);
+    }
+
+    /**
+     * Popup: Dateiname eingeben und sofort im Server-Ordner DXF speichern.
+     * @param {object} opts
+     * @param {string} [opts.defaultName] - vorgeschlagener Name
+     * @param {string} [opts.content]     - fertiger DXF-Text (CAD-Tools); sonst aktuelles Dokument
+     * @param {string} [opts.title]
+     * @returns {Promise<boolean>} true = gespeichert
+     */
+    promptSaveToServer({ defaultName = 'zeichnung.dxf', content = null, title = 'Neue Datei speichern', bind = true } = {}) {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483000;display:flex;align-items:center;justify-content:center;';
+            overlay.innerHTML = `
+                <div style="background:#252526;color:#ddd;border:1px solid #555;border-radius:8px;padding:20px;min-width:360px;max-width:90vw;font-family:inherit;">
+                    <h3 style="margin:0 0 6px;font-size:15px;">💾 ${sanitizeHTML(title)}</h3>
+                    <div style="font-size:12px;color:#999;margin-bottom:12px;">Speicherort: Server-Ordner <b>DXF</b></div>
+                    <div id="srv-save-path" style="font-size:12px;color:#8cf;margin-bottom:4px;word-break:break-all;"></div>
+                    <div id="srv-save-dirs" style="max-height:160px;overflow:auto;border:1px solid #444;border-radius:4px;margin-bottom:10px;background:#1e1e1e;font-size:13px;"></div>
+                    <input type="text" id="srv-save-name" style="width:100%;box-sizing:border-box;padding:7px;background:#1e1e1e;color:#eee;border:1px solid #555;border-radius:4px;font-size:13px;">
+                    <div id="srv-save-msg" style="min-height:18px;margin-top:8px;font-size:12px;color:#f88;"></div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+                        <button id="srv-save-local" title="Nur in Ausnahmefällen" style="padding:6px 14px;margin-right:auto;">Lokal (Ausnahme)</button>
+                        <button id="srv-save-cancel" style="padding:6px 14px;">Später</button>
+                        <button id="srv-save-ok" style="padding:6px 14px;background:#0e639c;color:#fff;border:0;border-radius:4px;">Speichern</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            const input = overlay.querySelector('#srv-save-name');
+            const msg = overlay.querySelector('#srv-save-msg');
+            const okBtn = overlay.querySelector('#srv-save-ok');
+            input.value = defaultName;
+            let curDir = '';
+            const dirsEl = overlay.querySelector('#srv-save-dirs');
+            const pathEl = overlay.querySelector('#srv-save-path');
+            const loadDirs = async (dir) => {
+                try {
+                    const resp = await fetch('/api/dxf/list?path=' + encodeURIComponent(dir));
+                    const data = await resp.json();
+                    if (!resp.ok) throw new Error(data.error || resp.statusText);
+                    curDir = dir;
+                    pathEl.textContent = '📁 DXF/' + dir;
+                    dirsEl.innerHTML = '';
+                    const row = (label, target) => {
+                        const d = document.createElement('div');
+                        d.textContent = label;
+                        d.style.cssText = 'padding:5px 8px;cursor:pointer;';
+                        d.onmouseenter = () => d.style.background = '#094771';
+                        d.onmouseleave = () => d.style.background = '';
+                        d.onclick = () => loadDirs(target);
+                        dirsEl.appendChild(d);
+                    };
+                    if (dir) row('⬆ ..', dir.split('/').slice(0, -1).join('/'));
+                    for (const it of data.items.filter(i => i.type === 'directory')) row('📁 ' + it.name, dir ? dir + '/' + it.name : it.name);
+                    if (!dirsEl.children.length) dirsEl.innerHTML = '<div style="padding:5px 8px;color:#777;">(keine Unterordner)</div>';
+                } catch (err) {
+                    msg.textContent = 'Ordnerliste: ' + err.message;
+                }
+            };
+            loadDirs('');
+            setTimeout(() => { input.focus(); input.setSelectionRange(0, input.value.replace(/\.dxf$/i, '').length); }, 30);
+
+            const done = (v) => { overlay.remove(); resolve(v); };
+            const doSave = async (overwrite = false) => {
+                let name = input.value.trim();
+                if (!name) { msg.textContent = 'Bitte einen Dateinamen eingeben.'; return; }
+                if (!/\.dxf$/i.test(name)) name += '.dxf';
+                okBtn.disabled = true; msg.textContent = '';
+                try {
+                    const bytes = content != null
+                        ? this.dxfWriter._encodeAnsi1252(content)
+                        : this._currentDxfBytes(name);
+                    const r = await this._postDxfSave(name, bytes, overwrite, curDir);
+                    if (r.exists) {
+                        okBtn.disabled = false;
+                        if (confirm(`"${name}" existiert bereits im DXF-Ordner. Überschreiben?`)) return doSave(true);
+                        msg.textContent = 'Datei existiert bereits — bitte anderen Namen wählen.';
+                        return;
+                    }
+                    if (r.error) { okBtn.disabled = false; msg.textContent = 'Fehler: ' + r.error; return; }
+                    if (!bind) { this.showToast(`✅ ${r.filename} im DXF-Ordner gespeichert`, 'success'); done(true); return; }
+                    // Dokument an die gespeicherte Datei binden (Strg+S schreibt künftig dorthin)
+                    this._dxfServerName = (r.dir ? r.dir + '/' : '') + r.filename;
+                    this._dxfFileHandle = null;
+                    this.loadedFileName = r.filename;
+                    this.currentProjectName = r.filename;
+                    this.dxfFileName = r.filename;
+                    this.isDirty = false;
+                    const fn = document.getElementById('current-filename');
+                    if (fn) fn.textContent = `📄 ${r.filename}`;
+                    const planInput = document.getElementById('planname-input');
+                    if (planInput) planInput.value = r.filename.replace(/\.dxf$/i, '').toUpperCase();
+                    this.documentManager?._renderTabs();
+                    this.showToast(`✅ ${r.filename} im DXF-Ordner gespeichert`, 'success');
+                    done(true);
+                } catch (err) {
+                    okBtn.disabled = false;
+                    msg.textContent = 'Fehler: ' + err.message;
+                }
+            };
+            okBtn.addEventListener('click', () => doSave(false));
+            // Ausnahme: lokaler Download (nur auf ausdrücklichen Wunsch des Users)
+            overlay.querySelector('#srv-save-local').addEventListener('click', () => {
+                let name = input.value.trim() || defaultName;
+                if (!/\.dxf$/i.test(name)) name += '.dxf';
+                const bytes = content != null ? this.dxfWriter._encodeAnsi1252(content) : this._currentDxfBytes(name);
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/dxf' }));
+                a.download = name;
+                document.body.appendChild(a); a.click();
+                setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+                this.showToast(`${name} lokal heruntergeladen (Ausnahme)`, 'warning');
+                done(false);
+            });
+            overlay.querySelector('#srv-save-cancel').addEventListener('click', () => done(false));
+            overlay.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') doSave(false);
+                else if (e.key === 'Escape') done(false);
+                e.stopPropagation();
+            });
+            overlay.addEventListener('keyup', (e) => e.stopPropagation());
+        });
+    }
+
+    /** Neue leere Zeichnung: Tab anlegen und sofort zum Speichern auffordern */
+    async createNewDrawing() {
+        this.documentManager?.createDocument();
+        this.showToast('Neue Zeichnung (neuer Tab)', 'success');
+        await this.promptSaveToServer({ defaultName: this._nextDrawingName(), title: 'Neue Zeichnung speichern' });
+    }
+
+    _nextDrawingName() {
+        const d = new Date(), p = (n) => String(n).padStart(2, '0');
+        return `Zeichnung_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.dxf`;
+    }
+
+    /** Von CAD-Tools erzeugtes DXF laden (neuer Tab) und sofort zum Speichern auffordern */
+    async loadGeneratedDXF(filename, content, sizeKB) {
+        this.loadDXFContent(filename, content, sizeKB);
+        this.isDirty = true;
+        await this.promptSaveToServer({ defaultName: filename, content, title: 'Erzeugte Datei speichern' });
+    }
+
     /** Speichern (gleicher Dateiname) — nutzt letzten FileHandle wenn vorhanden */
     async saveDXF() {
+        // V6.93: Dokument gehört zu einer Datei im Server-DXF-Ordner → dorthin zurückschreiben
+        if (this._dxfServerName && !this._dxfFileHandle) {
+            if (this._isSaving) return;
+            this._isSaving = true;
+            try {
+                const full = this._dxfServerName;
+                const i = full.lastIndexOf('/');
+                const name = full.slice(i + 1), dir = i >= 0 ? full.slice(0, i) : '';
+                const r = await this._postDxfSave(name, this._currentDxfBytes(name), true, dir);
+                if (r.error) { this.showToast('Speichern fehlgeschlagen: ' + r.error, 'error'); return; }
+                this.isDirty = false;
+                this.showToast(`✅ ${full} im DXF-Ordner gespeichert`, 'success');
+            } catch (err) {
+                this.showToast('Speichern fehlgeschlagen: ' + err.message, 'error');
+            } finally {
+                this._isSaving = false;
+            }
+            return;
+        }
         // Kein FileHandle → "Speichern unter" öffnen
         if (!this._dxfFileHandle) {
             return this.saveDXFAs();

@@ -909,7 +909,8 @@ class SinumerikPostprocessor {
      */
     _getKerfCode(contour) {
         const mode = contour.cuttingMode;
-        const flipped = contour.kerfFlipped || false;
+        const flipped = (typeof contour._effectiveFlip === 'function') ? contour._effectiveFlip() : (contour.kerfFlipped || false);
+        if (contour.kerfComp === 'online') return 'G40';
 
         if (mode === 'hole') {
             return flipped ? 'G42' : 'G41';

@@ -242,6 +242,12 @@ class PropertiesPanel {
                 <input type="number" class="pp-input" data-prop="kerfWidth" data-idx="${idx}" value="${(contour.kerfWidth || 0.8).toFixed(2)}" step="0.01" min="0">
                 <span class="pp-unit">mm</span>
             </div>
+            <div class="pp-row">
+                <span class="pp-key">Kerf-Seite:</span>
+                <select class="pp-select" data-prop="kerfComp" data-idx="${idx}" title="Auto = Scheibe aussen / Loch innen. Links/Rechts = Werkzeug links/rechts der Schnittrichtung (G41/G42).">
+                    ${[['auto','Auto'],['left','Links (G41)'],['right','Rechts (G42)'],['online','Auf Kontur (G40)']].map(([v,l]) => `<option value="${v}" ${(contour.kerfComp || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+            </div>
         </div>`;
 
         // ── Piercing (nur wenn cuttingMode gesetzt) ──
@@ -433,6 +439,13 @@ class PropertiesPanel {
                 <span class="pp-key">Kerf:</span>
                 <input type="number" class="pp-input" data-prop="kerfWidth" data-batch="true" value="" placeholder="Verschieden" step="0.01" min="0">
                 <span class="pp-unit">mm</span>
+            </div>
+            <div class="pp-row">
+                <span class="pp-key">Kerf-Seite:</span>
+                <select class="pp-select" data-prop="kerfComp" data-batch="true">
+                    <option value="">— Verschieden —</option>
+                    ${[['auto','Auto'],['left','Links (G41)'],['right','Rechts (G42)'],['online','Auf Kontur (G40)']].map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}
+                </select>
             </div>
         </div>`;
         html += `</div>`;

@@ -1,5 +1,6 @@
 /**
- * CeraCUT V2.14 Constants
+ * CeraCUT V2.15 Constants
+ * V2.15: TOOL_TOOLTIPS — VERB (Verband), AUSS (Ausschnitte)
  * V2.14: TOOL_TOOLTIPS — Zuschnitt-Generator (MOSW Mosaik-Wuerfel, MOSR Rechteck, MOSS Sockel)
  * V2.13: GENERAL_SHORTCUTS — Strg+Shift+P Bereich drucken
  * V2.12: GENERAL_SHORTCUTS — F9/F10/F11 + Shift-Ortho-Override
@@ -7,7 +8,7 @@
  * V2.10: TOOL_ECHO_NAMES — AutoCAD-Style Command-Echo-Tabelle (_LINE, _CIRCLE, ...)
  * V2.9: TOOL_TOOLTIPS — alle 7 CAM-Tools (EF, REP, AN, BT, PJ, VZ, HULL) eingetragen
  * V2.8: INTARSIA_MATERIALS — 5 Materialgruppen mit Farben
- * Build: 20261105-zuschnitt
+ * Build: 20261105-verband
  * V2.11: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
 
@@ -165,6 +166,9 @@ const TOOL_TOOLTIPS = {
     'HULL':  { label: 'Convex Hull', tip: 'Konvexes Huellpolygon um Objekte',        shortcut: 'HULL',  group: 'cam' },
     'MOSW':  { label: 'Zuschnitt Mosaik Wuerfel',  tip: 'Zuschnitt-Programm Mosaik Wuerfel aus Fliese + Wuerfelmass (+0,8 mm Aufmass)', shortcut: 'MOSW', group: 'cam' },
     'MOSR':  { label: 'Zuschnitt Rechteck', tip: 'Zuschnitt-Programm Rechteck mit Verschnittpruefung, Dekor, Mischlage',   shortcut: 'MOSR', group: 'cam' },
+    'FLI':   { label: 'Fliesen-Raster',     tip: 'Raster aus Fliesen (je 4 zusammenhaengende Linien, Layer Fliese) mit Fuge, Nummerierung (Layer Beschriftung) und Maserungspfeil (Layer Konstruktion), beide nicht geschnitten', shortcut: 'FLI', group: 'cam' },
+    'VERB':  { label: 'Verband',            tip: 'Verlegemuster auf Wand: Laeufer 1/2, Drittel, Viertel, Gitter, diagonal; Randzuschnitte + Stueckliste', shortcut: 'VERB', group: 'cam' },
+    'AUSS':  { label: 'Ausschnitte',        tip: 'Ausschnitte in Fliese: Steckdose, Rohr, Ecke, Randkerbe, eckiges Loch (mit Stegpruefung)', shortcut: 'AUSS', group: 'cam' },
     'MOSS':  { label: 'Zuschnitt Sockel',   tip: 'Sockel-Zuschnitt: Streifen ueber volle Fliesenseite, Raster Hoehe + 0,8 mm', shortcut: 'MOSS', group: 'cam' },
 };
 

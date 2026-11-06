@@ -56,6 +56,7 @@ class CeraDocument {
         this.currentProjectName = '';
         this.isDirty = false;
         this._dxfFileHandle = null;
+        this._dxfServerName = null; // Dateiname im Server-DXF-Ordner (Strg+S)
 
         this.settings = CeraDocument._defaultSettings();
 
@@ -121,6 +122,7 @@ class CeraDocument {
             loadedFileName: this.loadedFileName,
             currentProjectName: this.currentProjectName,
             isDirty: this.isDirty,
+            _dxfServerName: this._dxfServerName,
             _dxfFileHandle: this._dxfFileHandle,   // FileSystemFileHandle — Structured-Clone-fähig
             settings: this.settings,
             layers: this.layerManager.toJSON(),
@@ -148,6 +150,7 @@ class CeraDocument {
         doc.currentProjectName = data.currentProjectName || '';
         doc.isDirty = false; // bewusst nicht übernommen — frischer Session-Start
         doc._dxfFileHandle = data._dxfFileHandle || null;
+        doc._dxfServerName = data._dxfServerName || null;
         doc.settings = data.settings || CeraDocument._defaultSettings();
         if (data.layers) doc.layerManager.fromJSON(data.layers);
         doc.view = data.view || { scale: 1, offsetX: 0, offsetY: 0 };
@@ -283,6 +286,7 @@ class DocumentManager {
         doc.currentProjectName = app.currentProjectName;
         doc.isDirty = app.isDirty;
         doc._dxfFileHandle = app._dxfFileHandle;
+        doc._dxfServerName = app._dxfServerName || null;
         doc.settings = app.settings;
         doc.undoManager = app.undoManager;
         doc.clipboardManager = app.clipboardManager;
@@ -313,6 +317,7 @@ class DocumentManager {
         app.currentProjectName = doc.currentProjectName;
         app.isDirty = doc.isDirty;
         app._dxfFileHandle = doc._dxfFileHandle;
+        app._dxfServerName = doc._dxfServerName || null;
         app.settings = doc.settings;
 
         // Undo/Redo, Layer, Clipboard, Image-Underlays an das Dokument re-binden

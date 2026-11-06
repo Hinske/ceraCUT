@@ -187,7 +187,10 @@ class CamContour {
         this.entitySeams = [];    // [{x1,y1, x2,y2, distance}] — echte Naht-Distanzen aus dem Chaining (V5.11)
 
         // ═══ KERF FLIP (Kompensationsseite umkehren) ═══
-        this.kerfFlipped = false;  // true = Kerf auf Gegenseite
+        this.kerfFlipped = false;  // true = Kerf auf Gegenseite (Legacy, gilt nur bei kerfComp='auto')
+        // V5.24: Explizite Kerf-Seite: 'auto' (Scheibe aussen / Loch innen, + kerfFlipped)
+        //        | 'left' | 'right' (Werkzeug links/rechts der Schnittrichtung = G41/G42) | 'online' (G40)
+        this.kerfComp = options.kerfComp || 'auto';
 
         // ═══ Interne States ═══
         this.startPointIndex = 0;
@@ -224,7 +227,7 @@ class CamContour {
     // ════════════════════════════════════════════════════════════════
 
     getKerfOffsetPolyline() {
-        const cacheKey = `${this.kerfWidth}_${this.kerfSide}_${this.cuttingMode}_${this.points.length}_${this._rotationCount}_${this.kerfFlipped}`;
+        const cacheKey = `${this.kerfWidth}_${this.kerfSide}_${this.cuttingMode}_${this.points.length}_${this._rotationCount}_${this.kerfFlipped}_${this.kerfComp}`;
         if (this._cachedKerfPolyline && this._cacheKey === cacheKey) {
             return this._cachedKerfPolyline;
         }
@@ -235,7 +238,7 @@ class CamContour {
             return result;
         };
 
-        if (this.kerfSide === 'online' || this.kerfWidth <= 0) {
+        if (this.kerfSide === 'online' || this.kerfComp === 'online' || this.kerfWidth <= 0) {
             return cacheResult({ points: this.points, flipped: false });
         }
         if (!this.points || this.points.length < 3) {
@@ -325,9 +328,36 @@ class CamContour {
      * Sonst genau der Bug aus V5.13: eine Stelle vergisst kerfFlipped, Lead zeigt ins Werkstück.
      */
     _isEffectivelyHole() {
-        return this.kerfFlipped
+        return this._effectiveFlip()
             ? (this.cuttingMode !== 'hole')
             : (this.cuttingMode === 'hole');
+    }
+
+    /**
+     * V5.24: Wirksames Flip-Flag. 'auto'/'online' -> kerfFlipped (Legacy).
+     * 'left'/'right' -> Flip genau dann, wenn die gewuenschte Seite von der
+     * un-geflippten Verschnittseite (disc/hole + Umlaufsinn) abweicht.
+     */
+    _effectiveFlip() {
+        const c = this.kerfComp;
+        if (c !== 'left' && c !== 'right') return !!this.kerfFlipped;
+        const isCW = Geometry.getSignedArea(this.points) > 0;
+        const wasteLeft = ((this.cuttingMode === 'hole') === isCW);   // un-geflippt
+        return (c === 'left') !== wasteLeft;
+    }
+
+    /** V5.24: Aufgeloeste Seite fuer UI/Postprozessor: 'left' | 'right' | 'online'. */
+    resolveKerfSide() {
+        if (this.kerfComp === 'online' || this.kerfSide === 'online') return 'online';
+        const isCW = Geometry.getSignedArea(this.points) > 0;
+        const wasteLeft = (this._isEffectivelyHole() === isCW);
+        return wasteLeft ? 'left' : 'right';
+    }
+
+    /** V5.24: Kerf-Seite setzen (auto|left|right|online) und Caches invalidieren. */
+    setKerfComp(mode) {
+        this.kerfComp = mode;
+        this.invalidate();
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -2531,6 +2561,7 @@ class CamContour {
         c.leadManualOverride = this.leadManualOverride;
         c.areaClassApplied = this.areaClassApplied;
         c.kerfFlipped = this.kerfFlipped;
+        c.kerfComp = this.kerfComp;
         c.isClosed = this.isClosed;
         c.isSelected = false;
         c.microjoints = this.microjoints ? this.microjoints.map(j => ({ ...j })) : [];

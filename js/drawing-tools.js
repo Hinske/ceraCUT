@@ -44,7 +44,7 @@
  * V1.0: Initiale 5 Zeichentools
  * Created: 2026-02-13 MEZ
  * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-otrack
+ * Build: 20261106-cadlock
  * V2.21: Feat — handleClick/handleMouseMove ueber SnapManager.resolve() (Objektfang > Object-Snap-Tracking > Polar/Ortho, Shift-Override)
  */
 
@@ -182,6 +182,8 @@ class DrawingToolManager {
 
     /** Tool per Shortcut starten */
     startTool(shortcut) {
+        // V6.57: Zeichnen/Ändern nur im Tab CAD
+        if (window.app?.isGeometryEditAllowed && !window.app.isGeometryEditAllowed()) return window.app._denyGeometryEdit();
         const key = shortcut.toUpperCase();
         const factory = this.tools[key];
 

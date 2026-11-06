@@ -559,22 +559,16 @@ const MosaicGenerator = (() => {
 
         $('mos-ok').addEventListener('click', () => {
             if (!last?.ok) return;
-            if (!app?.loadDXFContent) { console.warn(LOG, 'app.loadDXFContent nicht verfuegbar'); return; }
+            if (!app?.loadGeneratedDXF) { console.warn(LOG, 'app.loadDXFContent nicht verfuegbar'); return; }
             const kb = (last.dxf.length / 1024).toFixed(1);
-            app.loadDXFContent(last.fileName, last.dxf, kb);
+            app.loadGeneratedDXF(last.fileName, last.dxf, kb);
             app.showToast?.(`Mosaik ${last.name}: ${last.count} Stück erzeugt`, 'success');
             console.log(LOG, 'erzeugt', last.name, last.count, 'Stueck');
             close();
         });
         $('mos-save').addEventListener('click', () => {
             if (!last?.ok) return;
-            const blob = new Blob([last.dxf], { type: 'application/dxf' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = last.fileName;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+            app.promptSaveToServer({ defaultName: last.fileName, content: last.dxf, title: 'DXF speichern', bind: false });
         });
 
         update();

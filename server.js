@@ -342,6 +342,51 @@ async function handleCNCSave(req, res) {
 }
 
 /**
+ * API: POST /api/dxf/save  { filename, content (base64, rohe DXF-Bytes), overwrite? }
+ * Schreibt eine .dxf-Datei flach nach DXF_ROOT (keine Unterordner).
+ * 409 {exists:true} wenn die Datei existiert und overwrite nicht gesetzt ist.
+ */
+async function handleDXFSave(req, res) {
+    let body;
+    try {
+        body = await readJSONBody(req, 64 * 1024 * 1024);
+    } catch (err) {
+        return sendJSON(res, 400, { error: err.message });
+    }
+    const filename = typeof body.filename === 'string' ? body.filename : '';
+    if (typeof body.content !== 'string' || body.content.length === 0) {
+        return sendJSON(res, 400, { error: 'Inhalt fehlt' });
+    }
+    if (!/^[^\\/\x00-\x1f<>:"|?*]{1,120}\.dxf$/i.test(filename) || filename.startsWith('.')) {
+        return sendJSON(res, 400, { error: 'Ungültiger Dateiname (nur *.DXF, ohne Pfad)' });
+    }
+    // Zielordner: vom User gewählter, bereits existierender Unterordner (wird nie angelegt)
+    const dir = typeof body.dir === 'string' ? body.dir : '';
+    const dirPath = safePath(DXF_ROOT, dir);
+    if (!dirPath) return sendJSON(res, 403, { error: 'Zugriff verweigert' });
+    try {
+        if (!(await fs.promises.stat(dirPath)).isDirectory()) throw new Error('nodir');
+        await fs.promises.access(dirPath, fs.constants.W_OK);
+    } catch {
+        return sendJSON(res, 500, { error: 'Zielordner nicht erreichbar oder nicht beschreibbar' });
+    }
+    const target = safePath(DXF_ROOT, path.join(dir, filename));
+    if (!target || path.dirname(target) !== dirPath) {
+        return sendJSON(res, 403, { error: 'Zugriff verweigert' });
+    }
+    const exists = fs.existsSync(target);
+    if (exists && !body.overwrite) {
+        return sendJSON(res, 409, { exists: true, error: 'Datei existiert bereits' });
+    }
+    try {
+        await fs.promises.writeFile(target, Buffer.from(body.content, 'base64'));
+    } catch (err) {
+        return sendJSON(res, 500, { error: 'Schreibfehler: ' + err.code });
+    }
+    sendJSON(res, 200, { ok: true, filename: path.basename(target), dir, overwritten: exists });
+}
+
+/**
  * API: GET /api/dxf/file?path=
  * Liefert DXF-Dateiinhalt (ISO-8859-1 raw bytes).
  */
@@ -603,6 +648,11 @@ function requestHandler(req, res) {
     if (pathname === '/api/dxf/file' && req.method === 'GET') {
         if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
         return handleDXFFile(res, parsed.query.path || '');
+    }
+
+    if (pathname === '/api/dxf/save' && req.method === 'POST') {
+        if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
+        return handleDXFSave(req, res);
     }
 
     // ── CNC-Export: Login nötig ──

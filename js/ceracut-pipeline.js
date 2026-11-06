@@ -1,6 +1,6 @@
 /**
- * CeraCUT V3.10 - Processing Pipeline
- * Last Modified: 2026-11-04
+ * CeraCUT V3.11 - Processing Pipeline
+ * Last Modified: 2026-11-06
  * Build: 20261104-reviewfix
  * V3.10: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
@@ -23,6 +23,18 @@
  */
 
 const CeraCutPipeline = {
+
+    /** V3.11: Layer, deren Inhalt nie geschnitten wird (Nummerierung/Maserung aus dem Fliesen-Raster FLI). */
+    NON_CUT_LAYERS: ['konstruktion', 'beschriftung'],
+    isNonCutLayer(layer) {
+        return !!layer && this.NON_CUT_LAYERS.includes(String(layer).trim().toLowerCase());
+    },
+    /** Nicht geschnitten: Konstruktion/Beschriftung sowie offene Einzellinien auf Layer "Fliese" (FLI-Raster, reine Zeichnung). */
+    isNonCutContour(c) {
+        if (!c) return false;
+        if (this.isNonCutLayer(c.layer)) return true;
+        return !c.isClosed && String(c.layer || '').trim().toLowerCase() === 'fliese';
+    },
     kerfWidth: 1.0,
     healingStats: null,
 
@@ -69,6 +81,8 @@ const CeraCutPipeline = {
         });
 
         const healed = this._microHeal(camContours, config);
+        // Layer "Konstruktion" (Nummerierung, Maserungspfeile) wird nie geschnitten -> wie Schraffur ueberall uebersprungen
+        healed.forEach(c => { if (CeraCutPipeline.isNonCutContour(c)) c.cuttingMode = 'none'; });
         console.log(`[Pipeline V3.7] After micro-healing: ${healed.length} contours`);
 
         // V3.7: Gap-Klassifizierung

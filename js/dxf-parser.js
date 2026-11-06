@@ -4,6 +4,7 @@
  * Build: 20261104-reviewfix
  * V3.19: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
+ * V3.20: Feat — LINEs auf Layer "Fliese" werden nicht verkettet (FLI-Fliesenraster: 4 Einzellinien statt geschlossener Kontur)
  * V3.18: Fix — chainContours() verkettete mehrere Original-Entities (z.B. SPLINE + mehrere
  *        LINEs) korrekt zu EINER durchgehenden Kontur (chain.points enthielt alle Punkte),
  *        reichte aber weiterhin NUR die rohen _splineData/_fitPoints/sourceType DES ERSTEN
@@ -1302,6 +1303,9 @@ const DXFParser = {
      * - Fortschritts-Logging bei >1000 Entities
      * - Spread-freies Array-Append für große Segmente
      */
+    /** V3.20: Layer, auf denen LINE-Entities nie verkettet werden (jede Linie bleibt eine eigene Kontur). */
+    SEPARATE_LINE_LAYERS: ['fliese'],
+
     chainContours(entities, tolerance = 0.1) {
         if (!entities || entities.length === 0) return [];
         const t0 = performance.now();
@@ -1321,8 +1325,19 @@ const DXFParser = {
         const result = [];
         let processedCount = 0;
 
+        // V3.20: LINEs auf Layer "Fliese" (FLI-Fliesenraster) bleiben EINZELLINIEN — nicht zu einer geschlossenen Kontur verketten
+        for (let i = 0; i < segments.length; i++) {
+            const sg = segments[i];
+            if (sg.type === 'LINE' && !sg.isClosed && this.SEPARATE_LINE_LAYERS.includes(String(sg.layer).trim().toLowerCase())) {
+                sg.used = true;
+                processedCount++;
+                result.push(this._createContour(sg.points, sg.layer, false, sg.type, null, null, null, null, null, []));
+            }
+        }
+
         // Geschlossene Segmente zuerst verarbeiten
         for (let i = 0; i < segments.length; i++) {
+            if (segments[i].used) continue;
             if (segments[i].isClosed) {
                 segments[i].used = true;
                 processedCount++;

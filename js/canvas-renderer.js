@@ -1,5 +1,8 @@
 /**
- * CeraCUT V3.51 - Canvas Renderer
+ * CeraCUT V3.52 - Canvas Renderer
+ * V3.58: Feat — Reihenfolge-Nummern: Anklick-Modus (cutSeq) grün/gedimmt, ausgewählte Schnitte gelb umrandet
+ * V3.57: Feat — Fliesennummer gross mittig, Anklick-Modus zeigt Klick-Reihenfolge (app.tileSeq)
+ * V3.52: Fix — Konturen auf Nicht-Schnitt-Layern (Konstruktion/Beschriftung, offene Linien auf Fliese) wurden unsichtbar gezeichnet (nur Hatch-Fuellung); jetzt duenne Linie in Layerfarbe
  * V3.51: Feat — Vereinfachen-Vorschau (simplifyPreview): vereinfachte Kontur Cyan mit Stuetzpunkten ueber dem Original
  * V3.50: Feat — Machbarkeits-Halo (feasibilityMap): zu schmale Konturen rot, zu nahe Nachbarn orange (Strahlbreiten-Check, feasibility.js)
  * V3.49: Fix — Konturen-Auswahl bei vielen kleinen Konturen: findContourAtPoint waehlt jetzt die NAECHSTE Kante (statt die zuletzt gezeichnete im 12-px-Radius), exakter Kantentreffer (5 px) > Flaeche (innerste Kontur) > weiter Kantenradius. Startpunkt-Drag erst nach >4 px Bewegung (Klick verschiebt Anschnitt nicht mehr). Richtungspfeile: directionArrowMode 'auto' (bei >25 Konturen nur Auswahl/Hover) | 'always' | 'never'.
@@ -47,9 +50,10 @@
  *        Anschussfahnen nur in CAM-Modi (nicht im CAD-Zeichenmodus)
  * V3.11: Image Underlay Rendering
  * V3.5: Ghost-Preview + Window-Selection Rendering
+ * V3.53: Feat — drawTileOrigins: Fliesen-Umriss + Nullpunkt-Fadenkreuz je Fliese
  * V3.4: Drawing-Overlay + SnapManager-Rendering
- * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-simp1
+ * Last Modified: 2026-11-06 MEZ
+ * Build: 20261106-cadlock
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -416,7 +420,7 @@ class CanvasRenderer {
                 if (this.onBeforeMouseDown(worldPos, e)) return;
             }
             // V3.10: Grip-Drag prüfen (VOR allem anderen, NUR wenn Grips existieren)
-            if (e.button === 0 && !e.shiftKey && !isDraggingGrip && this._grips.length > 0) {
+            if (e.button === 0 && !e.shiftKey && !isDraggingGrip && this._grips.length > 0 && (!this.app?.isGeometryEditAllowed || this.app.isGeometryEditAllowed())) {
                 const worldPos = this.screenToWorld(e.offsetX, e.offsetY);
                 const toolMgr = this.app?.drawingTools || this.app?.toolManager;
                 const isToolActive = toolMgr?.isToolActive?.();
@@ -824,6 +828,57 @@ class CanvasRenderer {
         return qColors[quality] || this.colors.disc;
     }
 
+    /**
+     * V5.24: Kerf-Seiten-Overlay — Verschnittband (Kerf-Breite, Weltkoordinaten) zwischen
+     * Originalkontur und Kerf-Bahn + Richtungspfeile mit L/R-Marker.
+     */
+    _drawKerfSideOverlay(ctx, contour, kerfPoints, baseWidth) {
+        if (!kerfPoints || kerfPoints.length < 3 || !contour.points || contour.points.length < 3) return;
+        const side = contour.resolveKerfSide ? contour.resolveKerfSide() : 'left';
+        const col = this.getKerfColor(contour);
+        // Band: Flaeche zwischen Original und Kerf-Bahn (even-odd)
+        ctx.save();
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        [contour.points, kerfPoints].forEach(poly => {
+            poly.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+        });
+        ctx.fill('evenodd');
+        ctx.restore();
+        // Pfeile + L/R-Marker auf der Kerf-Bahn
+        const pts = kerfPoints, n = pts.length;
+        let total = 0;
+        for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n]; total += Math.hypot(b.x - a.x, b.y - a.y); }
+        if (total <= 0) return;
+        const step = Math.max(total / 4, 40 / this.scale);
+        const sz = 6 / this.scale;
+        let acc = step / 2, run = 0;
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = col;
+        for (let i = 0; i < n; i++) {
+            const a = pts[i], b = pts[(i + 1) % n];
+            const len = Math.hypot(b.x - a.x, b.y - a.y);
+            if (len < 1e-9) continue;
+            while (acc <= run + len) {
+                const t = (acc - run) / len;
+                const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+                const dx = (b.x - a.x) / len, dy = (b.y - a.y) / len;
+                ctx.beginPath();
+                ctx.moveTo(x + dx * sz, y + dy * sz);
+                ctx.lineTo(x - dx * sz - dy * sz * 0.6, y - dy * sz + dx * sz * 0.6);
+                ctx.lineTo(x - dx * sz + dy * sz * 0.6, y - dy * sz - dx * sz * 0.6);
+                ctx.closePath();
+                ctx.fill();
+                acc += step;
+            }
+            run += len;
+        }
+        ctx.restore();
+    }
+
     getKerfColor(contour) {
         if (contour === this.hoveredContour) return this.colors.kerfHovered;
         if (contour.isSelected) return this.colors.kerfSelected;
@@ -934,6 +989,7 @@ class CanvasRenderer {
         }
 
         if (this.nullPoint) this.drawNullPoint();
+        if (this.app?.tiles?.length) this.drawTileOrigins();   // V6.95
 
         // V3.11: Image Underlay Grips (im Screen-Space)
         if (this.app?.imageUnderlayManager?.selectedUnderlay) {
@@ -1094,6 +1150,13 @@ class CanvasRenderer {
                     console.error('[CanvasRenderer V3.28] Hatch-Kontur Fehler:', e, contour.name);
                 }
             }
+            // V3.52: Nicht-Schnitt-Layer (Konstruktion/Beschriftung, FLI): dünne Linie in Layerfarbe, nie geschnitten
+            if (!contour.hatch && typeof CeraCutPipeline !== 'undefined' && CeraCutPipeline.isNonCutContour(contour) && points.length >= 2) {
+                const lc = this.app?.layerManager?.getLayer?.(contour.layer)?.color || '#ff7ad9';
+                const pts = (contour.isClosed && points.length > 2) ? [...points, points[0]] : points;
+                this.drawPath(ctx, pts, (isHovered || isSelected) ? (isSelected ? this.colors.selected : this.colors.hovered) : lc, baseWidth * 0.7);
+                return;
+            }
             // Dünne Boundary-Linie bei Hover/Selected
             if (isHovered || isSelected) {
                 const color = isSelected ? this.colors.selected : this.colors.hovered;
@@ -1123,6 +1186,7 @@ class CanvasRenderer {
                 this.drawPath(ctx, kerfPoints, this.getKerfColor(contour), baseWidth * 0.9);
                 ctx.setLineDash([]);
                 ctx.globalAlpha = 1;
+                this._drawKerfSideOverlay(ctx, contour, kerfPoints, baseWidth);
             }
 
             // V3.11: Layer-Farbe als Grundfarbe
@@ -1516,6 +1580,7 @@ class CanvasRenderer {
     // ════════════════════════════════════════════════════════════════
 
     drawTravelPaths(ctx) {
+        const tileOf = this.app.getTileOfMap ? this.app.getTileOfMap() : new Map();   // zuerst: kann Fliesen/cutOrder aktualisieren
         const cutOrder = this.app.cutOrder;
         if (!cutOrder || cutOrder.length < 1) return;
 
@@ -1526,10 +1591,23 @@ class CanvasRenderer {
         ctx.lineWidth = CanvasRenderer.LINE_WIDTH.TRAVEL / this.scale;
 
         let lastPos = origin;
+        const tiles = this.app.tiles || [];
+        let curTile = null;
+        const backToOrigin = (pos, o) => {   // gedimmter Rückweg zum Nullpunkt
+            ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.moveTo(pos.x, pos.y); ctx.lineTo(o.x, o.y); ctx.stroke(); ctx.globalAlpha = 1;
+        };
 
         for (let i = 0; i < cutOrder.length; i++) {
             const contour = this.contours[cutOrder[i]];
             if (!contour || !contour.points || contour.points.length < 1) continue;
+
+            // V6.97: Fliesenwechsel → Weg endet am Nullpunkt der alten, beginnt am Nullpunkt der neuen Fliese
+            const tIdx = tileOf.get(cutOrder[i]);
+            if (tIdx !== curTile) {
+                if (curTile != null && tiles[curTile]?.origin) backToOrigin(lastPos, tiles[curTile].origin);
+                curTile = tIdx ?? null;
+                lastPos = (curTile != null && tiles[curTile]?.origin) ? tiles[curTile].origin : origin;
+            }
 
             const startPoint = contour.points[0];
 
@@ -1550,12 +1628,7 @@ class CanvasRenderer {
             lastPos = endPoint;
         }
 
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(lastPos.x, lastPos.y);
-        ctx.lineTo(origin.x, origin.y);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+        backToOrigin(lastPos, (curTile != null && tiles[curTile]?.origin) ? tiles[curTile].origin : origin);
 
         ctx.setLineDash([]);
     }
@@ -1584,14 +1657,19 @@ class CanvasRenderer {
     // ════════════════════════════════════════════════════════════════
 
     drawOrderNumbers() {
+        const tileOf = this.app.getTileOfMap ? this.app.getTileOfMap() : new Map();   // zuerst: kann cutOrder aktualisieren
         const cutOrder = this.app.cutOrder;
         if (!cutOrder || cutOrder.length < 1) return;
 
         const ctx = this.ctx;
+        const seqPerTile = new Map();
 
         for (let i = 0; i < cutOrder.length; i++) {
             const contour = this.contours[cutOrder[i]];
             if (!contour || !contour.points || contour.points.length < 1) continue;
+            const tIdx = tileOf.get(cutOrder[i]);
+            let seq = i + 1;
+            if (tIdx != null) { seq = (seqPerTile.get(tIdx) || 0) + 1; seqPerTile.set(tIdx, seq); }
 
             let cx = 0, cy = 0;
             for (const p of contour.points) {
@@ -1602,15 +1680,19 @@ class CanvasRenderer {
             cy /= contour.points.length;
 
             const screen = this.worldToScreen(cx, cy);
-            const num = i + 1;
+            let num = seq;
             const size = CanvasRenderer.MARKER_SIZE.ORDER_NUMBER;
-
+            // V3.58: Anklick-Modus (Schnittreihenfolge): Klick-Nummer grün, übrige gedimmt; Auswahl gelb umrandet
+            const seqMode = !!this.app.cutSeqMode, sp = seqMode ? this.app.cutSeq.indexOf(cutOrder[i]) : -1;
+            if (sp >= 0) num = sp + 1;
+            ctx.save();
+            if (seqMode && sp < 0) ctx.globalAlpha = 0.35;
             ctx.beginPath();
             ctx.arc(screen.x, screen.y, size, 0, Math.PI * 2);
-            ctx.fillStyle = this.colors.orderNumberBg;
+            ctx.fillStyle = sp >= 0 ? '#16a34a' : this.colors.orderNumberBg;
             ctx.fill();
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = contour.isSelected ? '#ffd54f' : '#fff';
+            ctx.lineWidth = contour.isSelected ? 3 : 2;
             ctx.stroke();
 
             ctx.font = `bold ${size}px sans-serif`;
@@ -1618,6 +1700,7 @@ class CanvasRenderer {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(num.toString(), screen.x, screen.y);
+            ctx.restore();
         }
     }
 
@@ -2024,6 +2107,47 @@ class CanvasRenderer {
         ctx.beginPath();
         ctx.arc(start.x, start.y, CanvasRenderer.MARKER_SIZE.SNAP / this.scale, 0, Math.PI * 2);
         ctx.fill();
+    }
+
+    /** V6.95: Fliesen-Umriss (gestrichelt), Nummer und Nullpunkt-Fadenkreuz je Fliese */
+    drawTileOrigins() {
+        this.app._ensureTilesFresh?.();
+        const tiles = this.app.tiles, ctx = this.ctx;
+        tiles.forEach((t, i) => {
+            const hl = this.app.tileHighlight === i || this.app.tilePickIdx === i;
+            const a = this.worldToScreen(t.bbox.minX, t.bbox.maxY), b = this.worldToScreen(t.bbox.maxX, t.bbox.minY);
+            ctx.save();
+            ctx.setLineDash([6, 4]);
+            ctx.strokeStyle = hl ? '#ffd54f' : 'rgba(255,213,79,0.45)';
+            ctx.lineWidth = hl ? 2.5 : 1;
+            ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+            ctx.setLineDash([]);
+            if (hl) { ctx.fillStyle = 'rgba(255,213,79,0.08)'; ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y); }
+            // V3.57: grosse Nummer mittig (Anklick-Modus: Klick-Reihenfolge, nicht angeklickte gedimmt)
+            const app = this.app, seqPos = app.tileSeqMode ? app.tileSeq.indexOf(i) : -1;
+            const label = app.tileSeqMode ? (seqPos >= 0 ? String(seqPos + 1) : '?') : String(i + 1);
+            const bw = b.x - a.x, bh = b.y - a.y, fs = Math.max(12, Math.min(96, Math.min(bw, bh) * 0.4));
+            if (app.tileSeqMode && seqPos >= 0) { ctx.fillStyle = 'rgba(0,255,136,0.12)'; ctx.fillRect(a.x, a.y, bw, bh); }
+            if (Math.min(bw, bh) > 24) {
+                ctx.font = `bold ${fs}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillStyle = app.tileSeqMode ? (seqPos >= 0 ? 'rgba(0,255,136,0.85)' : 'rgba(255,213,79,0.25)') : 'rgba(255,213,79,0.5)';
+                ctx.fillText(label, a.x + bw / 2, a.y + bh / 2);
+                ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+            } else {
+                ctx.font = 'bold 13px monospace'; ctx.fillStyle = '#ffd54f'; ctx.fillText(label, a.x + 5, a.y + 15);
+            }
+            ctx.font = 'bold 13px monospace';
+            ctx.fillStyle = '#ffd54f';
+            if (t.origin) {
+                const o = this.worldToScreen(t.origin.x, t.origin.y), L = 14;
+                ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(o.x - L, o.y); ctx.lineTo(o.x + L, o.y); ctx.moveTo(o.x, o.y - L); ctx.lineTo(o.x, o.y + L); ctx.stroke();
+                ctx.beginPath(); ctx.arc(o.x, o.y, 4, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+                ctx.lineWidth = 1; ctx.strokeStyle = '#000'; ctx.stroke();
+                ctx.fillStyle = '#00ff88'; ctx.fillText('0·' + (i + 1), o.x + 6, o.y - 6);
+            }
+            ctx.restore();
+        });
     }
 
     drawNullPoint() {
@@ -3065,6 +3189,7 @@ class CanvasRenderer {
         const toolMgr = this.app?.drawingTools || this.app?.toolManager;
         if (toolMgr?.isToolActive?.()) return;
         if (this.app?.measureMode) return;
+        if (this.app?.isGeometryEditAllowed && !this.app.isGeometryEditAllowed()) return;   // V6.57: Grips nur im CAD-Tab
 
         if (this._gripDirty) this._computeGrips();
         if (this._grips.length === 0) return;

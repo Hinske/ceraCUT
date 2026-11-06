@@ -1,39 +1,39 @@
 /**
- * CeraCUT Build Info V6.90
- * Version: V6.90
- * Last Modified: 2026-11-05 MEZ
- * Build: 20261105-ppfix
+ * CeraCUT Build Info V6.92
+ * Version: V6.92
+ * Last Modified: 2026-11-06 MEZ
+ * Build: 20261106-fliese
  *
  * Zeigt Versionsinformationen in der Console
  */
 
 const CERACUT_BUILD = {
-    version: '6.91',
-    build: '20261105-simp1',
-    date: '2026-11-05',
-    time: '18:12 MEZ',
+    version: '7.00',
+    build: '20261106-cutorder',
+    date: '2026-11-06',
+    time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '9900452',
-        date: '2026-11-05',
-        message: 'feat: Bearbeitung-Tab vereinfacht, Strahlbreiten-Check, Konturen vereinfachen, Auswahl-Fix V6.91'
+        hash: 'dc1bb8e',
+        date: '2026-11-06',
+        message: 'feat: Fliesen-Reihenfolge (Presets, Anklicken, Drag&Drop, Sperre), Schnittreihenfolge manu'
     },
 
     modules: {
-        'dxf-parser':         { version: '3.19', build: '20261104-reviewfix' },
+        'dxf-parser':         { version: '3.20', build: '20261106-fliese4' },
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
-        'pipeline':           { version: '3.10', build: '20261104-reviewfix' },
-        'cam-contour':        { version: '5.23', build: '20261104-pushexecuted' },
-        'canvas-renderer':    { version: '3.51', build: '20261105-simp1' },
+        'pipeline':           { version: '3.11', build: '20261106-fliese4' },
+        'cam-contour':        { version: '5.24', build: '20261106-kerfside' },
+        'canvas-renderer':    { version: '3.59', build: '20261106-kerfside' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
-        'sinumerik-pp':       { version: '2.6', build: '20261105-ppfix' },
+        'sinumerik-pp':       { version: '2.7', build: '20261106-kerfside' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
         'snap-manager':       { version: '1.9', build: '20261105-acmarker' },
         'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },
         'feasibility':        { version: '1.0', build: '20261105-feas1' },
         'simplify':           { version: '1.0', build: '20261105-simp1' },
-        'drawing-tools':      { version: '2.21', build: '20261105-otrack' },
+        'drawing-tools':      { version: '2.22', build: '20261106-cadlock' },
         'drawing-tools-ext':  { version: '1.11', build: '20261104-reviewfix' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
@@ -41,8 +41,8 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
-        'app':                { version: '6.50', build: '20261105-simp1' },
-        'document-manager':   { version: '1.5', build: '20261104-reviewfix' },
+        'app':                { version: '6.60', build: '20261106-cutorder' },
+        'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
         'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
@@ -61,8 +61,10 @@ const CERACUT_BUILD = {
         'server':             { version: '1.10', build: '20261105-cncsave' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
-        'constants': { version: '2.14', build: '20261105-zuschnitt' },
-        'mosaic-generator': { version: '1.3', build: '20261105-zuschnitt' },
+        'constants': { version: '2.15', build: '20261105-verband' },
+        'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
+        'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
+        'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },
@@ -71,6 +73,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V6.92: Feat — Fliesen-Raster FLI (tile-grid V1.0): Raster aus Fliesen (je 4 Einzellinien, NICHT zu geschlossener Kontur verkettet (Parser V3.20), nie geschnitten; Layer Fliese blau; Dateiname frei waehlbar, Fuge 100 mm), optional Nummerierung (A1/lfd.) auf Layer Beschriftung (gruen) und Maserungspfeil auf Layer Konstruktion (rosa); Layer Schnitt (rot) nur angelegt. Pipeline V3.11: Layer Konstruktion + Beschriftung werden nie geschnitten; Renderer V3.52 zeichnet sie als duenne Linie in Layerfarbe (vorher unsichtbar) (cuttingMode none).',
         'V6.89: Feat — Mosaik-Maeander (durchgehende Innenlinien je Richtung, Halbkreise ausserhalb der Fliese, Rand zuletzt) (app V6.45); Fix — arc-fitting V3.4: scharfe Ecken wurden zu Riesenbogen',
         'V6.90: Fix — Sinumerik-PP V2.6: Haltesteg ohne Nullweg-Satz (Alarm "Bahnkomponente = Null"); Multi-Head erzeugt lauffaehiges Programm (KOPF_*-Zuweisungen vor M30, PARTn-Aufrufe, voller PART-Rahmen mit ATRANS-Offset); fehlender cuttingMode blockiert Export; Guard in _processArcLeadExact; Versionsangaben vereinheitlicht',
         'V6.88: Feat — Sortierung "Mosaik": Fliesenrand (verkettete Randkontur) wird immer zuletzt geschnitten, alle Konturen davor per Nearest-Neighbor ab Nullpunkt (offene Linien in guenstigerer Richtung) (app V6.44)',
