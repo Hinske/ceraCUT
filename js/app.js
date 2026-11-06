@@ -1,5 +1,6 @@
 /**
  * CeraCUT V6.50 - Main Application
+ * V6.66: Fix — Auto-Setup erkennt Fliesenbogen auch OHNE Layer Fliese (mehrere aeussere Rechtecke mit Schnitten) und setzt dort keine Auto-Referenz (eine Fliese ging verloren)
  * V6.65: Fix — Auto-Setup beim Import fasst Fliesen (Layer Fliese) und vorhandene Referenzen nicht mehr an (setzte sonst EINE Fliese als Referenz, eine Fliese fehlte in Erkennung/Schnitt); nur Nullpunkt
  * V6.64: Feat — AP4 Waricam-Workflow: Auto-Setup beim Import (Referenz + Nullpunkt), danach direkt in Bearbeitung; Bearbeitung-Tab in Workflow-Reihenfolge ① Loch/Scheibe ② Leads ③ Schnittfuge
  * V6.63: Feat — AP2 Bogenwinkel (Feld ⌒°, Aussen/Innen) und Ecken-Lead (Typ/Winkel/ab Eckwinkel) im Lead-Ribbon, in Profilen und Undo-Snapshots
@@ -3852,7 +3853,11 @@ class CeraCutApp {
         // Einzellinien und macht EINE Kontur zur Referenz -> eine Fliese verschwindet aus Schnitt/Fliesen-Erkennung.
         // Dann nur den Nullpunkt setzen (unten links der Referenzen bzw. aller Konturen), wie ein Klick im Setup-Tab.
         const isTileLayer = c => ['fliese', 'fliesen'].includes(String(c.layer || '').trim().toLowerCase());
-        const keepRefs = this.contours.some(c => c.isReference || isTileLayer(c));
+        // Auch ohne Layer "Fliese": mehrere aeussere Rechtecke mit Schnitten (Fallback der Fliesen-Erkennung) = Fliesenbogen.
+        // Eine Auto-Referenz wuerde dort ein Rechteck herausnehmen -> Fliese fehlt in Erkennung/Schnitt.
+        let tileSheet = false;
+        try { tileSheet = this._groupPartsForExport(true).length > 0; } catch (e) { /* ignore */ }
+        const keepRefs = this.contours.some(c => c.isReference || isTileLayer(c)) || tileSheet;
         try {
             if (keepRefs) this.setOriginToReferenceUL();
             else this.autoDetectReference();

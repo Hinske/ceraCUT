@@ -34,6 +34,17 @@ function polyDxf() {
     const d = o.join('\n') + '\n', k = d.lastIndexOf('0\nENDSEC');
     return d.slice(0, k) + circles() + d.slice(k);
 }
+function noLayerDxf() {   // Rechtecke auf Layer 0 (kein Layer "Fliese") mit je 2 Schnitten -> Fallback-Erkennung
+    const o = ['0', 'SECTION', '2', 'ENTITIES'];
+    for (let i = 0; i < NX; i++) for (let j = 0; j < NY; j++) {
+        const x = (W + GAP) * i, y = (H + GAP) * j;
+        o.push('0', 'LWPOLYLINE', '8', '0', '90', '4', '70', '1');
+        for (const [px, py] of [[x, y], [x + W, y], [x + W, y + H], [x, y + H]]) o.push('10', String(px), '20', String(py));
+        for (const [dx, rad] of [[90, 40], [210, 30]]) o.push('0', 'CIRCLE', '8', '0', '10', String(x + dx), '20', String(y + 150), '30', '0', '40', String(rad));
+    }
+    o.push('0', 'ENDSEC', '0', 'EOF');
+    return o.join('\n') + '\n';
+}
 const PLAIN = ['0', 'SECTION', '2', 'ENTITIES', '0', 'CIRCLE', '8', '0', '10', '100', '20', '100', '30', '0', '40', '80',
     '0', 'CIRCLE', '8', '0', '10', '100', '20', '100', '30', '0', '40', '20', '0', 'ENDSEC', '0', 'EOF'].join('\n') + '\n';
 
@@ -55,6 +66,16 @@ const PLAIN = ['0', 'SECTION', '2', 'ENTITIES', '0', 'CIRCLE', '8', '0', '10', '
         check(`${name}: Auto-Setup (Nullpunkt gesetzt, Bearbeitung offen)`, r.setup && r.tab === 'bearbeitung', r);
         check(`${name}: keine Konsolenfehler`, errs.length === 0, errs);
         await p.close();
+    }
+    {   // Fliesenbogen ohne Layer "Fliese": nach "Sortieren" muessen alle 6 Fliesen mit je eigenem Nullpunkt erkannt sein
+        const q = await b.newPage({ viewport: { width: 1600, height: 900 } });
+        await q.goto('file://' + path.join(ROOT, 'index.html')); await q.waitForTimeout(1500);
+        await q.evaluate(c => window.app.loadDXFContent('x.dxf', c, 100), noLayerDxf()); await q.waitForTimeout(3000);
+        await q.evaluate(() => document.querySelector('.ribbon-tab[data-ribbon="order"]').click()); await q.waitForTimeout(500);
+        await q.evaluate(() => document.getElementById('btn-auto-sort').click()); await q.waitForTimeout(1500);
+        const r2 = await q.evaluate(() => ({ tiles: (window.app.tiles || []).length, origins: new Set((window.app.tiles || []).map(t => t.origin.x + '_' + t.origin.y)).size, refs: window.app.contours.filter(c => c.isReference).length }));
+        check('Fliesen ohne Layer "Fliese": 6 Fliesen, je eigener Nullpunkt, keine Auto-Referenz', r2.tiles === 6 && r2.origins === 6 && r2.refs === 0, r2);
+        await q.close();
     }
     const p = await b.newPage({ viewport: { width: 1600, height: 900 } });
     await p.goto('file://' + path.join(ROOT, 'index.html')); await p.waitForTimeout(1500);
