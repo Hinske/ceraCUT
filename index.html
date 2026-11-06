@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CeraCUT V7.00 — Wasserstrahl CAM</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260625-favicon">
-    <link rel="stylesheet" href="styles.css?v=20261105-techadv">
+    <link rel="stylesheet" href="styles.css?v=20261106-classic">
     <link rel="stylesheet" href="properties-panel-styles.css?v=20260315-ctxmenu">
     <script>
         // V6.32: Login/User-Management — Server injiziert window.CeraCutCurrentUser
@@ -24,6 +24,21 @@
                 if (legacy !== null) localStorage.setItem(key, legacy);
             }
             return key;
+        }
+        // V7.10: Theme vor dem ersten Paint setzen (Default: classic); 'light' = kein Attribut
+        (function () {
+            let t = 'classic';
+            try { t = localStorage.getItem(_userKeyReadThrough('ceracut-theme')) || 'classic'; } catch (e) { /* ignore */ }
+            if (t === 'dark' || t === 'classic') document.documentElement.setAttribute('data-theme', t);
+        })();
+        function __setCeraTheme(name) {
+            const root = document.documentElement;
+            if (name === 'light') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', name);
+            try { localStorage.setItem(_userKey('ceracut-theme'), name); } catch (e) { /* ignore */ }
+            ['light', 'dark', 'classic'].forEach(n => document.getElementById('btn-theme-' + n)?.classList.toggle('active', n === name));
+            const r = window.app?.renderer || window.renderer;
+            if (r) r.setTheme(name);
+            console.debug('[CeraCUT] Theme:', name);
         }
     </script>
 </head>
@@ -1323,11 +1338,15 @@
         <!-- ═══ Design / Theme ═══ -->
         <div class="ribbon-group">
             <div class="ribbon-group-content">
-                <div class="ribbon-btn-lg" id="btn-theme-light" title="Hell-Modus (Light)" onclick="document.documentElement.removeAttribute('data-theme');localStorage.setItem(_userKey('ceracut-theme'),'light');document.getElementById('btn-theme-light').classList.add('active');document.getElementById('btn-theme-dark').classList.remove('active');if(window.app?.renderer)window.app.renderer.setTheme('light');else if(window.renderer)window.renderer.setTheme('light');console.debug('[CeraCUT] Theme: light');">
+                <div class="ribbon-btn-lg" id="btn-theme-classic" title="Klassisch (schlicht, grau — wie Waricam)" onclick="__setCeraTheme('classic')">
+                    <div class="icon"><svg viewBox="0 0 32 32" fill="none"><rect x="5" y="6" width="22" height="20" fill="#d4d0c8" stroke="#404040" stroke-width="1.5"/><rect x="5" y="6" width="22" height="5" fill="#0a246a"/><rect x="9" y="15" width="14" height="7" fill="#666666"/></svg></div>
+                    <span class="label">Klassisch</span>
+                </div>
+                <div class="ribbon-btn-lg" id="btn-theme-light" title="Hell-Modus (Light)" onclick="__setCeraTheme(\'light\')">
                     <div class="icon"><svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="7" fill="#f5c842" stroke="#e8a020" stroke-width="1.5"/><line x1="16" y1="2" x2="16" y2="6" stroke="#e8a020" stroke-width="2"/><line x1="16" y1="26" x2="16" y2="30" stroke="#e8a020" stroke-width="2"/><line x1="2" y1="16" x2="6" y2="16" stroke="#e8a020" stroke-width="2"/><line x1="26" y1="16" x2="30" y2="16" stroke="#e8a020" stroke-width="2"/><line x1="6.1" y1="6.1" x2="8.9" y2="8.9" stroke="#e8a020" stroke-width="2"/><line x1="23.1" y1="23.1" x2="25.9" y2="25.9" stroke="#e8a020" stroke-width="2"/><line x1="23.1" y1="6.1" x2="25.9" y2="8.9" stroke="#e8a020" stroke-width="2"/><line x1="6.1" y1="23.1" x2="8.9" y2="25.9" stroke="#e8a020" stroke-width="2"/></svg></div>
                     <span class="label">Hell</span>
                 </div>
-                <div class="ribbon-btn-lg" id="btn-theme-dark" title="Dunkel-Modus (Dark)" onclick="document.documentElement.setAttribute('data-theme','dark');localStorage.setItem(_userKey('ceracut-theme'),'dark');document.getElementById('btn-theme-dark').classList.add('active');document.getElementById('btn-theme-light').classList.remove('active');if(window.app?.renderer)window.app.renderer.setTheme('dark');else if(window.renderer)window.renderer.setTheme('dark');console.debug('[CeraCUT] Theme: dark');">
+                <div class="ribbon-btn-lg" id="btn-theme-dark" title="Dunkel-Modus (Dark)" onclick="__setCeraTheme(\'dark\')">
                     <div class="icon"><svg viewBox="0 0 32 32" fill="none"><path d="M10 6 A12 12 0 1 0 26 22 A9 9 0 1 1 10 6z" fill="#4fc3f7" stroke="#2196f3" stroke-width="1.5"/></svg></div>
                     <span class="label">Dunkel</span>
                 </div>
@@ -1762,7 +1781,7 @@
 <script src="js/lead-profiles.js?v=20261106-arcangle"></script>
 <script src="js/cerajet-engine.js?v=20261104-reviewfix"></script>
 <script src="js/ceracut-pipeline.js?v=20261106-fliese4"></script>
-<script src="js/canvas-renderer.js?v=20261106-geombasis"></script>
+<script src="js/canvas-renderer.js?v=20261106-classic"></script>
 <script src="js/undo-manager.js?v=20261104-reviewfix"></script>
 <script src="js/sinumerik-postprocessor.js?v=20261106-kerfside"></script>
 <script src="js/command-line.js?v=20261104-reviewfix"></script>
@@ -4120,23 +4139,13 @@
         }, 0);
     });
     
-    // ── Theme Toggle — beim Laden gespeichertes Theme wiederherstellen ──
+    // ── Theme Toggle — Button-Zustand fuer das (im Head gesetzte) Theme ──
     (function() {
-        const saved = localStorage.getItem(_userKeyReadThrough('ceracut-theme'));
-        if (saved === 'dark') {
-            document.documentElement.setAttribute('data-theme', 'dark');
-            // Buttons korrekt setzen (nach DOM-Ready)
-            document.addEventListener('DOMContentLoaded', () => {
-                document.getElementById('btn-theme-dark')?.classList.add('active');
-                document.getElementById('btn-theme-light')?.classList.remove('active');
-            });
-        } else {
-            // Light ist Default — Button-State nach DOM-Ready setzen
-            document.addEventListener('DOMContentLoaded', () => {
-                document.getElementById('btn-theme-light')?.classList.add('active');
-            });
-        }
-        console.debug('[CeraCUT] Theme geladen:', saved || 'light (default)');
+        const saved = localStorage.getItem(_userKeyReadThrough('ceracut-theme')) || 'classic';
+        document.addEventListener('DOMContentLoaded', () => {
+            ['light', 'dark', 'classic'].forEach(n => document.getElementById('btn-theme-' + n)?.classList.toggle('active', n === saved));
+        });
+        console.debug('[CeraCUT] Theme geladen:', saved);
     })();
     
     console.debug('%c[CeraCUT UI] AutoCAD 2017 Layout geladen', 'color: #0078d4; font-weight: bold');

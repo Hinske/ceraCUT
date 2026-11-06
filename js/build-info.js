@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '150da04',
+        hash: '4a0c97d',
         date: '2026-11-06',
-        message: 'feat: AP2 Bogenwinkel (3/4-Kreis) + Ecken-Lead-Oberflaeche statt Fahnenkatalog ('
+        message: 'feat: AP3 Classic-Theme (schlicht, grau, flach) als Standard, Hell/Dunkel waehlb'
     },
 
     modules: {
@@ -25,7 +25,7 @@ const CERACUT_BUILD = {
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.11', build: '20261106-fliese4' },
         'cam-contour':        { version: '5.30', build: '20261106-arcangle' },
-        'canvas-renderer':    { version: '3.61', build: '20261106-geombasis' },
+        'canvas-renderer':    { version: '3.62', build: '20261106-classic' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.8', build: '20261106-leadseg' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.10: Feat — AP3 Classic-Theme (Standard): schlichte graue Oberflaeche wie Waricam/Windows-Klassik (flach, keine Rundungen/Schatten/Blur/Animationen), mittelgraue Zeichenflaeche ohne Raster. Hell/Dunkel bleiben waehlbar (Ansicht > Design). Theme wird vor dem ersten Paint gesetzt (canvas-renderer V3.62, styles.css).',
         'V7.09: Feat — AP2 (statt Fahnenkatalog): Bogenwinkel fuer Arc-Leads (90 bis 270 Grad, Waricam 3/4-Kreis) und Ecken-Lead-Oberflaeche (Typ/Winkel/ab Eckwinkel) im Ribbon, in Lead-Profilen und Undo; Lead-Out folgt dem Lead-In (cam-contour V5.30, lead-profiles V1.5, app V6.63). Entscheidung: kein Katalog — Waricam-Fahnen sind Presets der vorhandenen Parameter.',
         'V7.08: Refactor — AP1 S6/S7 abgeschlossen: Roundtrip-Tests G-Code == Zeichnung inkl. Ueberschnitt (10 mm = 10 mm) und negativer Ueberschnitt; alte Bogen-Metadaten der Leads entfernt (cam-contour V5.29). AP1 Lead-Kern fertig.',
         'V7.07: Feat — AP1 S5 Simulator (toolpath-simulator V1.5): Lead-Laengen exakt aus Segmenten (Bogenlaenge), Kollisions-/Plattenrand-Pruefung der Leads gegen die reale Strahlmitte (kerf/2 versetzt), Animationspfad Lead-In -> Kontur -> Ueberschnitt -> Lead-Out ohne Sprung (Test).',

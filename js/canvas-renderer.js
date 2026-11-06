@@ -1,5 +1,6 @@
 /**
  * CeraCUT V3.52 - Canvas Renderer
+ * V3.62: Feat — AP3 Classic-Theme (Palette #666 ohne Raster, Default), isDark auch fuer classic.
  * V3.61: Feat — AP1 S4b: Leads/Ueberschnitt/Startmarke auf der Teilegeometrie (wie G-Code), Fugenband entlang der realen Strahlmitte (getLeadIn/OutToolSegments, overcut.toolPoints).
  * V3.60: Feat — AP1 S3 (Waricam-Stil): Leads aus echten Segmenten (Bogen immer ctx.arc, kein Polylinien-Fallback), Anschnitt rot / Ausschnitt+Ueberschnitt blau, Pfeil in Schneidrichtung, einheitlicher Anschusspunkt, Warnsymbol (!) statt Zustandsfarben, Schnittfuge massstaeblich als Band (showKerfBand, Schalter btn-kerf-band). Typ-Farben/-Dashes/-Labels entfernt.
  * V3.58: Feat — Reihenfolge-Nummern: Anklick-Modus (cutSeq) grün/gedimmt, ausgewählte Schnitte gelb umrandet
@@ -136,6 +137,13 @@ const CANVAS_THEMES = {
     }
 };
 
+// V3.62: Classic-Palette (WARICAM-nah): mittelgraue Zeichenflaeche (#666), kein Raster, Farben wie Dark
+CANVAS_THEMES.classic = Object.assign({}, CANVAS_THEMES.dark, {
+    background: '#666666',
+    grid:       '#666666',   // = Hintergrund -> Raster unsichtbar
+    gridMajor:  '#696969'
+});
+
 /** Pro-User-Namespacing für localStorage-Keys (V6.32 Login/User-Management). */
 function _userKey(base) {
     return (typeof window !== 'undefined' && window.CeraCutCurrentUser) ? base + '::' + window.CeraCutCurrentUser : base;
@@ -197,8 +205,8 @@ class CanvasRenderer {
         this._hasSelection = false; // Schneller Check ohne .some() bei jedem Render
 
         // Starte mit gespeichertem Theme oder Dark als Default
-        const savedTheme = (typeof localStorage !== 'undefined' && localStorage.getItem(_userKey('ceracut-theme'))) || 'dark';
-        this.colors = Object.assign({}, CANVAS_THEMES[savedTheme] || CANVAS_THEMES.dark);
+        const savedTheme = (typeof localStorage !== 'undefined' && localStorage.getItem(_userKey('ceracut-theme'))) || 'classic';
+        this.colors = Object.assign({}, CANVAS_THEMES[savedTheme] || CANVAS_THEMES.classic);
         this._currentTheme = savedTheme;
 
         this.ctx.lineJoin = 'round';
@@ -3176,7 +3184,7 @@ class CanvasRenderer {
 
     /**
      * Wechselt die Canvas-Farbpalette.
-     * @param {'dark'|'light'} theme
+     * @param {'dark'|'light'|'classic'} theme
      */
     setTheme(theme) {
         const palette = CANVAS_THEMES[theme];
@@ -3189,7 +3197,7 @@ class CanvasRenderer {
         // ACI 7 = weiß auf dunklem Hintergrund, schwarz auf hellem Hintergrund
         if (this.app?.layerManager) {
             const lm = this.app.layerManager;
-            const isDark = (theme === 'dark');
+            const isDark = (theme !== 'light');   // dark + classic: dunkler/mittelgrauer Hintergrund
             const aci7Dark = '#ffffff';
             const aci7Light = '#000000';
             const fromColor = isDark ? aci7Light : aci7Dark;

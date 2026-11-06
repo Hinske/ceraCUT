@@ -2542,3 +2542,107 @@ html, body {
 /* V6.47: Setup/Technologie — Düse, Druck, Optimierung eingeklappt */
 .ribbon-panel[data-ribbon="setup"]:not(.tech-adv-open) .tech-adv { display: none !important; }
 .ribbon-panel[data-ribbon="setup"].tech-adv-open #btn-tech-adv-toggle { color: #f0a030; font-weight: 600; }
+
+/* ═══════════════════════════════════════════════════════════════
+   CLASSIC THEME (V7.10) — schlicht, flach, grau (angelehnt an WARICAM / Windows-Klassik)
+   Keine Rundungen, Schatten, Blur, Animationen; Zeichenflaeche mittelgrau, ohne Raster.
+   ═══════════════════════════════════════════════════════════════ */
+
+[data-theme="classic"] {
+    --title-bar-bg: #0a246a;
+    --title-bar-text: #ffffff;
+    --ribbon-bg: #d4d0c8;
+    --ribbon-panel-bg: #d4d0c8;
+    --ribbon-border: #808080;
+    --ribbon-hover: #e6e3dc;
+    --ribbon-active: #b9b5ac;
+    --ribbon-text: #000000;
+    --ribbon-label: #404040;
+    --ribbon-separator: #808080;
+    --file-tabs-bg: #d4d0c8;
+    --file-tab-bg: #bfbbb2;
+    --file-tab-active-bg: #eceae4;
+    --file-tab-text: #404040;
+    --file-tab-active-text: #000000;
+    --viewport-bg: #666666;
+    --panel-bg: #d4d0c8;
+    --panel-header-bg: #bfbbb2;
+    --panel-border: #808080;
+    --panel-text: #000000;
+    --panel-text-muted: #404040;
+    --panel-input-bg: #ffffff;
+    --panel-input-border: #808080;
+    --panel-hover: #e6e3dc;
+    --cmd-bg: #ffffff;
+    --cmd-text: #000000;
+    --cmd-prompt: #0a246a;
+    --cmd-border: #808080;
+    --status-bg: #d4d0c8;
+    --status-text: #000000;
+    --status-toggle-on: #000000;
+    --status-toggle-off: rgba(0,0,0,0.45);
+    --accent-blue: #0a246a;
+    --ctx-bg: #d4d0c8;
+    --ctx-border: #808080;
+    --ctx-hover: #0a246a;
+    --ctx-text: #000000;
+    --toast-bg: #ffffe1;
+    --toast-border: #000000;
+    --toast-text: #000000;
+    --tooltip-bg: #ffffe1;
+    --tooltip-text: #000000;
+    --tooltip-border: #000000;
+    --text-primary: #000000;
+    --text-muted: #404040;
+    --border-color: #808080;
+    --bg-card: #ffffff;
+    --drop-bg: rgba(0,0,0,0.04);
+    --drop-border: #808080;
+    color-scheme: light;
+}
+
+/* Flach: keine Rundungen/Schatten/Blur/Animationen */
+[data-theme="classic"] *,
+[data-theme="classic"] *::before,
+[data-theme="classic"] *::after {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    transition: none !important;
+    animation: none !important;
+}
+
+/* Schwebende Zoom-Palette und Hinweisfeld: schlicht, opak */
+[data-theme="classic"] .ct-toolbar,
+[data-theme="classic"] .canvas-toolbar,
+[data-theme="classic"] .viewport-toolbar {
+    background: #d4d0c8 !important;
+    border: 1px solid #808080 !important;
+}
+[data-theme="classic"] .start-hint {
+    background: #d4d0c8 !important;
+    color: #000000 !important;
+    border: 1px solid #808080 !important;
+}
+
+/* Statusleiste hell */
+[data-theme="classic"] .status-bar,
+[data-theme="classic"] #status-bar { border-top: 1px solid #808080; }
+
+/* Befehlszeile: klassisch hell mit Rahmen */
+[data-theme="classic"] .command-line,
+[data-theme="classic"] #command-line { border-top: 1px solid #808080; }
+
+[data-theme="classic"] .ct-btn { color: #202020; }
+[data-theme="classic"] .ct-btn:hover { background: #e6e3dc; color: #000; }
+[data-theme="classic"] .ct-btn:active { background: #b9b5ac; }
+[data-theme="classic"] .ct-btn.active { background: #0a246a; color: #fff; }
+[data-theme="classic"] .ct-sep,
+[data-theme="classic"] .status-separator { background: #808080; }
+[data-theme="classic"] .status-toggle:hover { background: #e6e3dc; }
+[data-theme="classic"] .status-toggle.active { background: #bfbbb2; border-color: #808080; color: #000; }
+[data-theme="classic"] .status-snap-modes { color: rgba(0,0,0,0.4); }
+[data-theme="classic"] .status-snap-modes .snap-active { color: #0a246a; }
+[data-theme="classic"] .status-label { color: #404040; }
