@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'dc1bb8e',
+        hash: 'f5e928d',
         date: '2026-11-06',
-        message: 'feat: Fliesen-Reihenfolge (Presets, Anklicken, Drag&Drop, Sperre), Schnittreihenfolge manu'
+        message: 'feat: AP1 S1 lead-geometry.js (Segment-Geometrie fuer Leads) + Node-Tests + Plan'
     },
 
     modules: {
@@ -41,6 +41,7 @@ const CERACUT_BUILD = {
         'text-tool':          { version: '1.3', build: '20261104-reviewfix' },
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.4', build: '20260625-cornerleadslot' },
+        'lead-geometry':      { version: '1.0', build: '20261106-leadgeom' },
         'app':                { version: '6.60', build: '20261106-cutorder' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
@@ -73,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.01: Feat — AP1 S1 Lead-Kern: neues Modul lead-geometry.js V1.0 (reine Segment-Geometrie fuer Lead-In/-Out: Linie/Bogen lueckenlos, Kuerzen als echter Bogen, einzige Tessellierung toPolyline, validate). Noch NICHT an cam-contour/Renderer/PP angebunden (folgt in S2-S5). 22 Node-Tests (npm test). Siehe tasks/ap1-lead-kern-design.md (lead-geometry V1.0)',
         'V6.92: Feat — Fliesen-Raster FLI (tile-grid V1.0): Raster aus Fliesen (je 4 Einzellinien, NICHT zu geschlossener Kontur verkettet (Parser V3.20), nie geschnitten; Layer Fliese blau; Dateiname frei waehlbar, Fuge 100 mm), optional Nummerierung (A1/lfd.) auf Layer Beschriftung (gruen) und Maserungspfeil auf Layer Konstruktion (rosa); Layer Schnitt (rot) nur angelegt. Pipeline V3.11: Layer Konstruktion + Beschriftung werden nie geschnitten; Renderer V3.52 zeichnet sie als duenne Linie in Layerfarbe (vorher unsichtbar) (cuttingMode none).',
         'V6.89: Feat — Mosaik-Maeander (durchgehende Innenlinien je Richtung, Halbkreise ausserhalb der Fliese, Rand zuletzt) (app V6.45); Fix — arc-fitting V3.4: scharfe Ecken wurden zu Riesenbogen',
         'V6.90: Fix — Sinumerik-PP V2.6: Haltesteg ohne Nullweg-Satz (Alarm "Bahnkomponente = Null"); Multi-Head erzeugt lauffaehiges Programm (KOPF_*-Zuweisungen vor M30, PARTn-Aufrufe, voller PART-Rahmen mit ATRANS-Offset); fehlender cuttingMode blockiert Export; Guard in _processArcLeadExact; Versionsangaben vereinheitlicht',
