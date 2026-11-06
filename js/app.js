@@ -1,5 +1,6 @@
 /**
  * CeraCUT V6.50 - Main Application
+ * V6.65: Fix — Auto-Setup beim Import fasst Fliesen (Layer Fliese) und vorhandene Referenzen nicht mehr an (setzte sonst EINE Fliese als Referenz, eine Fliese fehlte in Erkennung/Schnitt); nur Nullpunkt
  * V6.64: Feat — AP4 Waricam-Workflow: Auto-Setup beim Import (Referenz + Nullpunkt), danach direkt in Bearbeitung; Bearbeitung-Tab in Workflow-Reihenfolge ① Loch/Scheibe ② Leads ③ Schnittfuge
  * V6.63: Feat — AP2 Bogenwinkel (Feld ⌒°, Aussen/Innen) und Ecken-Lead (Typ/Winkel/ab Eckwinkel) im Lead-Ribbon, in Profilen und Undo-Snapshots
  * V6.61: Feat — Schnittfugenband An/Aus (btn-kerf-band, renderer.showKerfBand, localStorage ceracut_kerf_band)
@@ -3847,8 +3848,14 @@ class CeraCutApp {
         if (!this.contours?.length) return false;
         // Einzelmeldungen von autoDetectReference() unterdruecken — es gibt EINE Zusammenfassung unten
         this.showToast = () => {};
+        // Fliesen (Layer "Fliese"/"Fliesen") und vorhandene Referenzen NICHT anfassen: autoDetectReference() verkettet
+        // Einzellinien und macht EINE Kontur zur Referenz -> eine Fliese verschwindet aus Schnitt/Fliesen-Erkennung.
+        // Dann nur den Nullpunkt setzen (unten links der Referenzen bzw. aller Konturen), wie ein Klick im Setup-Tab.
+        const isTileLayer = c => ['fliese', 'fliesen'].includes(String(c.layer || '').trim().toLowerCase());
+        const keepRefs = this.contours.some(c => c.isReference || isTileLayer(c));
         try {
-            this.autoDetectReference();
+            if (keepRefs) this.setOriginToReferenceUL();
+            else this.autoDetectReference();
             this.undoManager?.clear();
         } catch (e) {
             console.warn('[App V6.64] Auto-Setup fehlgeschlagen', e);
@@ -3857,7 +3864,8 @@ class CeraCutApp {
             delete this.showToast;   // zurueck auf die Prototyp-Methode
         }
         const ok = this.isSetupComplete();
-        if (ok) this.showToast?.('Auto-Setup: Referenz + Nullpunkt gesetzt — jetzt pruefen: ① Loch/Scheibe ② Leads ③ Schnittfuge', 'success');
+        if (ok) this.showToast?.(keepRefs ? 'Auto-Setup: Nullpunkt gesetzt (Fliesen/Referenzen unveraendert) — jetzt pruefen: ① Loch/Scheibe ② Leads ③ Schnittfuge'
+            : 'Auto-Setup: Referenz + Nullpunkt gesetzt — jetzt pruefen: ① Loch/Scheibe ② Leads ③ Schnittfuge', 'success');
         return ok;
     }
 

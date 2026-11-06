@@ -6,7 +6,8 @@
   "scripts": {
     "serve": "node server.js",
     "dev": "PORT=3000 node server.js",
-    "test": "node --test tests/"
+    "test": "node --test tests/",
+    "check:import": "node scripts/check-import-workflow.js"
   },
   "keywords": [
     "cam",

@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '650a7be',
+        hash: 'f5b5b51',
         date: '2026-11-06',
-        message: 'feat: AP3/AP4 Feinschliff - eine Import-Meldung, Reihenfolge/Export nummeriert, '
+        message: 'fix: Auto-Setup beim Import zerstoerte Fliesen-Erkennung (eine Fliese wurde Refe'
     },
 
     modules: {
@@ -42,7 +42,7 @@ const CERACUT_BUILD = {
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.5', build: '20261106-arcangle' },
         'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
-        'app':                { version: '6.64', build: '20261106-workflow' },
+        'app':                { version: '6.65', build: '20261106-tilefix' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.13: Fix — Regression durch AP4-Auto-Setup: bei Fliesen-Rastern (Layer Fliese, 4 Einzellinien) wurde per Auto-Referenz EINE Fliese zur Referenz gemacht und fehlte danach in Fliesen-Erkennung und Schnitt. Auto-Setup setzt bei Fliesen/vorhandenen Referenzen nur noch den Nullpunkt (app V6.65).',
         'V7.12: Feat — AP3/AP4 Feinschliff: Import-Hinweise zu einer Meldung zusammengefasst (Einzelmeldungen von autoDetectReference unterdrueckt), Gruppen Reihenfolge/Export als ④/⑤ nummeriert, Setup-Gruppen als (auto) gekennzeichnet, Classic-Theme fuer F1-Hilfe und Flyouts/Dialoge mit festen Dunkelfarben (app V6.64, styles.css).',
         'V7.11: Feat — AP4 Waricam-Workflow: Referenz + Nullpunkt laufen beim Import automatisch (Checkbox "Auto beim Import" im Setup-Tab), danach oeffnet sich Bearbeitung; Bearbeitung-Tab in Workflow-Reihenfolge ① Loch/Scheibe pruefen, ② Leads (Art/Laenge), ③ Schnittfuge/Qualitaet kontrollieren, danach Reihenfolge und Export (app V6.64).',
         'V7.10: Feat — AP3 Classic-Theme (Standard): schlichte graue Oberflaeche wie Waricam/Windows-Klassik (flach, keine Rundungen/Schatten/Blur/Animationen), mittelgraue Zeichenflaeche ohne Raster. Hell/Dunkel bleiben waehlbar (Ansicht > Design). Theme wird vor dem ersten Paint gesetzt (canvas-renderer V3.62, styles.css).',
