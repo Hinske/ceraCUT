@@ -1,5 +1,6 @@
 /**
  * CeraCUT V6.50 - Main Application
+ * V6.64: Feat — AP4 Waricam-Workflow: Auto-Setup beim Import (Referenz + Nullpunkt), danach direkt in Bearbeitung; Bearbeitung-Tab in Workflow-Reihenfolge ① Loch/Scheibe ② Leads ③ Schnittfuge
  * V6.63: Feat — AP2 Bogenwinkel (Feld ⌒°, Aussen/Innen) und Ecken-Lead (Typ/Winkel/ab Eckwinkel) im Lead-Ribbon, in Profilen und Undo-Snapshots
  * V6.61: Feat — Schnittfugenband An/Aus (btn-kerf-band, renderer.showKerfBand, localStorage ceracut_kerf_band)
  * V6.60: Feat — Schnittreihenfolge manuell: Schnitte anklicken, Auswahl Anfang/↑/↓/Ende/Position N (je Fliese, Undo); alte Schnittliste war seit V5.7 nicht mehr im HTML
@@ -3816,7 +3817,13 @@ class CeraCutApp {
             }
 
             console.timeEnd('[PERF] runPipeline total');
-            setTimeout(() => this.goToStep(2), 300);
+            // V6.64 (AP4): Waricam-Workflow — Referenz + Nullpunkt laufen beim Import automatisch,
+            // danach direkt in die Bearbeitung (① Loch/Scheibe ② Leads ③ Schnittfuge pruefen).
+            const autoOk = this._autoSetupAfterImport();
+            setTimeout(() => {
+                if (autoOk) document.querySelector('.ribbon-tab[data-ribbon="bearbeitung"]')?.click();
+                else this.goToStep(2);
+            }, 300);
         } else if (contours.length === 0) {
             // Leere DXF-Datei — kein Fehler, nur Info
             this.contours = [];
@@ -3828,6 +3835,28 @@ class CeraCutApp {
         }
     }
     
+    /**
+     * V6.64 (AP4): Automatisches Setup nach dem Import (Waricam-Workflow): Referenz erkennen und Nullpunkt
+     * setzen. Nur wenn aktiviert (Checkbox "Auto beim Import") und noch nicht gesetzt. Der Import-Zustand
+     * bleibt die Undo-Basis (Stack bleibt leer). Rueckgabe: true, wenn das Setup danach komplett ist.
+     */
+    _autoSetupAfterImport() {
+        const cb = document.getElementById('chk-auto-setup');
+        if (cb && !cb.checked) return false;
+        if (this.isSetupComplete()) return true;
+        if (!this.contours?.length) return false;
+        try {
+            this.autoDetectReference();
+            this.undoManager?.clear();
+        } catch (e) {
+            console.warn('[App V6.64] Auto-Setup fehlgeschlagen', e);
+            return false;
+        }
+        const ok = this.isSetupComplete();
+        if (ok) this.showToast?.('Auto-Setup: Referenz + Nullpunkt gesetzt — jetzt pruefen: ① Loch/Scheibe ② Leads ③ Schnittfuge', 'success');
+        return ok;
+    }
+
     updateRenderer() {
         if (!this.renderer) return;
         this.renderer.setContours(this.contours);

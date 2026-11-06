@@ -173,3 +173,13 @@ Liste zur Entscheidung (behalten / unter "Erweitert" verstecken / streichen):
 1. Farbbedeutung im Katalog (rot/blau/gelb) so richtig?
 2. Gibt es die Waricam-Katalogdaten / Beispielteile mit Fahnen?
 4. Welche Sonderfunktionen aus Abschnitt AP5 sind dir wichtig?
+
+
+---
+
+## Fortschritt (Stand 2026-11-06)
+
+- **AP1 Lead-Kern** ✔ (Segmente, Geometrie-Basis wie Waricam, Renderer, Postprozessor, Simulator, Roundtrip, Abnahme gegen `HEIDE6000101587.CNC`).
+- **AP2** ✔ in geaenderter Form: kein Fahnenkatalog; stattdessen Bogenwinkel (bis 3/4-Kreis) + Ecken-Lead-Oberflaeche.
+- **AP3 Optik** ✔ Classic-Theme (flach, grau, Standard); Seitenpanel/Dialoge im Classic-Theme noch nicht durchgesehen.
+- **AP4 Workflow** (Teil 1 ✔): Waricam-Ablauf: *DXF-Import → Referenz + Nullpunkt automatisch → pruefen: Loch/Scheibe → Lead (Art/Laenge) → Schnittfuge → Reihenfolge → Export*. Umgesetzt: Auto-Setup beim Import (Checkbox "Auto beim Import"), automatischer Wechsel in Bearbeitung, Bearbeitung-Tab in Reihenfolge ① Loch/Scheibe ② Leads ③ Schnittfuge/Qualitaet. Offen: Reihenfolge-/Export-Tab im selben Stil nummerieren (④/⑤), Dialoge/Seitenpanel pruefen, evtl. "Weiter"-Leiste.

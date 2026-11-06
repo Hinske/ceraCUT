@@ -536,6 +536,10 @@
                             <option value="manual">Manuell</option>
                         </select>
                     </div>
+                    <div class="ribbon-inline-row">
+                        <input type="checkbox" id="chk-auto-setup" checked>
+                        <label for="chk-auto-setup" class="ribbon-cb-label" title="Beim DXF-Import Referenz + Nullpunkt automatisch setzen und direkt zu Bearbeitung wechseln (wie Waricam)">Auto beim Import</label>
+                    </div>
                     <div class="ribbon-btn-sm" id="btn-clear-ref" title="Referenzen aufheben">
                         <div class="icon"><svg viewBox="0 0 16 16" fill="none"><line x1="3" y1="3" x2="13" y2="13" stroke="#e33" stroke-width="1.5"/><line x1="13" y1="3" x2="3" y2="13" stroke="#e33" stroke-width="1.5"/></svg></div>
                         <span class="label">Ref löschen</span>
@@ -608,6 +612,30 @@
 
     <!-- ── Bearbeitung Panel (Profil, Leads, Typ & Qualität) ── -->
     <div class="ribbon-panel" data-ribbon="bearbeitung" style="display:none">
+        <!-- ═══ ① Loch / Scheibe prüfen (AP4 Waricam-Workflow) ═══ -->
+        <div class="ribbon-group">
+            <div class="ribbon-group-content">
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row">
+                        <span class="ribbon-field-label">Typ:</span>
+                        <button class="ribbon-btn-mini" data-mode="hole" title="Als Loch (Innenkontur)">⭕ Loch</button>
+                        <button class="ribbon-btn-mini" data-mode="disc" title="Als Scheibe (Außenkontur)">🔵 Scheibe</button>
+                    </div>
+                    <div class="ribbon-inline-row">
+                        <span class="ribbon-field-label">Richtung:</span>
+                        <button class="ribbon-btn-mini" id="btn-direction-cw" title="CW">↻</button>
+                        <button class="ribbon-btn-mini" id="btn-direction-ccw" title="CCW">↺</button>
+                        <button class="ribbon-btn-mini" id="btn-arrow-mode" title="Schneidrichtungs-Pfeile: Auto (bei vielen Konturen nur Auswahl) / An / Aus">➤ Auto</button>
+                    </div>
+                    <div class="ribbon-inline-row">
+                        <button class="ribbon-btn-mini" id="btn-feas-nesting"
+                                title="Scheibe/Loch automatisch aus der Schachtelung setzen: äußerste = Scheibe, darin Loch, darin wieder Scheibe … (STRG+Z macht es rückgängig)">Typ aus Schachtelung</button>
+                    </div>
+                </div>
+            </div>
+            <div class="ribbon-group-label">① Loch / Scheibe</div>
+        </div>
+
         <!-- ═══ Lead-Profil (V6.0) ═══ -->
         <div class="ribbon-group">
             <div class="ribbon-group-content">
@@ -629,7 +657,7 @@
                     </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">Profil</div>
+            <div class="ribbon-group-label">② Lead-Profil</div>
         </div>
 
         <!-- ═══ Außen-Lead (V3.15 — UX-Verbesserungen: Touch, Tooltips, Farbcodes) ═══ -->
@@ -770,7 +798,7 @@
                     </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">Außen-Lead</div>
+            <div class="ribbon-group-label">② Außen-Lead</div>
         </div>
 
         <!-- ═══ Innen-Lead (V3.15 — Tooltips + Stepper) ═══ -->
@@ -849,7 +877,7 @@
                     </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">Innen-Lead</div>
+            <div class="ribbon-group-label">② Innen-Lead</div>
         </div>
 
         <!-- ═══ Ecken-Lead (AP2: Anfahrt an Ecken — Form · Winkel · ab Eckwinkel) ═══ -->
@@ -894,7 +922,7 @@
                     </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">Ecken-Lead</div>
+            <div class="ribbon-group-label">② Ecken-Lead</div>
         </div>
 
         <!-- ═══ Flächenklassen-Popup (B.3) ═══ -->
@@ -913,17 +941,11 @@
             </div>
         </div>
 
-        <!-- ═══ Typ & Qualität (V3.14 — Kerf → Material verschoben) ═══ -->
+        <!-- ═══ ③ Schnittfuge kontrollieren + Qualität (AP4 Waricam-Workflow) ═══ -->
         <div class="ribbon-group">
             <div class="ribbon-group-content">
                 <div class="ribbon-sm-stack">
                     <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label">Typ:</span>
-                        <button class="ribbon-btn-mini" data-mode="hole" title="Als Loch (Innenkontur)">⭕</button>
-                        <button class="ribbon-btn-mini" data-mode="disc" title="Als Scheibe (Außenkontur)">🔵</button>
-                        <button class="ribbon-btn-mini" id="btn-direction-cw" title="CW">↻</button>
-                        <button class="ribbon-btn-mini" id="btn-direction-ccw" title="CCW">↺</button>
-                        <button class="ribbon-btn-mini" id="btn-arrow-mode" title="Schneidrichtungs-Pfeile: Auto (bei vielen Konturen nur Auswahl) / An / Aus">➤ Auto</button>
                         <button class="ribbon-btn-mini" id="btn-kerf-band" title="Schnittfuge massstaeblich als Band anzeigen (Breite = Kerf)">▮ Fuge An</button>
                     </div>
                     <div class="ribbon-inline-row">
@@ -940,7 +962,7 @@
                     </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">Typ & Qualität</div>
+            <div class="ribbon-group-label">③ Schnittfuge &amp; Qualität</div>
         </div>
 
         <!-- ═══ Strahlbreite / Machbarkeit (V6.49) ═══ -->
@@ -967,13 +989,9 @@
                         <input type="number" class="ribbon-input" id="feas-area-lt" step="1" min="0" placeholder="mm²" style="width:42px">
                         <button class="ribbon-btn-mini" id="btn-feas-sel-crit" title="Konturen nach diesen Kriterien auswählen (leere Felder werden ignoriert)">Wählen</button>
                     </div>
-                    <div class="ribbon-inline-row">
-                        <button class="ribbon-btn-mini" id="btn-feas-nesting"
-                                title="Scheibe/Loch automatisch aus der Schachtelung setzen: äußerste = Scheibe, darin Loch, darin wieder Scheibe … (STRG+Z macht es rückgängig)">Typ aus Schachtelung</button>
-                    </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">Strahlbreite</div>
+            <div class="ribbon-group-label">③ Strahlbreite</div>
         </div>
 
         <!-- ═══ Vereinfachen (V6.50) ═══ -->
@@ -1818,7 +1836,7 @@
 <script src="js/quality-zones.js?v=20261104-reviewfix"></script>
 <script src="js/project-manager.js?v=20261104-pushexecuted"></script>
 <script src="js/dxf-browser.js?v=20261105-sort2"></script>
-<script src="js/app.js?v=20261106-arcangle"></script>
+<script src="js/app.js?v=20261106-workflow"></script>
 
 <!-- Hidden Image Input -->
 <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/bmp,image/webp" hidden>

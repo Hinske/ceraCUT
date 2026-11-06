@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '4a0c97d',
+        hash: '0d49707',
         date: '2026-11-06',
-        message: 'feat: AP3 Classic-Theme (schlicht, grau, flach) als Standard, Hell/Dunkel waehlb'
+        message: 'feat: AP4 Waricam-Workflow - Auto-Setup beim Import (Referenz+Nullpunkt), Bearbe'
     },
 
     modules: {
@@ -42,7 +42,7 @@ const CERACUT_BUILD = {
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.5', build: '20261106-arcangle' },
         'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
-        'app':                { version: '6.63', build: '20261106-arcangle' },
+        'app':                { version: '6.64', build: '20261106-workflow' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -74,6 +74,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.11: Feat — AP4 Waricam-Workflow: Referenz + Nullpunkt laufen beim Import automatisch (Checkbox "Auto beim Import" im Setup-Tab), danach oeffnet sich Bearbeitung; Bearbeitung-Tab in Workflow-Reihenfolge ① Loch/Scheibe pruefen, ② Leads (Art/Laenge), ③ Schnittfuge/Qualitaet kontrollieren, danach Reihenfolge und Export (app V6.64).',
         'V7.10: Feat — AP3 Classic-Theme (Standard): schlichte graue Oberflaeche wie Waricam/Windows-Klassik (flach, keine Rundungen/Schatten/Blur/Animationen), mittelgraue Zeichenflaeche ohne Raster. Hell/Dunkel bleiben waehlbar (Ansicht > Design). Theme wird vor dem ersten Paint gesetzt (canvas-renderer V3.62, styles.css).',
         'V7.09: Feat — AP2 (statt Fahnenkatalog): Bogenwinkel fuer Arc-Leads (90 bis 270 Grad, Waricam 3/4-Kreis) und Ecken-Lead-Oberflaeche (Typ/Winkel/ab Eckwinkel) im Ribbon, in Lead-Profilen und Undo; Lead-Out folgt dem Lead-In (cam-contour V5.30, lead-profiles V1.5, app V6.63). Entscheidung: kein Katalog — Waricam-Fahnen sind Presets der vorhandenen Parameter.',
         'V7.08: Refactor — AP1 S6/S7 abgeschlossen: Roundtrip-Tests G-Code == Zeichnung inkl. Ueberschnitt (10 mm = 10 mm) und negativer Ueberschnitt; alte Bogen-Metadaten der Leads entfernt (cam-contour V5.29). AP1 Lead-Kern fertig.',
