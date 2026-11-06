@@ -85,3 +85,16 @@ Danach AP2 (Katalog) setzt direkt auf `buildFlag()` auf.
 - **Warn-Symbol** statt Farbcode — einverstanden? (Vorschlag: ja.)
 - **Tests:** Es gibt kein Test-Framework im Projekt. Vorschlag: leichte Node-Tests (`node --test`), keine neue Abhaengigkeit.
 - **Git:** `/opt/ceraCUT` Repo-Status pruefen, bevor S2 beginnt (CLAUDE.md verlangt Commit/Push je Aenderung).
+
+---
+
+## 6. Fortschritt
+
+- [x] **S1** `lead-geometry.js` + 22 Node-Tests (2026-11-06)
+- [x] **S2** Anbindung `cam-contour.js` V5.25: Builder + Kuerzen ueber Segmente. Golden-Regression (`tests/golden/leads-old.json`, 279 Szenarien aus altem Code, `tests/lead-contour-golden.test.js`) gruen. Overcut noch ohne Segmente (folgt mit S4/S5).
+- [ ] **S3** Renderer · [ ] **S4** Postprozessor · [ ] **S5** Simulator · [ ] **S6** Roundtrip · [ ] **S7** Aufraeumen
+
+## 7. Befund waehrend S2: Arc-Leads werden nie erzeugt (offen, Entscheidung noetig)
+
+`CamContour._isAtCorner()` (seit Initial-Import) berechnet `deviation = 180° - Drehwinkel`. Eine **gerade** Stelle liefert damit ~175°, ein 90°-Eck 90°. Der Schwellenvergleich (`> cornerDegradeThreshold`, Default 60°) ist damit fuer fast jeden Startpunkt wahr, und `getLeadInPath/getLeadOutPath` degradieren `arc` auf `cornerLeadType` (Default `linear`, Winkel 0). Folge: **der Default-Arc-Lead wird praktisch nie erzeugt**, auch nicht auf Kreisen/Geraden. Nachgewiesen im Golden-Capture (Default-Szenarien: 0 Arc-Leads, erst mit `cornerDegradeThreshold: 999` entstehen sie).
+Vorschlag S2b: Drehwinkel statt Supplementwinkel verwenden (gerade = 0°, 90°-Ecke = 90°). Aendert das Verhalten sichtbar (Arcs erscheinen wieder) und muss mit dem Fahnenkatalog (AP2) abgestimmt werden.

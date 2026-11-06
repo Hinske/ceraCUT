@@ -209,7 +209,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Geometry** | `geometry.js` | **V2.14** | Vektoren, SplineUtils (De Boor), MicroHealing (5-Stage), Shoelace, interiorPoint |
 | **GeometryOps** | `geometry-ops.js` | **V2.7** | Intersection, Segment-Modell, Arabeske, circumscribedCircle, splitAndOverlap, Boundary (DCEL Planar Graph), filletPolyline/chamferPolyline |
 | **DXF-Parser** | `dxf-parser.js` | **V3.20** | DXF → Entities, SPLINE-Tessellation, Deque-Chaining, Layer-aware, TEXT/MTEXT, TEXT-Glyphs, Center/Radius-Passthrough, R12-Layer-Table, HATCH-Skip |
-| **CAMContour** | `cam-contour.js` | **V5.24** | Lead-In/Out, Overcut, Multi-Contour-Collision, Lead-Routing (Corner-Penalty, Flat-Segment-Bonus, Dog-Leg), Slit, Kerf-Flip, Arc-Metadaten, clone(), leadManualOverride, Flat-Preferred autoPlace, Hatch-Entity (cuttingMode='none', isHatchContour), materialGroup, intarsiaRole |
+| **CAMContour** | `cam-contour.js` | **V5.25** | Lead-In/Out, Overcut, Multi-Contour-Collision, Lead-Routing (Corner-Penalty, Flat-Segment-Bonus, Dog-Leg), Slit, Kerf-Flip, Arc-Metadaten, clone(), leadManualOverride, Flat-Preferred autoPlace, Hatch-Entity (cuttingMode='none', isHatchContour), materialGroup, intarsiaRole |
 | **Lead Profiles** | `lead-profiles.js` | **V1.1** | 8 Built-in Profile (inkl. Intarsien), Benutzerdefiniert (localStorage), Batch-Engine (disc/hole/smallHole/slit) |
 | **CeraJet Engine** | `cerajet-engine.js` | — | Technologie-Engine (Piercing, Speed-Ramping) |
 | **Renderer** | `canvas-renderer.js` | **V3.59** | Canvas-Rendering, Hit-Testing (Kante+Fläche), Arc-Leads, DPR-Fix, Grip-Editing, Window-Selection-Rect, Lead-Differenzierung, Trackpad-Navigation, Disc-Füllung (nur CAM-Modi), Intarsien-Overlay (Multi-Material), Entry-Pfeil, Hatch-Entity-Rendering, Hatch-Live-Preview, Locked-Layer-Guard, Cycle-Selection (findAllContoursAtPoint) |
@@ -291,7 +291,7 @@ ceraCUT/
 │   ├── geometry.js                    ← Geometrie-Kernel V2.14
 │   ├── geometry-ops.js                ← GeometryOps V2.7 (Intersection, Arabeske, splitAndOverlap)
 │   ├── ceracut-pipeline.js            ← Pipeline V3.11
-│   ├── cam-contour.js                 ← Kontur-Klasse V5.24 (Flat-Preferred autoPlace)
+│   ├── cam-contour.js                 ← Kontur-Klasse V5.25 (Flat-Preferred autoPlace)
 │   ├── lead-profiles.js               ← Lead-Profile V1.1 (8 Built-in inkl. Intarsien, Batch-Engine)
 │   ├── cerajet-engine.js              ← Technologie-Engine
 │   ├── canvas-renderer.js             ← Canvas Rendering V3.59 (Flächen-Hit, Disc-Fill Fix, Cycle-Selection)
@@ -525,7 +525,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   dxf-parser: V3.20 (20261106-fliese4)
   geometry: V2.14 (20261104-reviewfix)
   pipeline: V3.11 (20261106-fliese4)
-  cam-contour: V5.24 (20261106-kerfside)
+  cam-contour: V5.25 (20261106-leadseg)
   canvas-renderer: V3.59 (20261106-kerfside)
   undo-manager: V1.4 (20261104-reviewfix)
   sinumerik-pp: V2.7 (20261106-kerfside)

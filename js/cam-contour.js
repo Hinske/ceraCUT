@@ -1,5 +1,11 @@
 /**
- * CeraCUT CamContour V5.23 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.25 - IGEMS-konformes Lead-In/Out System
+ * V5.25: Refactor — AP1 S2: Lead-Builder (linear/arc/tangent In+Out, Center-Pierce/-Exit) erzeugen
+ *        jetzt echte Segmente ueber lead-geometry.js (leadPath.segments = Wahrheit, points nur
+ *        abgeleitet via toPolyline, Tess-Tol 0.005 mm). Kollisions-Kuerzen trimmt die Segmente
+ *        (Bogen bleibt Bogen) statt nur die Punktliste. Alte Felder (arcCenter/arcRadius/
+ *        arcStartAngle/arcEndAngle/arcSweepCCW/hasLinePortion) bleiben fuer Renderer/PP.
+ *        Verifiziert gegen Golden (279 Szenarien, tests/). Verhalten unveraendert.
  * V5.21: Fix — getPiercingR923(): 'auto' mapped jetzt auf R923=9 (Rotationsanschuss)
  *        statt R923=1 (Linearer Anschuss). L201-Subroutine dieser Maschine kennt R923=1
  *        nicht (oder braucht undokumentierte R918/R919-Parameter) → "fehlende Anschuss-
@@ -95,10 +101,14 @@
  * V5.4: Hatch-Property (Schraffur — reine Visualisierung) + clone()-Support
  * V5.6: Hatch als eigenständige CamContour (cuttingMode='none', isHatchContour)
  * V5.7: Gap Detection — gaps[], healedGaps[] Properties + hasGaps()/clearGapData()
- * Last Modified: 2026-06-26
+ * Last Modified: 2026-11-06
+ * Build: 20261106-leadseg
  */
 
 class CamContour {
+    /** V5.25: max. Sehnenfehler (mm) der Lead-Tessellierung (LeadGeometry.toPolyline) */
+    static get LEAD_TESS_TOL() { return 0.005; }
+
     constructor(points, options = {}) {
         this.points = points || [];
         this.name = options.name || `Contour_${CamContour.nextId++}`;
@@ -520,6 +530,7 @@ class CamContour {
             ],
             piercingPoint: { x: centroid.x, y: centroid.y },
             entryPoint: { x: entry.x, y: entry.y },
+            segments: [LeadGeometry.line(centroid, entry)],
             type: 'center_pierce'
         };
     }
@@ -544,6 +555,7 @@ class CamContour {
                 endPoint
             ],
             endPoint,
+            segments: [LeadGeometry.line(exit, endPoint)],
             type: 'center_exit'
         };
     }
@@ -689,6 +701,7 @@ class CamContour {
         this.leadInLength = _origLeadInLength;
         this.leadInRadius = _origLeadInRadius;
 
+        this._ensureSegments(leadPath);
         this._cachedLeadInPath = leadPath;
         return leadPath;
     }
@@ -700,147 +713,99 @@ class CamContour {
      *        siehe getLeadInPath CORNER DETECTION)
      */
     _calcLinearLeadIn(entry, tangent, normal, angleOverride) {
-        const length = this.leadInLength;
-        const angleRad = (angleOverride !== undefined ? angleOverride : this.leadInAngle) * Math.PI / 180;
-
-        const approachX = normal.x * Math.sin(angleRad) - tangent.x * Math.cos(angleRad);
-        const approachY = normal.y * Math.sin(angleRad) - tangent.y * Math.cos(angleRad);
-
-        const pierce = {
-            x: entry.x + approachX * length,
-            y: entry.y + approachY * length
-        };
-
-        return {
-            points: [pierce, { x: entry.x, y: entry.y }],
-            piercingPoint: pierce,
-            entryPoint: { x: entry.x, y: entry.y },
-            type: 'linear'
-        };
+        const segs = LeadGeometry.leadInLinear({
+            join: entry, tangent, normal, length: this.leadInLength,
+            angleDeg: (angleOverride !== undefined ? angleOverride : this.leadInAngle)
+        });
+        return this._leadFromSegments(segs, 'in', 'linear');
     }
 
     /**
-     * ARC LEAD-IN (IGEMS Standard) - Kreisbogen tangential in die Kontur
-     * 
-     * Geometrie:
-     * - Bogenzentrum auf der Verschnittseite (normal * radius)
-     * - Am Entry-Punkt muss der Bogen tangential zur Schnittrichtung sein
-     * - CCW-Tangente am Entry = (normal.y, -normal.x)
-     * - CW-Tangente am Entry = (-normal.y, normal.x)
-     * - Wir wählen die Richtung, die zur Schnitt-Tangente passt
+     * ARC LEAD-IN (IGEMS Standard) - Kreisbogen tangential in die Kontur.
+     * V5.25: Geometrie liegt in lead-geometry.js (echte Segmente). Die alten Metadaten
+     * (arcCenter/arcRadius/arcStartAngle/arcEndAngle/arcSweepCCW/hasLinePortion) werden
+     * fuer bestehende Konsumenten (Renderer/PP) weiter aus dem Bogen-Segment befuellt.
      */
     _calcArcLeadIn(entry, tangent, normal) {
         const radius = this.leadInRadius;
         const totalLength = this.leadInLength;
 
-        // V5.12 Fix: radius<=0 würde Bogenzentrum auf Entry-Punkt kollabieren lassen
-        // (atan2(0,0)=0 IMMER, unabhängig von der tatsächlichen Schnittrichtung) →
-        // degeneriert auf reinen Tangenten-Lead statt dem Bogen-Pfad zu folgen.
+        // Radius <= 0: tangentialer Lead (V5.12), Typ bleibt 'arc' fuer Konsumenten
         if (radius <= 1e-6) {
-            const pierce = {
-                x: entry.x - tangent.x * totalLength,
-                y: entry.y - tangent.y * totalLength
-            };
-            return {
-                points: [pierce, { x: entry.x, y: entry.y }],
-                piercingPoint: pierce,
-                entryPoint: { x: entry.x, y: entry.y },
-                arcCenter: { x: entry.x, y: entry.y },
-                arcRadius: 0,
-                arcStartAngle: 0,
-                arcEndAngle: 0,
-                arcSweepCCW: true,
-                hasLinePortion: totalLength > 0.1,
-                type: 'arc'
-            };
+            const lp = this._leadFromSegments(
+                LeadGeometry.leadInTangent({ join: entry, tangent, length: totalLength }), 'in', 'arc');
+            lp.arcCenter = { x: entry.x, y: entry.y };
+            lp.arcRadius = 0; lp.arcStartAngle = 0; lp.arcEndAngle = 0; lp.arcSweepCCW = true;
+            lp.hasLinePortion = totalLength > 0.1;
+            return lp;
         }
 
-        // Bogenzentrum auf der Verschnittseite
-        const cx = entry.x + normal.x * radius;
-        const cy = entry.y + normal.y * radius;
+        const segs = LeadGeometry.leadInArc({ join: entry, tangent, normal, radius, length: totalLength });
+        const lp = this._leadFromSegments(segs, 'in', 'arc');
+        const a = segs[segs.length - 1];
+        lp.arcCenter = { x: a.center.x, y: a.center.y };
+        lp.arcRadius = a.radius;
+        lp.arcStartAngle = LeadGeometry.startAngle(a);
+        lp.arcEndAngle = LeadGeometry.endAngle(a);
+        lp.arcSweepCCW = a.ccw;
+        lp.hasLinePortion = segs.length > 1;
+        return lp;
+    }
 
-        // Entry-Winkel (Entry-Punkt relativ zum Zentrum)
-        const entryAngle = Math.atan2(entry.y - cy, entry.x - cx);
+    /**
+     * V5.25: Segmentliste -> Lead-Objekt. `points` ist NUR abgeleitet (einzige Tessellierung
+     * in LeadGeometry.toPolyline), `segments` ist die Wahrheit.
+     */
+    _leadFromSegments(segs, role, type) {
+        const points = LeadGeometry.toPolyline(segs, CamContour.LEAD_TESS_TOL);
+        const first = points[0], last = points[points.length - 1];
+        const lp = { points, segments: segs, type };
+        if (role === 'in') { lp.piercingPoint = first; lp.entryPoint = { x: last.x, y: last.y }; }
+        else { lp.endPoint = last; }
+        return lp;
+    }
 
-        // Bogen-Richtung bestimmen: Tangente am Entry muss zur Schnittrichtung passen
-        // CCW-Tangente am Entry-Punkt des Kreises: (normal.y, -normal.x)
-        const ccwDot = normal.y * tangent.x + (-normal.x) * tangent.y;
-        const sweepCCW = ccwDot > 0;
+    /** V5.25: Lead ohne Segmente (Dog-Leg, Fallbacks) -> Linien-Segmente aus points. */
+    _ensureSegments(lp) {
+        if (!lp || lp.segments) return lp;
+        const pts = lp.points || [];
+        lp.segments = [];
+        for (let i = 1; i < pts.length; i++) lp.segments.push(LeadGeometry.line(pts[i - 1], pts[i]));
+        return lp;
+    }
 
-        const arcSpan = Math.PI / 2;  // 90°
-
-        // Bogen-Startwinkel: Rückwärts vom Entry aus gesehen
-        const arcStartAngle = sweepCCW
-            ? entryAngle - arcSpan   // CCW: Start liegt bei kleinerem Winkel
-            : entryAngle + arcSpan;  // CW: Start liegt bei größerem Winkel
-
-        // Bogen-Startpunkt auf dem Kreis
-        const arcStartX = cx + radius * Math.cos(arcStartAngle);
-        const arcStartY = cy + radius * Math.sin(arcStartAngle);
-
-        // Optionale Gerade VOR dem Bogen (Restlänge)
-        const arcLength = radius * arcSpan;
-        const lineLength = Math.max(0, totalLength - arcLength);
-
-        const points = [];
-
-        if (lineLength > 0.1) {
-            // Tangente am Bogen-Start (Richtung des Bogens am Startpunkt)
-            const tanAtStart = sweepCCW
-                ? { x: -Math.sin(arcStartAngle), y: Math.cos(arcStartAngle) }   // CCW-Tangente
-                : { x: Math.sin(arcStartAngle), y: -Math.cos(arcStartAngle) };  // CW-Tangente
-            // Pierce-Punkt: Gerade RÜCKWÄRTS von der Bogen-Tangente
-            const pierce = {
-                x: arcStartX - tanAtStart.x * lineLength,
-                y: arcStartY - tanAtStart.y * lineLength
-            };
-            points.push(pierce);
+    /**
+     * V5.25: Gekuerzte Punktliste uebernehmen UND die Segmente passend kuerzen — Boegen
+     * bleiben echte Boegen (kein Polylinien-Fallback). role: 'in' | 'out'.
+     */
+    _applyShortenedPoints(lp, newPts, role) {
+        const oldPts = lp.points;
+        if (!lp.segments || lp.segments.length === 0) {
+            lp.points = newPts;
+            lp.segments = null;
+            this._ensureSegments(lp);
+            return;
         }
-
-        points.push({ x: arcStartX, y: arcStartY });
-
-        // Bogen-Zwischenpunkte: von arcStart → entry
-        const segments = 12;
-        for (let i = 1; i <= segments; i++) {
-            const t = i / segments;
-            const angle = sweepCCW
-                ? arcStartAngle + arcSpan * t    // CCW: Winkel steigt
-                : arcStartAngle - arcSpan * t;   // CW: Winkel fällt
-            points.push({ x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) });
+        const oldPoly = this._pathLength(oldPts);
+        const trueLen = LeadGeometry.pathLength(lp.segments);
+        const removed = oldPoly > 1e-12 ? (oldPoly - this._pathLength(newPts)) * (trueLen / oldPoly) : 0;
+        const trimmed = LeadGeometry.trim(lp.segments, Math.max(0, removed), role === 'in' ? 'start' : 'end');
+        if (!trimmed.length) {
+            lp.points = newPts;
+            lp.segments = null;
+            this._ensureSegments(lp);
+            return;
         }
-
-        // Letzter Punkt = Entry exakt
-        points[points.length - 1] = { x: entry.x, y: entry.y };
-
-        return {
-            points,
-            piercingPoint: points[0],
-            entryPoint: { x: entry.x, y: entry.y },
-            arcCenter: { x: cx, y: cy },
-            arcRadius: radius,
-            arcStartAngle: arcStartAngle,
-            arcEndAngle: entryAngle,
-            arcSweepCCW: sweepCCW,
-            hasLinePortion: lineLength > 0.1,
-            type: 'arc'
-        };
+        lp.segments = trimmed;
+        lp.points = LeadGeometry.toPolyline(trimmed, CamContour.LEAD_TESS_TOL);
     }
 
     /**
      * TANGENTIAL LEAD-IN - Gerade entlang umgekehrter Schnittrichtung
      */
     _calcTangentLeadIn(entry, tangent, normal) {
-        const length = this.leadInLength;
-        const pierce = {
-            x: entry.x - tangent.x * length,
-            y: entry.y - tangent.y * length
-        };
-        return {
-            points: [pierce, { x: entry.x, y: entry.y }],
-            piercingPoint: pierce,
-            entryPoint: { x: entry.x, y: entry.y },
-            type: 'tangent'
-        };
+        return this._leadFromSegments(
+            LeadGeometry.leadInTangent({ join: entry, tangent, length: this.leadInLength }), 'in', 'tangent');
     }
 
     /**
@@ -851,6 +816,7 @@ class CamContour {
             points: [{ x: entry.x, y: entry.y }],
             piercingPoint: { x: entry.x, y: entry.y },
             entryPoint: { x: entry.x, y: entry.y },
+            segments: [],
             type: 'on_geometry',
             linearPiercingLength: this.leadInLength
         };
@@ -1231,6 +1197,7 @@ class CamContour {
         this.leadOutLength = _origLeadOutLength;
         this.leadOutRadius = _origLeadOutRadius;
 
+        this._ensureSegments(leadPath);
         this._cachedLeadOutPath = leadPath;
         return leadPath;
     }
@@ -1239,16 +1206,8 @@ class CamContour {
      * TANGENTIAL LEAD-OUT - Gerade weiter in Schnittrichtung (Pendant zu _calcTangentLeadIn)
      */
     _calcTangentLeadOut(exit, tangent, normal) {
-        const length = this.leadOutLength;
-        const endPoint = {
-            x: exit.x + tangent.x * length,
-            y: exit.y + tangent.y * length
-        };
-        return {
-            points: [{ x: exit.x, y: exit.y }, endPoint],
-            endPoint,
-            type: 'tangent'
-        };
+        return this._leadFromSegments(
+            LeadGeometry.leadOutTangent({ join: exit, tangent, length: this.leadOutLength }), 'out', 'tangent');
     }
 
     /**
@@ -1293,103 +1252,37 @@ class CamContour {
      * @param {number} [angleOverride] - V5.14: siehe _calcLinearLeadIn
      */
     _calcLinearLeadOut(exit, tangent, normal, angleOverride) {
-        const length = this.leadOutLength;
-        const angleRad = (angleOverride !== undefined ? angleOverride : this.leadOutAngle) * Math.PI / 180;
-
-        const departX = normal.x * Math.sin(angleRad) + tangent.x * Math.cos(angleRad);
-        const departY = normal.y * Math.sin(angleRad) + tangent.y * Math.cos(angleRad);
-
-        const endPoint = {
-            x: exit.x + departX * length,
-            y: exit.y + departY * length
-        };
-
-        return {
-            points: [{ x: exit.x, y: exit.y }, endPoint],
-            endPoint,
-            type: 'linear'
-        };
+        const segs = LeadGeometry.leadOutLinear({
+            join: exit, tangent, normal, length: this.leadOutLength,
+            angleDeg: (angleOverride !== undefined ? angleOverride : this.leadOutAngle)
+        });
+        return this._leadFromSegments(segs, 'out', 'linear');
     }
 
     _calcArcLeadOut(exit, tangent, normal) {
         const radius = this.leadOutRadius;
         const totalLength = this.leadOutLength;
 
-        // V5.12 Fix: radius<=0 würde Bogenzentrum auf Exit-Punkt kollabieren lassen
-        // (atan2(0,0)=0 IMMER, unabhängig von der tatsächlichen Schnittrichtung) →
-        // degeneriert auf reinen Tangenten-Lead statt dem Bogen-Pfad zu folgen.
+        // Radius <= 0: tangentialer Lead (V5.12), Typ bleibt 'arc'
         if (radius <= 1e-6) {
-            const endPoint = {
-                x: exit.x + tangent.x * totalLength,
-                y: exit.y + tangent.y * totalLength
-            };
-            return {
-                points: [{ x: exit.x, y: exit.y }, endPoint],
-                endPoint,
-                arcCenter: { x: exit.x, y: exit.y },
-                arcRadius: 0,
-                arcStartAngle: 0,
-                arcEndAngle: 0,
-                arcSweepCCW: true,
-                hasLinePortion: totalLength > 0.1,
-                type: 'arc'
-            };
+            const lp = this._leadFromSegments(
+                LeadGeometry.leadOutTangent({ join: exit, tangent, length: totalLength }), 'out', 'arc');
+            lp.arcCenter = { x: exit.x, y: exit.y };
+            lp.arcRadius = 0; lp.arcStartAngle = 0; lp.arcEndAngle = 0; lp.arcSweepCCW = true;
+            lp.hasLinePortion = totalLength > 0.1;
+            return lp;
         }
 
-        // Bogenzentrum auf der Verschnittseite
-        const cx = exit.x + normal.x * radius;
-        const cy = exit.y + normal.y * radius;
-
-        // Exit-Winkel (Exit-Punkt relativ zum Zentrum)
-        const exitAngle = Math.atan2(exit.y - cy, exit.x - cx);
-
-        // Bogen-Richtung: Tangente am Exit muss zur Schnittrichtung passen
-        // Gleiche Logik wie Lead-In
-        const ccwDot = normal.y * tangent.x + (-normal.x) * tangent.y;
-        const sweepCCW = ccwDot > 0;
-
-        const arcSpan = Math.PI / 2;
-        const segments = 12;
-        const points = [{ x: exit.x, y: exit.y }];
-
-        // Bogen vom Exit-Punkt WEITER in Schnittrichtung, dann weg von Kontur
-        for (let i = 1; i <= segments; i++) {
-            const t = i / segments;
-            const angle = sweepCCW
-                ? exitAngle + arcSpan * t    // CCW: Winkel steigt (weiter in Schnittrichtung)
-                : exitAngle - arcSpan * t;   // CW: Winkel fällt
-            points.push({ x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) });
-        }
-
-        // Optionale Gerade NACH dem Bogen
-        const arcLength = radius * arcSpan;
-        const lineLength = Math.max(0, totalLength - arcLength);
-        if (lineLength > 0.1) {
-            const endAngle = sweepCCW ? exitAngle + arcSpan : exitAngle - arcSpan;
-            // Tangente am Bogen-Ende (Fortsetzungsrichtung)
-            const tanAtEnd = sweepCCW
-                ? { x: -Math.sin(endAngle), y: Math.cos(endAngle) }
-                : { x: Math.sin(endAngle), y: -Math.cos(endAngle) };
-            const endPoint = {
-                x: points[points.length - 1].x + tanAtEnd.x * lineLength,
-                y: points[points.length - 1].y + tanAtEnd.y * lineLength
-            };
-            points.push(endPoint);
-        }
-
-        const arcEndAngle = sweepCCW ? exitAngle + arcSpan : exitAngle - arcSpan;
-
-        return {
-            points,
-            endPoint: points[points.length - 1],
-            arcCenter: { x: cx, y: cy },
-            arcRadius: radius,
-            arcStartAngle: exitAngle,
-            arcEndAngle: arcEndAngle,
-            arcSweepCCW: sweepCCW,
-            hasLinePortion: lineLength > 0.1,
-            type: 'arc'
-        };
+        const segs = LeadGeometry.leadOutArc({ join: exit, tangent, normal, radius, length: totalLength });
+        const lp = this._leadFromSegments(segs, 'out', 'arc');
+        const a = segs[0];
+        lp.arcCenter = { x: a.center.x, y: a.center.y };
+        lp.arcRadius = a.radius;
+        lp.arcStartAngle = LeadGeometry.startAngle(a);
+        lp.arcEndAngle = LeadGeometry.endAngle(a);
+        lp.arcSweepCCW = a.ccw;
+        lp.hasLinePortion = segs.length > 1;
+        return lp;
     }
 
     /**
@@ -1522,8 +1415,8 @@ class CamContour {
                 // Kerf-Toleranzen real auf/jenseits der gegenueberliegenden Kante. newPoints
                 // ist bereits Anschluss-zuerst geordnet (Anschluss bleibt fix).
                 const halfPoints = this._truncatePathToHalfLength(newPoints);
-                leadPath.points = halfPoints;
-                leadPath.endPoint = halfPoints[halfPoints.length - 1];
+                this._applyShortenedPoints(leadPath, halfPoints, 'out');
+                leadPath.endPoint = leadPath.points[leadPath.points.length - 1];
             } else {
                 // Lead-In: Behalte Schnittpunkt bis Ende (Kontur-Anschluss)
                 const newPoints = [bestHit.point];
@@ -1533,8 +1426,8 @@ class CamContour {
                 // V6.42: siehe oben — newPoints ist hier Anschluss-zuletzt geordnet (Treffer
                 // zuerst, Kontur-Anschluss am Ende), daher umgedreht kuerzen und zurueckdrehen.
                 const halfPoints = this._truncatePathToHalfLength([...newPoints].reverse()).reverse();
-                leadPath.points = halfPoints;
-                leadPath.piercingPoint = halfPoints[0];
+                this._applyShortenedPoints(leadPath, halfPoints, 'in');
+                leadPath.piercingPoint = leadPath.points[0];
             }
             leadPath.shortened = true;
             leadPath.effectiveLength = this._pathLength(leadPath.points);
@@ -1685,7 +1578,7 @@ class CamContour {
                     // ── Strategy B: Dog-Leg Routing ──
                     const dogLeg = this._tryDogLegLeadIn(neighbors, safetyMargin);
                     if (dogLeg) {
-                        this._cachedLeadInPath = dogLeg;
+                        this._cachedLeadInPath = this._ensureSegments(dogLeg);
                         leadInModified = true;
                         console.log(`[CamContour V5.3] Lead-Routing B: Dog-Leg für ${this.name}`);
                     } else {
@@ -1711,7 +1604,7 @@ class CamContour {
             if (outCollision) {
                 const dogLeg = this._tryDogLegLeadOut(neighbors, safetyMargin);
                 if (dogLeg) {
-                    this._cachedLeadOutPath = dogLeg;
+                    this._cachedLeadOutPath = this._ensureSegments(dogLeg);
                     leadOutModified = true;
                     console.log(`[CamContour V5.12] Lead-Routing B: Dog-Leg (Out) für ${this.name}`);
                 } else {
@@ -2141,13 +2034,13 @@ class CamContour {
                 const newPts = [];
                 for (let i = 0; i <= bestHit.li; i++) newPts.push(lPts[i]);
                 newPts.push(bestHit.point);
-                leadPath.points = newPts;
-                leadPath.endPoint = bestHit.point;
+                this._applyShortenedPoints(leadPath, newPts, 'out');
+                leadPath.endPoint = leadPath.points[leadPath.points.length - 1];
             } else {
                 const newPts = [bestHit.point];
                 for (let i = bestHit.li + 1; i < lPts.length; i++) newPts.push(lPts[i]);
-                leadPath.points = newPts;
-                leadPath.piercingPoint = bestHit.point;
+                this._applyShortenedPoints(leadPath, newPts, 'in');
+                leadPath.piercingPoint = leadPath.points[0];
             }
             leadPath.shortened = true;
             leadPath.multiContourCollision = true;
