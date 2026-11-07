@@ -25,7 +25,7 @@ async function setup(user = { username: 'mh', role: 'admin' }) {
         const text = await r.text();
         return { status: r.status, body: text ? JSON.parse(text) : null, etag: r.headers.get('etag') };
     };
-    return { call, ctx, stores, close: () => { server.closeAllConnections(); server.close(); } };
+    return { call, ctx, stores, port: server.address().port, close: () => { server.closeAllConnections(); server.close(); } };
 }
 
 const part = (id, extra = {}) => ({
@@ -137,4 +137,37 @@ test('resolveTechnology: Maschine exakt vor Default, nächste Dicke', () => {
     assert.strictEqual(resolveTechnology(t, { machineId: 'x', materialId: 1, thickness: 19 }).technology.technologyId, 'a');
     assert.strictEqual(resolveTechnology(t, { materialId: 1, thickness: 19 }).technology.technologyId, 'a');
     assert.strictEqual(resolveTechnology(t, { materialId: 2, thickness: 10 }), null);
+});
+
+test('Reports: Kalkulation (JSON) und PDF aus gespeichertem/inline Plan', async () => {
+    const s = await setup();
+    await s.call('POST', '/api/materials', { materialId: 21, name: 'Feinsteinzeug', specificWeight: 2.4, pricePerKg: 1.2 });
+    await s.call('POST', '/api/technologies', { technologyId: 'T1', materialId: 21, thickness: 10, cutting: { quality: 3, nozzleId: 3, pressure: 2900 }, cost: { machineRatePerH: 100 } });
+    const p = part('P-1', { geometry: { contours: [{ id: 'c1', role: 'disc', closed: true, points: [[0, 0], [100, 0], [100, 50], [0, 50]] }],
+        bbox: { w: 100, l: 50 }, cutLength: 0.3, piercings: 1, netArea: 0.005, rectArea: 0.005 } });
+    await s.call('POST', '/api/parts', p);
+    const plan = { planId: 'PL1', materialId: 21, thickness: 10, machineId: 'cj1', sheet: { width: 1000, length: 500 }, stats: { sheets: 1 },
+        instances: [{ partId: 'P-1', revision: 1, tx: 5, ty: 5, rot: 0, sheetIndex: 0 }, { partId: 'P-1', revision: 1, tx: 120, ty: 5, rot: 0, sheetIndex: 0 }] };
+    await s.call('POST', '/api/plans', plan);
+
+    const j = await s.call('POST', '/api/reports/cost', { planId: 'PL1', labor: true });
+    assert.strictEqual(j.status, 200);
+    assert.strictEqual(j.body.data.nested, 2); assert.strictEqual(j.body.techId, 'T1');
+    assert.strictEqual(j.body.include.labor, true);
+    assert.ok(j.body.total > 0 && j.body.parts[0].qty === 2);
+    const inline = await s.call('POST', '/api/reports/cost', { plan: { ...plan, planId: undefined } });
+    assert.strictEqual(inline.status, 200);
+
+    const raw = await fetch(`http://127.0.0.1:${s.port}/api/reports/cost-pdf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planId: 'PL1' }) });
+    assert.strictEqual(raw.status, 200);
+    assert.strictEqual(raw.headers.get('content-type'), 'application/pdf');
+    assert.match(raw.headers.get('content-disposition'), /Kalkulation_PL1\.pdf/);
+    assert.strictEqual(Buffer.from(await raw.arrayBuffer()).subarray(0, 5).toString(), '%PDF-');
+
+    assert.strictEqual((await s.call('POST', '/api/reports/cost', { planId: 'NOPE' })).status, 404);
+    assert.strictEqual((await s.call('POST', '/api/reports/cost', {})).status, 400);
+    assert.strictEqual((await s.call('POST', '/api/reports/cost', { plan: { instances: [], sheet: { width: 0 } } })).status, 400);
+    assert.strictEqual((await s.call('POST', '/api/reports/cost', { plan: { ...plan, materialId: null } })).status, 400);
+    assert.strictEqual((await s.call('GET', '/api/reports/cost')).status, 404);
+    s.close();
 });

@@ -12,7 +12,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-planopen
+ * Build: 20261107-costdialog
+ * V1.2: Feat — Button „Kalkulation" (Autonest-Dialog, Planliste) → cost-dialog.js
  * V1.1: Feat — Plan öffnen (PlanOpenDialog, toDXF, loadPlanParts), „Im Editor öffnen" im Autonest-Dialog
  *
  * (c) Cerasell GmbH
@@ -271,6 +272,7 @@ class AutoNestDialog {
                 <div id="an-stats" style="font-size:11px;color:#444"></div>
             </div>
             <div class="cldcl-row" style="padding:8px 12px;border-top:1px solid #ccc;justify-content:flex-end">
+                <button data-act="cost" title="Kostenkalkulation für das aktuelle Nesting-Ergebnis">Kalkulation</button>
                 <button data-act="edit" title="Aktuelles Blech ungespeichert im Editor öffnen">Im Editor öffnen</button>
                 <input id="an-name" type="text" placeholder="Planname" style="width:180px;text-transform:uppercase">
                 <button data-act="save">Plan speichern</button>
@@ -284,7 +286,7 @@ class AutoNestDialog {
             const act = e.target.closest('[data-act]')?.dataset.act;
             if (!act) return;
             const i = e.target.closest('[data-i]')?.dataset.i;
-            ({ close: () => this.close(), search: () => this._search(), run: () => this._run(), save: () => this._save(), edit: () => this._openInEditor(),
+            ({ close: () => this.close(), search: () => this._search(), run: () => this._run(), save: () => this._save(), edit: () => this._openInEditor(), cost: () => this._cost(),
                add: () => this._addPart(e.target.closest('[data-pid]').dataset.pid),
                del: () => { this.rows.splice(Number(i), 1); this._renderRows(); } }[act] || (() => {}))();
         });
@@ -369,6 +371,13 @@ class AutoNestDialog {
         this.overlay.querySelector('#an-preview').innerHTML = this.result ? NestingPlan.previewSvg(this.result.plan, this.partsMap, this.sheetIndex) : '';
     }
 
+    _cost() {
+        if (!this.result) return this._toast('Bitte zuerst Nesting starten', 'warning');
+        if (typeof PlanCostDialog === 'undefined') return this._toast('Kalkulation nicht geladen', 'error');
+        const name = this.overlay.querySelector('#an-name').value.trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '_') || 'NESTING';
+        PlanCostDialog.open(this.app, { plan: { ...this.result.plan, planId: name }, name });
+    }
+
     _openInEditor() {
         if (!this.result) return this._toast('Bitte zuerst Nesting starten', 'warning');
         try {
@@ -420,6 +429,7 @@ class PlanOpenDialog {
             const act = e.target.closest('[data-act]')?.dataset.act; if (!act) return;
             if (act === 'close') this.close();
             if (act === 'search') this._search();
+            if (act === 'cost') PlanCostDialog.open(this.app, { planId: e.target.closest('tr').dataset.id });
             if (act === 'open') this._open(e.target.closest('tr').dataset.id, Number(e.target.closest('tr').querySelector('select')?.value || 0));
         });
         ov.querySelector('#po-q').addEventListener('keydown', e => { if (e.key === 'Enter') this._search(); });
@@ -438,7 +448,7 @@ class PlanOpenDialog {
                 return `<tr data-id="${this._esc(p.planId)}" style="border-top:1px solid #ddd"><td>${this._esc(p.planId)}</td>
                     <td>${p.sheet ? p.sheet.width + '×' + p.sheet.length : ''}</td><td>${p.stats?.nested ?? p.instanceCount}</td><td>${n}</td>
                     <td>${p.stats?.utilization ?? ''}%</td><td>${this._esc((p.updatedAt || '').slice(0, 16).replace('T', ' '))}</td>
-                    <td>${n > 1 ? `<select>${Array.from({ length: n }, (_, i) => `<option value="${i}">Blech ${i + 1}</option>`).join('')}</select> ` : ''}<button data-act="open">Öffnen</button></td></tr>`;
+                    <td>${n > 1 ? `<select>${Array.from({ length: n }, (_, i) => `<option value="${i}">Blech ${i + 1}</option>`).join('')}</select> ` : ''}<button data-act="cost">Kalkulation</button> <button data-act="open">Öffnen</button></td></tr>`;
             }).join('') : '<tr><td colspan="7" style="padding:8px;color:#888">Keine Pläne gefunden</td></tr>';
         } catch (e) { this._toast(`Planliste nicht ladbar: ${e.message}`, 'error'); }
     }

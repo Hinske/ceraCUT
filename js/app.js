@@ -1,5 +1,6 @@
 /**
  * CeraCUT V6.50 - Main Application
+ * V6.71: Fix — applyKerfWidth wirkt auch auf offene Konturen (Schnittfuge aendert sich sichtbar).
  * V6.70: Feat — Lead-Menue Einfach-Ansicht: Groesse Klein/Mittel/Gross, Klartext-Zusammenfassung, Begriffe (Form/Laenge/Ueberschnitt), Feineinstellungen unter Experte.
  * V6.69: Feat — Ribbon: eigener Ausfahr-Typ und -Radius (lead-out-type/-radius, leer = wie Anfahrt).
  * V6.68: Feat — Ribbon: eigener Ausfahrwinkel (lead-out-angle), Schalter Ueberschnitt an Ecken (overcut-at-corners); Ausfahrlaenge/Winkel nicht mehr unter Erweitert.
@@ -4580,7 +4581,7 @@ class CeraCutApp {
     applyKerfWidth() {
         const newKerf = parseFloat(document.getElementById('kerf-width')?.value) || 0.8;
         const oldKerf = this.settings.kerfWidth;
-        const targets = this.contours.filter(c => c.isClosed && !c.isReference);
+        const targets = this.contours.filter(c => !c.isReference && c.cuttingMode !== 'none' && !c.isHatchContour);
         
         if (targets.length === 0) return;
         

@@ -1,5 +1,6 @@
 /**
  * CeraCUT V3.52 - Canvas Renderer
+ * V3.64: Fix — Schnittfugenband auch bei offenen Konturen (mittig auf dem Pfad, Breite = Kerf).
  * V3.62: Feat — AP3 Classic-Theme (Palette #666 ohne Raster, Default), isDark auch fuer classic.
  * V3.61: Feat — AP1 S4b: Leads/Ueberschnitt/Startmarke auf der Teilegeometrie (wie G-Code), Fugenband entlang der realen Strahlmitte (getLeadIn/OutToolSegments, overcut.toolPoints).
  * V3.63: Feat — Hover-Hinweis (Tooltip) am Lead-Warnsymbol mit Grund (gekuerzt/Startpunkt rotiert/Alternativ/Fallback).
