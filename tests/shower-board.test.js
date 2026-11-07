@@ -451,3 +451,47 @@ test('Auto-Raster: mit editiertem Layout laeuft keine Suche (Lage bleibt wie ueb
     assert.strictEqual(b.autoInfo, null);
     assert.deepStrictEqual(pieceKeys(b.pieces), pieceKeys(a.pieces));
 });
+
+// ── Schnittketten an scharfen Ecken trennen (V0.8) ───────────────────────────
+const pt = (x, y) => ({ x, y });
+
+test('splitSharp: rechter Winkel (waagerecht + senkrecht) wird getrennt, sanfter Uebergang (Diagonale -> Ablaufkante) bleibt verbunden', () => {
+    const { splitSharp, turnAngle } = G._internals;
+    const L = { pts: [pt(0, 100), pt(0, 0), pt(100, 0)], closed: false };
+    const r = splitSharp(L, 75);
+    assert.strictEqual(r.length, 2); assert.deepStrictEqual(r[0].pts, [pt(0, 100), pt(0, 0)]); assert.deepStrictEqual(r[1].pts, [pt(0, 0), pt(100, 0)]);
+    const diagDrain = { pts: [pt(1000, 998.6), pt(570, 568.6), pt(570, 431.4), pt(1000, 1.4)], closed: false };
+    assert.strictEqual(splitSharp(diagDrain, 75).length, 1, 'Gehrung + Ablaufkante + Gehrung = ein Schnitt');
+    assert.ok(Math.abs(turnAngle(pt(0, 0), pt(1, 0), pt(1, 1)) - 90) < 1e-9 && turnAngle(pt(0, 0), pt(1, 0), pt(2, 0)) === 0);
+    // spitzer Winkel Diagonale <-> Boardkante (Eckpunkt des Boards in der Fliese): trennen
+    const corner = { pts: [pt(0, 499), pt(0, 1.41), pt(580, 431)], closed: false };
+    assert.strictEqual(splitSharp(corner, 75).length, 2);
+    assert.strictEqual(splitSharp(L, 180).length, 1, '180 = nie trennen');
+    // geschlossenes Rechteck im Inneren: vier Einzellinien
+    const sq = { pts: [pt(0, 0), pt(10, 0), pt(10, 10), pt(0, 10), pt(0, 0)], closed: true };
+    const four = splitSharp(sq, 75);
+    assert.strictEqual(four.length, 4); assert.ok(four.every(c => c.pts.length === 2 && !c.closed));
+    assert.strictEqual(splitSharp({ pts: [pt(0, 0), pt(10, 0), pt(10, 10), pt(0, 0)], closed: true }, 180).length, 1);
+});
+
+test('Schnitte: Diagonale, waagerechter und senkrechter Boardrand sind getrennte Schnitte, jeder einzeln in der Mitte gebrochen', () => {
+    const r = G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 597, kurz: 597 } });
+    const { turnAngle, pathLength } = G._internals;
+    for (const c of r.cuts) {
+        const p = c.chain.pts;
+        for (let i = 1; i < p.length - 1; i++) assert.ok(turnAngle(p[i - 1], p[i], p[i + 1]) <= 75 + 1e-9, 'keine scharfe Ecke innerhalb eines Schnitts');
+        if (pathLength(p) >= 20) assert.strictEqual(c.parts.length, 2, 'jeder Schnitt einzeln gebrochen');
+    }
+    // Boardecke links unten: senkrechter Rand, waagerechter Rand und Diagonale sind drei getrennte Schnitte
+    const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) < 2.5;
+    const atCorner = r.cuts.filter(c => c.chain.pts.some(q => near(q, pt(0, 0))));
+    assert.ok(atCorner.length >= 3 && atCorner.every(c => c.chain.pts.length === 2), `Ecke: ${atCorner.length} Schnitte mit je 2 Punkten`);
+    const diag = atCorner.filter(c => { const [a, b] = c.chain.pts; return Math.abs(a.x - b.x) > 1 && Math.abs(a.y - b.y) > 1; });
+    assert.strictEqual(diag.length, 2, 'die Diagonale = ein Schnitt je Seite der Fuge (zwei parallele Schnitte im Fugenabstand), je ein einziger Schnitt');
+    assert.ok(atCorner.some(c => c.chain.pts.every(q => Math.abs(q.x) < 1e-6)), 'senkrechter Randschnitt');
+    assert.ok(atCorner.some(c => c.chain.pts.every(q => Math.abs(q.y) < 1e-6 || Math.abs(q.y - 0) < 2)), 'waagerechter Randschnitt');
+    // Eckenwinkel abschaltbar (alter Stand: verkettet)
+    const joined = G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 597, kurz: 597 }, eckenTrennen: 180 });
+    assert.ok(joined.cuts.length < r.cuts.length);
+    assert.strictEqual(G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, eckenTrennen: 0 }).ok, false);
+});

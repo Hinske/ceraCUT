@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.42',
-    build: '20261107-tileref3',
+    version: '7.43',
+    build: '20261107-dusch13',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '70e9402',
+        hash: '4c47aef',
         date: '2026-11-07',
-        message: 'fix: Fliesenumriss im CAD-Tab nicht als Referenz gesperrt, in CAM wieder Referenz'
+        message: 'feat: Duschboard-Schnitte - Ketten an scharfen Ecken trennen'
     },
 
     modules: {
@@ -67,7 +67,7 @@ const CERACUT_BUILD = {
         'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
-        'shower-board-generator': { version: '0.7', build: '20261107-dusch12' },
+        'shower-board-generator': { version: '0.8', build: '20261107-dusch13' },
         'shower-board-dialog': { version: '0.7', build: '20261107-dusch12' },
         'shower-api': { version: '0.1', build: '20261107-showerapi' },
         'shower-pdf': { version: '0.2', build: '20261107-dusch11' },
