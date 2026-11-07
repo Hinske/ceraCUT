@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-11-07
-> **Version:** V7.21
-> **Build:** 20261107-simrapid
+> **Version:** V7.22
+> **Build:** 20261107-camtab
 
 ---
 
@@ -217,10 +217,10 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **UndoManager** | `undo-manager.js` | **V1.4** | Command Pattern, Undo/Redo, Clipboard, WizardStepUndo |
 | **Arc-Fitting** | `arc-fitting.js` | **V3.4** | Polylinie → G02/G03 Bogen (fur PP-Ausgabe) |
 | **Pipeline** | `ceracut-pipeline.js` | **V3.12** | Topologie (disc/hole/reference/slit/none), Kerf-Offset, interiorPoint-basierte Nesting-Erkennung, Validation Engine (Pre-Export), Hatch-Konturen ausgeschlossen |
-| **Drawing Tools** | `drawing-tools.js` | **V2.22** | Tier 1+2 CAD-Tools, AutoCAD-Aliases, Continuous Mode, BreakTool, Enter/Rechtsklick=Beenden (AutoCAD), Layerfarbe, Auto-Apply pending Entities, Locked-Layer-Guard Window-Selection, ArcTool 8 Konstruktionsarten, PolylineTool Bogen-Modus, RectangleTool Fillet/Chamfer/Rotation, LineTool Fortsetzung, ALL/L-Selektion |
+| **Drawing Tools** | `drawing-tools.js` | **V2.23** | Tier 1+2 CAD-Tools, AutoCAD-Aliases, Continuous Mode, BreakTool, Enter/Rechtsklick=Beenden (AutoCAD), Layerfarbe, Auto-Apply pending Entities, Locked-Layer-Guard Window-Selection, ArcTool 8 Konstruktionsarten, PolylineTool Bogen-Modus, RectangleTool Fillet/Chamfer/Rotation, LineTool Fortsetzung, ALL/L-Selektion |
 | **Drawing Tools Ext** | `drawing-tools-ext.js` | **V1.11** | Ellipse, Spline, Donut, XLine, Overlap Break (OB), Hatch (H, eigenständige CamContour, Live-Preview, Farbpalette) |
 | **Advanced Tools** | `advanced-tools.js` | **V1.9** | Fillet, Trim, Extend, Offset (Ghost-Preview), Chamfer, Arabeske, Aufteilen, Overkill, Boundary (DCEL) |
-| **CAM Tools** | `cam-tools.js` | **V1.1** | CAM-spezifische Werkzeuge, Hit-Test Zoom-Scaling |
+| **CAM Tools** | `cam-tools.js` | **V1.7** | 7 CAM-Werkzeuge im Tab CAM (EF, REP, AN, BT, PJ, VZ, HULL); Schwerpunkt-/Kanten-korrekte Logik, Analyze mit BBox-Vorfilter, VZ via Simplify; Tests: tests/cam-tools.test.js |
 | **Zuschnitt-Generator** | `mosaic-generator.js` | **V1.3** | Menue CAD-Tools (Ribbon CAD nach CAM-Tools): Mosaik Wuerfel/Rechteck (Teilung = Stueck + 0,8 mm, Rand 3 mm, Verschnittpruefung, Dekor-Lage, Mischlage, Ueberlauf), Sockel-Streifen; Befehle MOSW/MOSR/MOSS; erzeugt DXF -> neuer Tab |
 | **Tool Manager** | `tool-manager.js` | **V2.2** | Tool-Routing, Always-Active, Shortcut-Dispatch, Tier 4 |
 | **Command Line** | `command-line.js` | **V1.6** | AutoCAD-style Prompt, Koordinaten-Parser, History, ArrowUp/Down Navigation, Input-Validation-Feedback |
@@ -262,7 +262,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Seed** | `lib/seed.js` | **V1.0** | Erststart-Befuellung materials/technologies aus CeraJetEngine (nie ueberschreibend) |
 | **Data-API** | `lib/data-api.js` | **V1.0** | REST: /api/parts,plans,sheets,orders,materials,technologies, /api/technology/resolve; If-Match, Filter, Admin-only fuer Preise/Technologie |
 | **Store** | `lib/store.js` | **V1.0** | JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftraege, Technologie): atomar, Versions-Sperre (If-Match), ID-Validierung |
-| **Build-Info** | `build-info.js` | **V7.21** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V7.22** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.14 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -297,9 +297,9 @@ ceraCUT/
 │   └── auth.js                        ← Cookie/Body-Parsing-Helper V1.0
 ├── data/                               ← users.json (gitignored — Passwort-Hashes)
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V7.21
+│   ├── build-info.js                  ← Versions-Banner V7.22
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
-│   ├── app.js                         ← Hauptanwendung V7.21 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
+│   ├── app.js                         ← Hauptanwendung V7.22 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.20 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.14
 │   ├── geometry-ops.js                ← GeometryOps V2.7 (Intersection, Arabeske, splitAndOverlap)
@@ -314,7 +314,7 @@ ceraCUT/
 │   ├── command-line.js                ← Command-Line UI V1.6 (History, Validation-Feedback)
 │   ├── dynamic-input.js              ← Dynamic Input HUD V1.1
 │   ├── snap-manager.js               ← Snap-System V1.9
-│   ├── drawing-tools.js              ← CAD-Tools V2.22 (Auto-Apply, Locked-Layer-Guard)
+│   ├── drawing-tools.js              ← CAD-Tools V2.23 (Auto-Apply, Locked-Layer-Guard)
 │   ├── drawing-tools-ext.js           ← Ellipse, Spline, Donut, XLine, OB, Hatch V1.11
 │   ├── advanced-tools.js              ← Tier 5 Tools V1.9 (Fillet/Trim/Extend/Offset/Chamfer/Overkill)
 │   ├── cam-tools.js                   ← CAM-Werkzeuge
@@ -547,7 +547,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   command-line: V1.6 (20261104-reviewfix)
   snap-manager: V1.9 (20261105-acmarker)
   geometry-ops: V2.7 (20261104-reviewfix)
-  drawing-tools: V2.22 (20261106-cadlock)
+  drawing-tools: V2.23 (20261107-camtab)
   drawing-tools-ext: V1.11 (20261104-reviewfix)
   dynamic-input: V1.1 (20260623-autocadfeel)
   tool-manager: V2.2 (20260216-0015)
@@ -566,7 +566,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   machine-profiles: V1.2 (20261104-reviewfix)
   bridge-cutting: V1.1 (20261104-reviewfix)
   quality-zones: V1.2 (20261104-reviewfix)
-  cam-tools: V1.6 (20261104-pushexecuted)
+  cam-tools: V1.7 (20261107-camtab)
   mosaic-generator: V1.4 (20261106-fliesenrect)
   advanced-tools: V1.9 (20261104-reviewfix)
   arc-fitting: V3.4 (20261105-meander)

@@ -1,5 +1,5 @@
 /**
- * CeraCUT CAM-Tools V1.6 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
+ * CeraCUT CAM-Tools V1.7 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
  * 7 Tools für Analyse, Optimierung und Vorbereitung der Schnittgeometrie
  *
  * Tools:
@@ -20,10 +20,65 @@
  *       Shift-Tracking für BoundaryTrim, Redo-Stack-Clearing nach Undo-Push, alle TOOL_TOOLTIPS
  * V1.1: Hit-Test Scaling — Klick-Threshold skaliert mit Zoom-Level
  * Created: 2026-02-17 MEZ
- * Last Modified: 2026-11-04
- * Build: 20261104-pushexecuted
+ * Last Modified: 2026-11-07
+ * Build: 20261107-camtab
+ * V1.7: Praxis-Check — REP (Flaechenschwerpunkt statt Punktemittel, vorher ~48 mm Versatz), BT (Eckpunkt-/Kantentest statt
+ *       Mittelwert; Kreuzende bleiben), PJ (Join: Steg-Flaeche je Drehsinn korrekt; Split: 2 geschlossene Konturen),
+ *       VZ (Punktreduktion via Simplify; bulge-Pfad war wirkungslos), AN (BBox-Vorfilter: 97 s -> 32 ms),
+ *       EF (A/B-Reihenfolge egal, Pfeilhoehen-Teilung). Tools jetzt im Tab CAM (Analyze-Button hatte keinen Handler).
  * V1.5: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  */
+
+// ════════════════════════════════════════════════════════════════════════════
+//  HELFER (V1.7)
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Vorzeichenbehaftete Flaeche (CCW positiv); Schlusspunkt = Startpunkt wird toleriert. */
+function _camSignedArea(pts) {
+    let a = 0;
+    for (let i = 0; i < pts.length; i++) {
+        const p = pts[i], q = pts[(i + 1) % pts.length];
+        a += p.x * q.y - q.x * p.y;
+    }
+    return a / 2;
+}
+
+/** Flaechenschwerpunkt (geschlossen) bzw. Bounding-Box-Mitte (offen/entartet). Der Punktemittelwert
+ *  waere bei ungleichmaessiger Punktdichte (Bogen vs. Gerade) um mehrere mm verschoben. */
+function _camCentroid(pts) {
+    if (!pts || pts.length === 0) return { x: 0, y: 0 };
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of pts) {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+    const bbox = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    let a = 0, cx = 0, cy = 0;
+    for (let i = 0; i < pts.length; i++) {
+        const p = pts[i], q = pts[(i + 1) % pts.length];
+        const f = p.x * q.y - q.x * p.y;
+        a += f; cx += (p.x + q.x) * f; cy += (p.y + q.y) * f;
+    }
+    if (Math.abs(a) < 1e-9) return bbox;
+    return { x: cx / (3 * a), y: cy / (3 * a) };
+}
+
+/** Punkt-in-Polygon (Strahlverfahren). */
+function _camPointInPolygon(x, y, polygon) {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i].x, yi = polygon[i].y, xj = polygon[j].x, yj = polygon[j].y;
+        if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+}
+
+/** Konturpunkte ohne doppelten Schlusspunkt. */
+function _camOpenRing(pts) {
+    const r = pts.map(p => ({ x: p.x, y: p.y }));
+    if (r.length > 1 && Math.hypot(r[0].x - r[r.length - 1].x, r[0].y - r[r.length - 1].y) < 1e-9) r.pop();
+    return r;
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 //  EDGEFIX TOOL (EF) — Polylinien-Abschnitt durch Arc/Line ersetzen
@@ -76,8 +131,17 @@ class EdgefixTool extends BaseTool {
         else if (this.state === 'pickB') {
             this.segB = this._nearestOnContour(point);
             if (!this.segB) { this.cmd?.log('Punkt nicht auf Kontur', 'error'); return; }
-            if (this.segB.segmentIndex <= this.segA.segmentIndex) {
-                this.cmd?.log('Punkt B muss nach Punkt A liegen', 'error');
+            // V1.7: Reihenfolge egal — A/B werden entlang der Kontur sortiert
+            const sameSeg = this.segB.segmentIndex === this.segA.segmentIndex;
+            const pts = this.contour.points;
+            const segStart = pts[this.segA.segmentIndex];
+            const dA = Math.hypot(this.segA.point.x - segStart.x, this.segA.point.y - segStart.y);
+            const dB = Math.hypot(this.segB.point.x - segStart.x, this.segB.point.y - segStart.y);
+            if (this.segB.segmentIndex < this.segA.segmentIndex || (sameSeg && dB < dA)) {
+                const t = this.segA; this.segA = this.segB; this.segB = t;
+            }
+            if (sameSeg && Math.abs(dA - dB) < 1e-6) {
+                this.cmd?.log('Punkte A und B liegen aufeinander', 'error');
                 return;
             }
             this.state = 'pickC';
@@ -192,7 +256,9 @@ class EdgefixTool extends BaseTool {
         if (ccw && sweep < 0) sweep += 2 * Math.PI;
         if (!ccw && sweep > 0) sweep -= 2 * Math.PI;
 
-        const steps = Math.max(8, Math.round(Math.abs(sweep) * r / 2));
+        // V1.7: Teilung nach Pfeilhoehe (0.02 mm) statt fester 2-mm-Sehne (bei kleinem Radius zu grob)
+        const stepAng = 2 * Math.acos(Math.max(0, Math.min(1, 1 - 0.02 / r)));
+        const steps = Math.max(8, Math.ceil(Math.abs(sweep) / Math.max(stepAng, 1e-3)));
         for (let i = 1; i < steps; i++) {
             const t = i / steps;
             const angle = sa + sweep * t;
@@ -330,12 +396,7 @@ class ReplaceTool extends ModificationTool {
         console.log('[CAM-Tools] Replace._execute: ' + (performance.now() - _t0).toFixed(2) + 'ms');
     }
 
-    _centroid(points) {
-        if (!points || points.length === 0) return { x: 0, y: 0 };
-        let sx = 0, sy = 0;
-        for (const p of points) { sx += p.x; sy += p.y; }
-        return { x: sx / points.length, y: sy / points.length };
-    }
+    _centroid(points) { return _camCentroid(points); }
 }
 
 
@@ -454,18 +515,32 @@ class AnalyzeTool extends ModificationTool {
         }
 
         // Segment-Überlappungen prüfen (parallele, überlagerte Segmente)
+        // V1.7: Bounding-Box-Vorfilter — vorher 97 s bei 400 Konturen, jetzt nur Paare mit sich berührenden Boxen
+        const boxes = contours.map(c => {
+            if (!c || c.isReference || !c.points || c.points.length < 2) return null;
+            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            for (const p of c.points) {
+                if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x;
+                if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y;
+            }
+            return { x0: x0 - overlapTolerance, y0: y0 - overlapTolerance, x1: x1 + overlapTolerance, y1: y1 + overlapTolerance };
+        });
         for (let i = 0; i < contours.length; i++) {
+            const bi = boxes[i];
+            if (!bi) continue;
             for (let j = i + 1; j < contours.length; j++) {
-                if (contours[i].isReference || contours[j].isReference) continue;
+                const bj = boxes[j];
+                if (!bj) continue;
+                if (bi.x1 < bj.x0 || bj.x1 < bi.x0 || bi.y1 < bj.y0 || bj.y1 < bi.y0) continue;
                 const ptsA = contours[i].points;
                 const ptsB = contours[j].points;
-                if (!ptsA || !ptsB || ptsA.length < 2 || ptsB.length < 2) continue;
 
                 // Stichproben-Check: Mittelpunkte einiger Segmente von A auf B prüfen
                 const sampleStep = Math.max(1, Math.floor(ptsA.length / 10));
                 for (let s = 0; s < ptsA.length - 1; s += sampleStep) {
                     const mx = (ptsA[s].x + ptsA[s + 1].x) / 2;
                     const my = (ptsA[s].y + ptsA[s + 1].y) / 2;
+                    if (mx < bj.x0 || mx > bj.x1 || my < bj.y0 || my > bj.y1) continue;
                     const nearest = GeometryOps.findNearestSegment(ptsB, mx, my, overlapTolerance);
                     if (nearest && nearest.distance < overlapTolerance) {
                         overlaps.push({ x: mx, y: my, distance: nearest.distance, type: 'overlap' });
@@ -584,15 +659,27 @@ class BoundaryTrimTool extends BaseTool {
 
         // Alle Konturen prüfen die nicht die Boundary sind
         const toDelete = [];
+        let straddling = 0;
 
         for (let i = 0; i < contours.length; i++) {
             const c = contours[i];
             if (c === boundary || c.isReference) continue;
             if (!c.points || c.points.length < 2) continue;
 
-            // Schwerpunkt-Test: Ist die Kontur hauptsächlich innerhalb?
-            const centroid = this._centroid(c.points);
-            const inside = this._pointInPolygon(centroid, boundaryPts);
+            // V1.7: Alle Eckpunkte pruefen (Schwerpunkt-Mittelwert lag bei umschliessenden/konkaven Konturen daneben).
+            // Punkte auf der Grenze (<= 0.05 mm) zaehlen neutral. Nur komplett innen bzw. komplett aussen
+            // wird geloescht; Konturen, die die Grenze kreuzen, bleiben stehen und werden gemeldet.
+            let nIn = 0, nOut = 0;
+            for (const p of c.points) {
+                const near = GeometryOps.findNearestSegment(boundaryPts, p.x, p.y, 0.05);
+                if (near) continue;
+                if (this._pointInPolygon(p, boundaryPts)) nIn++; else nOut++;
+            }
+            if (nIn > 0 && nOut > 0) { straddling++; continue; }
+            // Alle Eckpunkte auf einer Seite, aber Kanten koennen die Grenze trotzdem kreuzen (z.B. langer Streifen)
+            if (nIn + nOut > 0 && this._edgesCross(c.points, boundaryPts)) { straddling++; continue; }
+            if (nIn === 0 && nOut === 0) continue;   // liegt auf der Grenze
+            const inside = nIn > 0;
 
             // invertMode: SHIFT = alles AUSSERHALB löschen
             const shouldDelete = invertMode ? !inside : inside;
@@ -602,6 +689,9 @@ class BoundaryTrimTool extends BaseTool {
             }
         }
 
+        if (straddling > 0) {
+            this.cmd?.log('⚠ ' + straddling + ' Kontur(en) kreuzen die Grenze und bleiben unverändert', 'warning');
+        }
         if (toDelete.length === 0) {
             this.cmd?.log('Keine Objekte zum Löschen gefunden', 'info');
             console.log('[CAM-Tools] BoundaryTrim._execute: 0ms (nichts zu tun)');
@@ -644,23 +734,24 @@ class BoundaryTrimTool extends BaseTool {
         console.log('[CAM-Tools] BoundaryTrim._execute: ' + (performance.now() - _t0).toFixed(2) + 'ms');
     }
 
-    _centroid(points) {
-        let sx = 0, sy = 0;
-        for (const p of points) { sx += p.x; sy += p.y; }
-        return { x: sx / points.length, y: sy / points.length };
-    }
+    _centroid(points) { return _camCentroid(points); }
 
-    _pointInPolygon(point, polygon) {
-        let inside = false;
-        const x = point.x, y = point.y;
-        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-            const xi = polygon[i].x, yi = polygon[i].y;
-            const xj = polygon[j].x, yj = polygon[j].y;
-            if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
-                inside = !inside;
+    _pointInPolygon(point, polygon) { return _camPointInPolygon(point.x, point.y, polygon); }
+
+    /** Schneidet irgendeine Kante von a eine Kante von b? (echte Kreuzung) */
+    _edgesCross(a, b) {
+        const orient = (p, q, r) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+        let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+        for (const p of b) { bx0 = Math.min(bx0, p.x); bx1 = Math.max(bx1, p.x); by0 = Math.min(by0, p.y); by1 = Math.max(by1, p.y); }
+        for (let i = 0; i < a.length - 1; i++) {
+            const p = a[i], q = a[i + 1];
+            if (Math.max(p.x, q.x) < bx0 || Math.min(p.x, q.x) > bx1 || Math.max(p.y, q.y) < by0 || Math.min(p.y, q.y) > by1) continue;
+            for (let j = 0; j < b.length - 1; j++) {
+                const r = b[j], t = b[j + 1];
+                if (orient(p, q, r) * orient(p, q, t) < 0 && orient(r, t, p) * orient(r, t, q) < 0) return true;
             }
         }
-        return inside;
+        return false;
     }
 }
 
@@ -770,50 +861,56 @@ class PolyJointTool extends BaseTool {
         const nearA = GeometryOps.findNearestSegment(pts, pA.x, pA.y, Infinity);
         const nearB = GeometryOps.findNearestSegment(pts, pB.x, pB.y, Infinity);
         if (!nearA || !nearB) return;
+        if (nearA.segmentIndex === nearB.segmentIndex) {
+            this.cmd?.log('Punkte A und B liegen auf demselben Segment — Trennschnitt nicht möglich', 'error');
+            return;
+        }
 
-        // Zwei Split-Punkte auf Kontur
-        const splitA = nearA.point;
-        const splitB = nearB.point;
+        // V1.7: Ergebnis sind ZWEI GESCHLOSSENE Konturen (Sehne A-B als gemeinsame Trennkante).
+        // Vorher: zwei offene Teilstuecke, nur das zweite als Slit markiert — nicht schneidbar als Teile.
+        const first = nearA.segmentIndex < nearB.segmentIndex ? nearA : nearB;
+        const second = first === nearA ? nearB : nearA;
+        const ring = pts;                       // Schlusspunkt = Startpunkt vorausgesetzt
+        const f = { x: first.point.x, y: first.point.y }, g = { x: second.point.x, y: second.point.y };
+
+        const part1 = [f];
+        for (let i = first.segmentIndex + 1; i <= second.segmentIndex; i++) part1.push({ x: ring[i].x, y: ring[i].y });
+        part1.push({ x: g.x, y: g.y }, { x: f.x, y: f.y });
+
+        const part2 = [{ x: g.x, y: g.y }];
+        for (let i = second.segmentIndex + 1; i < ring.length; i++) part2.push({ x: ring[i].x, y: ring[i].y });
+        for (let i = 1; i <= first.segmentIndex; i++) part2.push({ x: ring[i].x, y: ring[i].y });
+        part2.push({ x: f.x, y: f.y }, { x: g.x, y: g.y });
 
         const oldPoints = pts.map(p => ({ x: p.x, y: p.y }));
-        const oldIsClosed = contour.isClosed;
-
-        // Kontour aufteilen: A→B und B→A
-        const idxA = Math.min(nearA.segmentIndex, nearB.segmentIndex);
-        const idxB = Math.max(nearA.segmentIndex, nearB.segmentIndex);
-        const ptFirst = nearA.segmentIndex <= nearB.segmentIndex ? splitA : splitB;
-        const ptSecond = nearA.segmentIndex <= nearB.segmentIndex ? splitB : splitA;
-
-        const part1 = [{ x: ptFirst.x, y: ptFirst.y }];
-        for (let i = idxA + 1; i <= idxB; i++) part1.push({ x: pts[i].x, y: pts[i].y });
-        part1.push({ x: ptSecond.x, y: ptSecond.y });
-
-        const part2 = [{ x: ptSecond.x, y: ptSecond.y }];
-        for (let i = idxB + 1; i < pts.length; i++) part2.push({ x: pts[i].x, y: pts[i].y });
-        for (let i = 1; i <= idxA; i++) part2.push({ x: pts[i].x, y: pts[i].y });
-        part2.push({ x: ptFirst.x, y: ptFirst.y });
-
-        // Undo
         const undoMgr = this.manager.app?.undoManager;
         const appRef = this.manager.app;
         if (undoMgr && appRef) {
             const contourRef = contour;
+            const idxOld = appRef.contours.indexOf(contourRef);
+            // Zweite Kontur erbt Typ/Layer/Leads der Originalkontur
+            let newContour;
+            if (typeof contourRef.clone === 'function') {
+                newContour = contourRef.clone();
+                newContour.points = part2;
+            } else {
+                newContour = new CamContour(part2, { isClosed: true });
+                newContour.cuttingMode = contourRef.cuttingMode;
+            }
+            newContour.isClosed = true;
+            newContour.isSelected = false;
+            ModificationTool.invalidateCache(newContour);
             const cmd = {
-                _newContour: null,
                 execute() {
                     contourRef.points = part1;
-                    contourRef.isClosed = false;
+                    contourRef.isClosed = true;
                     ModificationTool.invalidateCache(contourRef);
-                    const newContour = new CamContour(part2, { isClosed: false });
-                    newContour.cuttingMode = 'slit';
-                    appRef.contours.push(newContour);
-                    this._newContour = newContour;
+                    appRef.contours.splice(idxOld + 1, 0, newContour);
                 },
                 undo() {
                     contourRef.points = oldPoints;
-                    contourRef.isClosed = oldIsClosed;
                     ModificationTool.invalidateCache(contourRef);
-                    const idx = appRef.contours.indexOf(this._newContour);
+                    const idx = appRef.contours.indexOf(newContour);
                     if (idx !== -1) appRef.contours.splice(idx, 1);
                 }
             };
@@ -825,43 +922,50 @@ class PolyJointTool extends BaseTool {
 
         this.manager.renderer?.render();
         appRef?.updateContourPanel?.();
-        this.cmd?.log('✅ Poly Joint: Kontur aufgeteilt (Split)', 'info');
+        this.cmd?.log('✅ Poly Joint: Kontur in 2 geschlossene Konturen geteilt (Split)', 'info');
     }
 
     _joinContours(contourA, contourB, pA, pB) {
-        const ptsA = contourA.points;
-        const ptsB = contourB.points;
+        // V1.7: Beide Ringe gleich orientieren und die Bruecke so fuehren, dass der Steg wirklich
+        // zwischen den Ringen steht (Flaeche = A + B + Steg). Vorher: je nach Drehsinn Steg-Flaeche
+        // negativ (Kanal von der eigenen Kontur wieder zugeschnitten) — fehlerhafter Schnitt.
+        let ringA = _camOpenRing(contourA.points);
+        let ringB = _camOpenRing(contourB.points);
+        if (ringA.length < 3 || ringB.length < 3) return;
+        const sA = _camSignedArea(ringA) >= 0 ? 1 : -1;
+        if ((_camSignedArea(ringB) >= 0 ? 1 : -1) !== sA) ringB.reverse();
+        const closedA = ringA.concat([{ ...ringA[0] }]);
+        const closedB = ringB.concat([{ ...ringB[0] }]);
 
-        const nearA = GeometryOps.findNearestSegment(ptsA, pA.x, pA.y, Infinity);
-        const nearB = GeometryOps.findNearestSegment(ptsB, pB.x, pB.y, Infinity);
+        const nearA = GeometryOps.findNearestSegment(closedA, pA.x, pA.y, Infinity);
+        const nearB = GeometryOps.findNearestSegment(closedB, pB.x, pB.y, Infinity);
         if (!nearA || !nearB) return;
 
-        // Neue vereinigte Kontur: A-Abschnitt → Brücke → B-Abschnitt → Brücke zurück
-        const newPoints = [];
-        // A ab Split-Punkt
-        for (let i = nearA.segmentIndex + 1; i < ptsA.length; i++) newPoints.push({ x: ptsA[i].x, y: ptsA[i].y });
-        for (let i = 1; i <= nearA.segmentIndex; i++) newPoints.push({ x: ptsA[i].x, y: ptsA[i].y });
-        // Bruecke mit Breite this.width: Hin- und Rueckweg um +/- W/2 quer zur Verbindung versetzt,
-        // damit zwischen beiden ein Steg (Breite W) stehen bleibt.
         const bdx = nearB.point.x - nearA.point.x, bdy = nearB.point.y - nearA.point.y;
         const bLen = Math.hypot(bdx, bdy);
-        const hw = (this.width > 0 && bLen > 1e-9) ? this.width / 2 : 0;
-        const ox = hw ? (-bdy / bLen) * hw : 0, oy = hw ? (bdx / bLen) * hw : 0;
+        if (bLen < 1e-9) { this.cmd?.log('Punkte A und B liegen aufeinander', 'error'); return; }
+        const hw = this.width / 2;
+        // k = -sA: bei CCW-Ringen laeuft die Bruecke hin ueber die "hintere", zurueck ueber die "vordere" Seite
+        const k = -sA;
+        const ox = k * (-bdy / bLen) * hw, oy = k * (bdx / bLen) * hw;
+
+        const newPoints = [];
+        // A: ab Segmentende rund herum bis zum Segmentanfang des Bruecken-Segments
+        for (let i = nearA.segmentIndex + 1; i < ringA.length; i++) newPoints.push({ x: ringA[i].x, y: ringA[i].y });
+        for (let i = 0; i <= nearA.segmentIndex; i++) newPoints.push({ x: ringA[i].x, y: ringA[i].y });
+        // Bruecke hin (A -> B)
         newPoints.push({ x: nearA.point.x + ox, y: nearA.point.y + oy });
-
-        // Brücke A→B
         newPoints.push({ x: nearB.point.x + ox, y: nearB.point.y + oy });
-
-        // B ab Split-Punkt
-        for (let i = nearB.segmentIndex + 1; i < ptsB.length; i++) newPoints.push({ x: ptsB[i].x, y: ptsB[i].y });
-        for (let i = 1; i <= nearB.segmentIndex; i++) newPoints.push({ x: ptsB[i].x, y: ptsB[i].y });
+        // B komplett umfahren
+        for (let i = nearB.segmentIndex + 1; i < ringB.length; i++) newPoints.push({ x: ringB[i].x, y: ringB[i].y });
+        for (let i = 0; i <= nearB.segmentIndex; i++) newPoints.push({ x: ringB[i].x, y: ringB[i].y });
+        // Bruecke zurueck (B -> A)
         newPoints.push({ x: nearB.point.x - ox, y: nearB.point.y - oy });
-
-        // Brücke B→A (schließt)
         newPoints.push({ x: nearA.point.x - ox, y: nearA.point.y - oy });
+        // Schliessen
+        newPoints.push({ x: newPoints[0].x, y: newPoints[0].y });
 
-        // Undo
-        const oldPointsA = ptsA.map(p => ({ x: p.x, y: p.y }));
+        const oldPointsA = contourA.points.map(p => ({ x: p.x, y: p.y }));
         const oldClosedA = contourA.isClosed;
         const appRef = this.manager.app;
         const undoMgr = appRef?.undoManager;
@@ -869,16 +973,15 @@ class PolyJointTool extends BaseTool {
         if (undoMgr) {
             const cA = contourA;
             const cB = contourB;
-            const oldPointsB = ptsB.map(p => ({ x: p.x, y: p.y }));
+            const oldPointsB = contourB.points.map(p => ({ x: p.x, y: p.y }));
             const oldClosedB = contourB.isClosed;
             const idxB = appRef.contours.indexOf(contourB);
 
             const cmd = {
                 execute() {
-                    cA.points = newPoints;
+                    cA.points = newPoints.map(p => ({ x: p.x, y: p.y }));
                     cA.isClosed = true;
                     ModificationTool.invalidateCache(cA);
-                    // B entfernen
                     const idx = appRef.contours.indexOf(cB);
                     if (idx !== -1) appRef.contours.splice(idx, 1);
                 },
@@ -889,7 +992,7 @@ class PolyJointTool extends BaseTool {
                     cB.points = oldPointsB;
                     cB.isClosed = oldClosedB;
                     ModificationTool.invalidateCache(cB);
-                    appRef.contours.splice(idxB, 0, cB);
+                    if (appRef.contours.indexOf(cB) === -1) appRef.contours.splice(idxB, 0, cB);
                 }
             };
             cmd.execute();
@@ -900,7 +1003,7 @@ class PolyJointTool extends BaseTool {
 
         this.manager.renderer?.render();
         appRef?.updateContourPanel?.();
-        this.cmd?.log('✅ Poly Joint: 2 Konturen verbunden (Join)', 'info');
+        this.cmd?.log('✅ Poly Joint: 2 Konturen verbunden (Join, Steg ' + this.width + ' mm)', 'info');
     }
 }
 
@@ -984,30 +1087,39 @@ class VectorizeTool extends ModificationTool {
 
         const undoData = [];
 
+        // V1.7: Der DXF-Parser liefert Boegen/Splines bereits als Polylinie (kein bulge mehr) — die
+        // alte bulge-Tessellierung war damit wirkungslos (73 -> 73 Punkte). Jetzt: Punktreduktion
+        // mit Toleranz ueber Simplify (Ecken/Startpunkt bleiben, kein Selbstschnitt, Nachbarschutz).
+        const res = (typeof Simplify !== 'undefined' && Simplify.simplifyContours)
+            ? Simplify.simplifyContours(contours.filter(c => c && c.points && c.points.length >= 2), tol) : null;
         for (const c of contours) {
             if (!c.points || c.points.length < 2) continue;
-            const pts = c.points;
-            const oldPoints = pts.map(p => ({ x: p.x, y: p.y, bulge: p.bulge }));
-            totalBefore += pts.length;
-
-            // Alle Punkte mit Bulge (Arc-Segmente) in Liniensegmente tessellieren
-            const newPoints = [];
-            for (let i = 0; i < pts.length; i++) {
-                const p = pts[i];
-                newPoints.push({ x: p.x, y: p.y }); // Kein bulge mehr
-
-                if (p.bulge && i < pts.length - 1) {
-                    // Arc tessellieren
-                    const next = pts[i + 1];
-                    const arcPts = this._tessellateArcFromBulge(p, next, p.bulge, tol);
-                    for (const ap of arcPts) {
-                        newPoints.push({ x: ap.x, y: ap.y });
+            const oldPoints = c.points.map(p => ({ x: p.x, y: p.y, bulge: p.bulge }));
+            totalBefore += oldPoints.length;
+            let newPoints = null;
+            const hit = res && res.map.get(c);
+            if (hit) {
+                newPoints = hit.pts.map(p => ({ x: p.x, y: p.y }));
+            } else if (!res) {
+                // Fallback ohne Simplify: vorhandene bulge-Segmente tessellieren
+                newPoints = [];
+                for (let i = 0; i < c.points.length; i++) {
+                    const p = c.points[i];
+                    newPoints.push({ x: p.x, y: p.y });
+                    if (p.bulge && i < c.points.length - 1) {
+                        for (const ap of this._tessellateArcFromBulge(p, c.points[i + 1], p.bulge, tol)) newPoints.push({ x: ap.x, y: ap.y });
                     }
                 }
             }
-
+            if (!newPoints || newPoints.length === oldPoints.length) { totalAfter += oldPoints.length; continue; }
             totalAfter += newPoints.length;
             undoData.push({ contour: c, oldPoints, newPoints });
+        }
+        if (undoData.length === 0) {
+            this.cmd?.log('Vectorize: nichts zu vereinfachen bei Toleranz ' + tol + ' mm (Kreise/Bögen, Ecken und Startpunkte bleiben unverändert)', 'info');
+            for (const c of contours) c.isSelected = false;
+            this.cancel();
+            return;
         }
 
         // Undo-Command
@@ -1259,7 +1371,7 @@ if (typeof DrawingToolManager !== 'undefined') {
             this.tools['HULL']       = () => new ConvexHullTool(this);
             this.tools['CONVEXHULL'] = () => new ConvexHullTool(this);
 
-            console.debug('[CAM-Tools V1.2] ✅ 7 CAM-Vorbereitungstools registriert (EF, REP, AN, BT, PJ, VZ, HULL)');
+            console.debug('[CAM-Tools V1.7] ✅ 7 CAM-Vorbereitungstools registriert (EF, REP, AN, BT, PJ, VZ, HULL)');
         }
 
         // Auto-Apply gezeichnete Entities bei Mod-Tool-Start

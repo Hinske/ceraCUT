@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.21',
-    build: '20261107-simrapid',
+    version: '7.22',
+    build: '20261107-camtab',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '70b346e',
+        hash: '6b077c1',
         date: '2026-11-07',
-        message: 'feat: Simulation Leerweg sichtbar + Eilgang begrenzt, Sim schliesst bei Tab-Wech'
+        message: 'fix: CAM-Tools praxistauglich (REP/BT/PJ/VZ/AN/EF) und in Tab CAM verschoben (ca'
     },
 
     modules: {
@@ -33,7 +33,7 @@ const CERACUT_BUILD = {
         'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },
         'feasibility':        { version: '1.0', build: '20261105-feas1' },
         'simplify':           { version: '1.0', build: '20261105-simp1' },
-        'drawing-tools':      { version: '2.22', build: '20261106-cadlock' },
+        'drawing-tools':      { version: '2.23', build: '20261107-camtab' },
         'drawing-tools-ext':  { version: '1.11', build: '20261104-reviewfix' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
@@ -53,7 +53,7 @@ const CERACUT_BUILD = {
         'machine-profiles':   { version: '1.2', build: '20261104-reviewfix' },
         'bridge-cutting':     { version: '1.1', build: '20261104-reviewfix' },
         'quality-zones':      { version: '1.2', build: '20261104-reviewfix' },
-        'cam-tools':          { version: '1.6', build: '20261104-pushexecuted' },
+        'cam-tools':          { version: '1.7', build: '20261107-camtab' },
         'advanced-tools':     { version: '1.9', build: '20261104-reviewfix' },
         'arc-fitting':        { version: '3.4', build: '20261105-meander' },
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
@@ -87,6 +87,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.22: Fix+Feat — CAM-Tools (EF/REP/AN/BT/PJ/VZ/HULL) auf Praxistauglichkeit geprueft und in den Tab CAM verschoben (cam-tools V1.7, drawing-tools V2.23): REP Schwerpunkt-Versatz ~48 mm behoben, BT loescht nur komplett Innenliegendes, PJ Join/Split geometrisch korrekt, VZ reduziert Punkte (vorher wirkungslos), AN 97 s -> 32 ms bei 400 Konturen, Analyze-Button hatte keinen Klick-Handler; tests/cam-tools.test.js.',
         'V7.21: Feat — Simulation (toolpath-simulator V1.6): Leerweg gestrichelt/orange sichtbar, Eilgang auf 15x Schnitttempo begrenzt; Simulation schliesst beim Ribbon-Tab-Wechsel; Schneidrichtung umkehren auch fuer offene Konturen (app.js).',
         'V7.20: Feat — Richtungspfeile klein und rot, max. 4 je Kontur; doppelte rote Kerf-Bahn-Pfeile entfernt (canvas-renderer V3.66).',
         'V7.19: Fix — Fugenband offener Konturen sitzt bei Kerf-Seite Links/Rechts neben der Kontur (canvas-renderer V3.65).',
