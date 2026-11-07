@@ -572,7 +572,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   advanced-tools: V1.9 (20261104-reviewfix)
   arc-fitting: V3.4 (20261105-meander)
   dxf-browser: V1.6 (20261107-cncbrowse)
-  server: V1.13 (20261107-cncbrowse)
+  server: V1.14 (20261107-listperf)
   user-store: V1.1 (20261104-reviewfix)
   session-store: V1.1 (20261104-reviewfix)
   auth-helper: V1.1 (20261104-reviewfix)

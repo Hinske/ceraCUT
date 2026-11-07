@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'e2db4cc',
+        hash: 'bc6d769',
         date: '2026-11-07',
-        message: 'feat: Duschboard-Generator Phase 2a (Kern: Raster, Gehrung, Clipping, DXF, Tests'
+        message: 'feat: CNC-Import oeffnet neue Datei (eigener Tab); Server-Listing stat parallel'
     },
 
     modules: {
@@ -59,7 +59,7 @@ const CERACUT_BUILD = {
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
         'dimension-tool':     { version: '2.6', build: '20261104-pushexecuted' },
         'dxf-browser':        { version: '1.6', build: '20261107-cncbrowse' },
-        'server':             { version: '1.13', build: '20261107-cncbrowse' },
+        'server':             { version: '1.14', build: '20261107-listperf' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
         'constants': { version: '2.16', build: '20261107-tips' },

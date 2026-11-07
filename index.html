@@ -3354,6 +3354,7 @@
 
             // ── CNC-Import Dialog ──────────────────────────────────────────
             let _cncImportPendingContent = null;
+            let _cncImportPendingName = null;   // gesetzt → Import öffnet eine NEUE Datei (eigener Tab)
             let _cncImportPlateSize = { width: null, height: null };
 
             // Dialog-HTML einmalig in DOM einfügen
@@ -3403,15 +3404,16 @@
                 const file = e.target.files?.[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (ev) => window.CeraCutCncImportContent(ev.target.result);
+                reader.onload = (ev) => window.CeraCutCncImportContent(ev.target.result, file.name);
                 reader.readAsText(file, 'utf-8');
                 e.target.value = '';
             });
 
             // Gemeinsamer Einstieg: Datei-Dialog UND Server-CNC-Browser
-            window.CeraCutCncImportContent = (content) => {
+            window.CeraCutCncImportContent = (content, name) => {
                 {
                     _cncImportPendingContent = content;
+                    _cncImportPendingName = name || null;
 
                     // V1.3: Tafeldimensionen aus MPF-Header lesen
                     const plateSize = CNCReader.extractPlateSize(_cncImportPendingContent);
@@ -3438,6 +3440,7 @@
             cncDlgCancel?.addEventListener('click', () => {
                 if (cncDlg) cncDlg.style.display = 'none';
                 _cncImportPendingContent = null;
+                _cncImportPendingName = null;
             });
 
             cncDlgOk?.addEventListener('click', () => {
@@ -3447,6 +3450,24 @@
                 const zy = parseFloat(document.getElementById('cnc-dlg-zy')?.value || 0);
                 const showRapid  = document.getElementById('cnc-dlg-rapid')?.checked ?? false;
                 const drawFrame  = document.getElementById('cnc-dlg-frame')?.checked ?? true;
+
+                // CNC-Import öffnet eine neue Datei: eigener Tab (leerer Start-Tab wird wiederverwendet)
+                if (_cncImportPendingName) {
+                    const nm = _cncImportPendingName;
+                    const base = nm.replace(/\.(cnc|mpf|nc|gcode|txt)$/i, '');
+                    origApp.documentManager?.ensureTargetForNewFile();
+                    origApp._dxfFileHandle = null;
+                    origApp._dxfServerName = null;
+                    origApp.dxfFileName = base + '.dxf';
+                    origApp.loadedFileName = nm;
+                    origApp.currentProjectName = base;
+                    origApp.isDirty = false;
+                    origApp.outputFileName = base + '.cnc';
+                    const cf = document.getElementById('current-filename');
+                    if (cf) cf.textContent = `📄 ${nm}`;
+                    const pi = document.getElementById('planname-input');
+                    if (pi) pi.value = base.toUpperCase();
+                }
 
                 const cncReader = new CNCReader();
                 const result = cncReader.parse(_cncImportPendingContent, {
@@ -3485,7 +3506,9 @@
                 //  da er die größte Kontur ist)
 
                 _cncImportPendingContent = null;
+                _cncImportPendingName = null;
                 _cncImportPlateSize = { width: null, height: null };
+                origApp.documentManager?._renderTabs();
             });
 
             // ── SVG-Import Dialog ──────────────────────────────────────────

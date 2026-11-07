@@ -19,10 +19,11 @@
  * V1.9: Feat — /api/dxf/list liefert mtime (Änderungsdatum) für Ordner und Dateien
  * V1.12: Feat — Seed (lib/seed.js): materials/technologies beim ersten Start aus CeraJetEngine
  * V1.11: Feat — Daten-API (lib/data-api.js): /api/parts|plans|sheets|orders|materials|technologies + /api/technology/resolve, hinter Login
+ * V1.14: Perf — Listing stat parallel (32 gleichzeitig) statt serielles statSync (Netzlaufwerk)
  * V1.13: Feat — GET /api/cnc/list + /api/cnc/file (CNC-Ordner browsen, read-only, hinter Login)
  * V1.10: Feat — POST /api/cnc/save schreibt .CNC-Dateien nach CNC_ROOT (default /mnt/cnc)
  * Last Modified: 2026-11-07
- * Build: 20261107-cncbrowse
+ * Build: 20261107-listperf
  * V1.7: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * Statischer Dateiserver + DXF-Browse-API für Netzlaufwerk-Zugriff.
@@ -270,41 +271,31 @@ function handleDXFList(res, queryPath, root = DXF_ROOT, exts = ['.dxf']) {
                 return sendJSON(res, 500, { error: 'Lesefehler' });
             }
 
+            // stat parallel (Netzlaufwerk: serielles statSync pro Datei war der Flaschenhals)
+            const wanted = entries.filter(e => !e.name.startsWith('.') &&
+                (e.isDirectory() || exts.some(x => e.name.toLowerCase().endsWith(x))));
             const items = [];
-            for (const entry of entries) {
-                // Versteckte Dateien überspringen
-                if (entry.name.startsWith('.')) continue;
+            const statOne = async (entry) => {
+                let st = null;
+                try { st = await fs.promises.stat(path.join(dirPath, entry.name)); } catch {}
+                if (entry.isDirectory()) items.push({ name: entry.name, type: 'directory', mtime: st ? st.mtimeMs : 0 });
+                else items.push({ name: entry.name, type: 'file', size: st ? st.size : 0, mtime: st ? st.mtimeMs : 0 });
+            };
+            const queue = wanted.slice();
+            Promise.all(Array.from({ length: 32 }, async () => {
+                while (queue.length) await statOne(queue.shift());
+            })).then(() => {
+                // Ordner zuerst, dann Dateien, jeweils alphabetisch
+                items.sort((a, b) => {
+                    if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+                    return a.name.localeCompare(b.name, 'de');
+                });
 
-                if (entry.isDirectory()) {
-                    let dMtime = 0;
-                    try { dMtime = fs.statSync(path.join(dirPath, entry.name)).mtimeMs; } catch {}
-                    items.push({ name: entry.name, type: 'directory', mtime: dMtime });
-                } else if (exts.some(x => entry.name.toLowerCase().endsWith(x))) {
-                    // Dateigröße ermitteln
-                    try {
-                        const stat = fs.statSync(path.join(dirPath, entry.name));
-                        items.push({
-                            name: entry.name,
-                            type: 'file',
-                            size: stat.size,
-                            mtime: stat.mtimeMs,
-                        });
-                    } catch {
-                        items.push({ name: entry.name, type: 'file', size: 0, mtime: 0 });
-                    }
-                }
-            }
-
-            // Ordner zuerst, dann Dateien, jeweils alphabetisch
-            items.sort((a, b) => {
-                if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
-                return a.name.localeCompare(b.name, 'de');
-            });
-
-            sendJSON(res, 200, {
-                path: queryPath || '',
-                items: items,
-            });
+                sendJSON(res, 200, {
+                    path: queryPath || '',
+                    items: items,
+                });
+            }).catch(() => sendJSON(res, 500, { error: 'Lesefehler' }));
         });
     });
 }
