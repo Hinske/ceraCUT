@@ -56,6 +56,9 @@ const url = require('url');
 const { execSync } = require('child_process');
 
 const userStore = require('./lib/user-store');
+const { createStores } = require('./lib/store');
+const { handleDataApi } = require('./lib/data-api');
+const dataStores = createStores(path.join(__dirname, 'data'));
 const {
     getCurrentUser,
     createSessionCookie,
@@ -654,6 +657,11 @@ function requestHandler(req, res) {
     if (pathname === '/api/dxf/save' && req.method === 'POST') {
         if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
         return handleDXFSave(req, res);
+    }
+
+    // ── Daten-API (Teile, Pläne, Bleche, Aufträge, Technologie): Login in handleDataApi ──
+    if (pathname.startsWith('/api/') && handleDataApi(req, res, pathname, parsed.query, currentUser, dataStores)) {
+        return;
     }
 
     // ── CNC-Export: Login nötig ──
