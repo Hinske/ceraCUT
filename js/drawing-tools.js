@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.23
+ * CeraCUT Drawing & Modification Tools V2.24
  * AutoCAD-style CAD Tools für CeraCUT
  *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
@@ -12,7 +12,7 @@
  * - Window-Selection (Drag-Rechteck)
  * - Integration mit CommandLine + SnapManager + UndoManager
  *
- * V2.23: Feat — CAM-Tools (EF/REP/AN/BT/PJ/VZ/HULL) auch im Tab CAM startbar (Ausnahme zur CAD-Sperre V6.57)
+ * V2.24: CAM-Tools wieder im Tab CAD; CAM-Tab-Ausnahme der CAD-Sperre entfernt
  * V2.16: Fix — EraseTool/Mirror-delete_source übergeben DeleteContoursCommand jetzt die
  *        App-Referenz, damit geloeschte Konturen in app.deletedContourNames landen (siehe
  *        app.js applyLayerSelection) und nicht bei einem Layer-Toggle wieder auftauchen.
@@ -183,13 +183,9 @@ class DrawingToolManager {
 
     /** Tool per Shortcut starten */
     startTool(shortcut) {
+        // V6.57: Zeichnen/Ändern nur im Tab CAD (die CAM-Tools liegen wieder im Tab CAD)
+        if (window.app?.isGeometryEditAllowed && !window.app.isGeometryEditAllowed()) return window.app._denyGeometryEdit();
         const key = shortcut.toUpperCase();
-        // V6.57: Zeichnen/Ändern nur im Tab CAD
-        // V2.23: Ausnahme — die CAM-Tools (cam-tools.js) sind im Tab CAM zuhause
-        const camPrepKeys = ['EF', 'EDGEFIX', 'REP', 'REPLACE', 'AN', 'ANALYZE', 'BT', 'BTRIM', 'PJ', 'POLYJOINT', 'VZ', 'VECTORIZE', 'HULL', 'CONVEXHULL'];
-        const inCamTab = document.querySelector('.ribbon-tab.active[data-ribbon]')?.dataset.ribbon === 'bearbeitung';
-        if (!(inCamTab && camPrepKeys.includes(key)) &&
-            window.app?.isGeometryEditAllowed && !window.app.isGeometryEditAllowed()) return window.app._denyGeometryEdit();
         const factory = this.tools[key];
 
         if (!factory) {

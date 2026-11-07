@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.23',
-    build: '20261107-efjoin',
+    version: '7.24',
+    build: '20261107-camcad',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '688e4ee',
+        hash: 'b343d3c',
         date: '2026-11-07',
-        message: 'feat: Edgefix verbindet zwei offene Konturen (cam-tools V1.8)'
+        message: 'refactor: CAM-Tools wieder im Tab CAD (drawing-tools V2.24)'
     },
 
     modules: {
@@ -33,7 +33,7 @@ const CERACUT_BUILD = {
         'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },
         'feasibility':        { version: '1.0', build: '20261105-feas1' },
         'simplify':           { version: '1.0', build: '20261105-simp1' },
-        'drawing-tools':      { version: '2.23', build: '20261107-camtab' },
+        'drawing-tools':      { version: '2.24', build: '20261107-camcad' },
         'drawing-tools-ext':  { version: '1.11', build: '20261104-reviewfix' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
