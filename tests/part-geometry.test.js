@@ -17,6 +17,7 @@ test('Rechteck mit Loch: Rollen, Fläche, Schnittlänge, Ursprung unten-links', 
     assert.strictEqual(g.cutLength, (300 + 80) / 1000);
     assert.strictEqual(g.piercings, 2);
     assert.deepStrictEqual(r.warnings, []);
+    assert.strictEqual(g.groupSize, 1);
     assert.match(r.thumbnailSvg, /^<svg[^>]*viewBox=/);
 });
 
@@ -106,4 +107,9 @@ test('analyzeSplit: zwei identische Stücke → ein Teil × 2; verschiedene → 
     const one = PartGeometry.analyzeSplit([rect(0, 0, 100, 60), rect(20, 20, 10, 10)]);
     assert.strictEqual(one.pieces.length, 1); assert.strictEqual(one.pieces[0].count, 1);
     assert.strictEqual(PartGeometry.analyzeSplit([]).ok, false);
+});
+
+test('groupSize zählt getrennte Außenkonturen (Gruppe); Insel im Loch zählt nicht', () => {
+    assert.strictEqual(PartGeometry.analyze([rect(0, 0, 100, 60), rect(200, 0, 100, 60), rect(20, 20, 20, 20)]).geometry.groupSize, 2);
+    assert.strictEqual(PartGeometry.analyze([rect(0, 0, 100, 100), rect(10, 10, 80, 80), rect(30, 30, 20, 20)]).geometry.groupSize, 1);
 });

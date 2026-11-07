@@ -12,7 +12,7 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-viewer
+ * Build: 20261107-group
  * V1.1: Feat — Teilebibliothek: größere Vorschau (124×92), Klick → PartViewer mit Zoom
  *
  * (c) Cerasell GmbH
@@ -146,7 +146,7 @@ class PartUpdateDialog {
 // ═══════════════════════════════════════════════════════════════════
 
 class PartLibraryDialog {
-    constructor(app) { this.app = app; this.overlay = null; this.items = []; this.total = 0; this.materials = []; }
+    constructor(app) { this.app = app; this.overlay = null; this.items = []; this.total = 0; this.materials = []; this.sort = { key: null, dir: 1 }; }
     _toast(m, t = 'info') { this.app?.showToast?.(m, t); }
 
     async open() {
@@ -169,7 +169,7 @@ class PartLibraryDialog {
             </div>
             <div style="flex:1;overflow:auto;padding:0 12px">
                 <table style="width:100%;border-collapse:collapse;font-size:11px">
-                    <thead style="position:sticky;top:0;background:#e8eef5"><tr style="text-align:left"><th>Vorschau</th><th>Name</th><th>Auftrag</th><th>Kunde</th><th>Material / Dicke</th><th>B × L (mm)</th><th>Stück</th><th>Rev.</th><th></th></tr></thead>
+                    <thead style="position:sticky;top:0;background:#e8eef5"><tr style="text-align:left"><th>Vorschau</th><th data-sort="name">Name</th><th data-sort="orderId">Auftrag</th><th data-sort="customer">Kunde</th><th data-sort="material">Material / Dicke</th><th data-sort="area">B × L (mm)</th><th data-sort="qty">Stück</th><th data-sort="revision">Rev.</th><th data-sort="createdAt">Erstellt</th><th data-sort="updatedAt">Geändert</th><th></th></tr></thead>
                     <tbody id="pl-rows"></tbody>
                 </table>
             </div>
@@ -182,12 +182,15 @@ class PartLibraryDialog {
             if (e.target === ov) return this.close();
             const act = e.target.closest('[data-act]')?.dataset.act;
             const id = e.target.closest('tr[data-id]')?.dataset.id;
+            const th = e.target.closest('th[data-sort]');
+            if (th) return this._sortBy(th.dataset.sort);
             if (act === 'close') this.close();
             if (act === 'search') this._search(true);
             if (act === 'more') this._search(false);
             if (act === 'reset') { ov.querySelectorAll('input').forEach(i => { i.value = ''; }); ov.querySelectorAll('select').forEach(s => { s.value = ''; }); this._search(true); }
             if (act === 'view') { e.preventDefault(); this._view(id); }
             if (act === 'edit') this._edit(id);
+            if (act === 'meta') this._meta(id);
             if (act === 'dxf') this._dxf(id);
             if (act === 'del') this._del(id);
         });
@@ -209,19 +212,98 @@ class PartLibraryDialog {
         } catch (e) { this._toast(`Suche fehlgeschlagen: ${e.message}`, 'error'); }
     }
 
+    async _sortBy(key) {
+        this.sort = { key, dir: this.sort.key === key ? -this.sort.dir : 1 };
+        // Sortierung gilt für alle Treffer: fehlende Seiten vorher nachladen
+        while (this.items.length < this.total) {
+            const n = this.items.length;
+            await this._search(false);
+            if (this.items.length === n) break;
+        }
+        this._render();
+    }
+
+    _sorted() {
+        const { key, dir } = this.sort;
+        if (!key) return this.items;
+        const matName = id => this.materials.find(m => String(m.materialId) === String(id))?.name || String(id ?? '');
+        const val = p => ({
+            material: () => `${matName(p.technologyRef?.materialId)}|${String(Number(p.technologyRef?.thickness) || 0).padStart(8, '0')}`,
+            area: () => (p.bbox ? p.bbox.w * p.bbox.l : 0),
+            qty: () => Number(p.qty) || 0, revision: () => Number(p.revision) || 0,
+            createdAt: () => Date.parse(p.createdAt) || 0, updatedAt: () => Date.parse(p.updatedAt) || 0
+        }[key]?.() ?? String(p[key] ?? '').toLowerCase());
+        return [...this.items].sort((a, b) => {
+            const x = val(a), y = val(b);
+            return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'de', { numeric: true })) * dir;
+        });
+    }
+
     _render() {
         const esc = PartEditor.esc;
         const matName = id => this.materials.find(m => String(m.materialId) === String(id))?.name || id;
-        this.overlay.querySelector('#pl-rows').innerHTML = this.items.map(p => `
+        const fmt = d => d ? new Date(d).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '–';
+        this.overlay.querySelectorAll('th[data-sort]').forEach(th => {
+            const on = th.dataset.sort === this.sort.key;
+            th.style.cursor = 'pointer'; th.style.userSelect = 'none'; th.title = 'Klicken zum Sortieren';
+            th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (on ? (this.sort.dir > 0 ? ' ▲' : ' ▼') : '');
+        });
+        this.overlay.querySelector('#pl-rows').innerHTML = this._sorted().map(p => `
             <tr data-id="${esc(p.partId)}" style="border-top:1px solid #ddd">
                 <td style="width:136px"><div data-act="view" title="Klicken für große Vorschau mit Zoom" style="width:124px;height:92px;cursor:zoom-in;border:1px solid #ddd;background:#fff">${p.thumbnailSvg ? p.thumbnailSvg.replace('<svg ', '<svg width="124" height="92" ') : ''}</div></td>
-                <td><a href="#" data-act="view" style="color:#0b5cad;text-decoration:none">${esc(p.name)}</a></td><td>${esc(p.orderId)}</td><td>${esc(p.customer)}</td>
+                <td><a href="#" data-act="view" style="color:#0b5cad;text-decoration:none">${esc(p.name)}</a>${p.groupSize > 1 ? ` <span style="font-size:10px;color:#666" title="Gruppe aus ${p.groupSize} Außenkonturen">· Gruppe ×${p.groupSize}</span>` : ''}</td><td>${esc(p.orderId)}</td><td>${esc(p.customer)}</td>
                 <td>${esc(matName(p.technologyRef?.materialId))} · ${esc(p.technologyRef?.thickness)} mm</td>
-                <td>${p.bbox ? `${p.bbox.w} × ${p.bbox.l}` : ''}</td><td>${p.qty ?? ''}</td><td>${p.revision}</td>
-                <td style="white-space:nowrap"><button data-act="edit">Bearbeiten</button> <button data-act="dxf">DXF</button> <button data-act="del">Löschen</button></td></tr>`).join('')
-            || '<tr><td colspan="9" style="padding:12px;color:#888">Keine Teile gefunden</td></tr>';
+                <td>${p.bbox ? `${p.bbox.w} × ${p.bbox.l}` : ''}</td><td>${p.qty ?? ''}</td><td>${p.revision}</td><td style="white-space:nowrap">${fmt(p.createdAt)}</td><td style="white-space:nowrap">${fmt(p.updatedAt)}</td>
+                <td style="white-space:nowrap"><button data-act="meta" title="Name, Auftrag, Kunde, Stückzahl, Material, Dicke ändern">Eigenschaften</button> <button data-act="edit" title="Geometrie im CAD-Editor öffnen">CAD</button> <button data-act="dxf">DXF</button> <button data-act="del">Löschen</button></td></tr>`).join('')
+            || '<tr><td colspan="11" style="padding:12px;color:#888">Keine Teile gefunden</td></tr>';
         this.overlay.querySelector('#pl-count').textContent = `${this.items.length} von ${this.total}`;
         this.overlay.querySelector('#pl-more').style.display = this.items.length < this.total ? '' : 'none';
+    }
+
+    /** Stammdaten eines Teils bearbeiten (Name, Auftrag, Kunde, Stück, Material, Dicke) → PUT mit If-Match. */
+    async _meta(id) {
+        const esc = PartEditor.esc;
+        let part;
+        try { part = await PartLibrary.get(id); } catch (e) { return this._toast(`Laden fehlgeschlagen: ${e.message}`, 'error'); }
+        const t = part.technologyRef || {};
+        const box = document.createElement('div');
+        box.className = 'modal-overlay';
+        box.style.zIndex = 100001;
+        box.innerHTML = `<div class="cldcl-dialog-box" style="width:420px;max-width:95vw">
+            <div class="cldcl-header"><span>Teil bearbeiten</span><button class="cldcl-close" data-m="x">×</button></div>
+            <div style="padding:12px;display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;font-size:12px">
+                <label>Name</label><input id="pm-name" value="${esc(part.name)}">
+                <label>Auftrag</label><input id="pm-order" value="${esc(part.orderId)}">
+                <label>Kunde</label><input id="pm-customer" value="${esc(part.customer)}">
+                <label>Stückzahl</label><input id="pm-qty" type="number" min="1" step="1" value="${esc(part.qty)}">
+                <label>Material</label><select id="pm-material">${this.materials.map(m => `<option value="${esc(m.materialId)}"${String(m.materialId) === String(t.materialId) ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+                <label>Dicke (mm)</label><input id="pm-thick" type="number" min="0.1" step="0.1" value="${esc(t.thickness)}">
+                <label>Erstellt</label><span>${part.createdAt ? new Date(part.createdAt).toLocaleString('de-DE') : '–'}</span>
+                <label>Geändert</label><span>${part.updatedAt ? new Date(part.updatedAt).toLocaleString('de-DE') : '–'}${part.updatedBy ? ' · ' + esc(part.updatedBy) : ''}</span>
+            </div>
+            <div class="cldcl-row" style="padding:8px 12px;justify-content:flex-end;border-top:1px solid #ccc">
+                <button data-m="x">Abbrechen</button><button data-m="ok" style="font-weight:600">Speichern</button></div></div>`;
+        document.body.appendChild(box);
+        const close = () => box.remove();
+        box.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') close(); });
+        box.addEventListener('keyup', e => e.stopPropagation());
+        box.addEventListener('click', async e => {
+            if (e.target === box || e.target.dataset.m === 'x') return close();
+            if (e.target.dataset.m !== 'ok') return;
+            const g = k => box.querySelector('#' + k).value.trim();
+            const name = g('pm-name'), qty = g('pm-qty') === '' ? part.qty : Number(g('pm-qty')), thick = Number(g('pm-thick'));
+            if (!name) return this._toast('Name darf nicht leer sein', 'warning');
+            if (!Number.isFinite(qty) || qty < 1) return this._toast('Stückzahl ungültig', 'warning');
+            if (!Number.isFinite(thick) || thick <= 0) return this._toast('Dicke ungültig', 'warning');
+            const upd = { ...part, name, orderId: g('pm-order'), customer: g('pm-customer'), qty,
+                technologyRef: { ...t, materialId: g('pm-material') || t.materialId, thickness: thick } };
+            try {
+                await PartEditor.api('PUT', `/api/parts/${encodeURIComponent(id)}`, upd, part.version);
+                close(); this._toast('Teil gespeichert', 'success'); await this._search(true);
+            } catch (er) {
+                this._toast(er.status === 409 ? 'Konflikt: Teil wurde zwischenzeitlich geändert — bitte neu öffnen' : `Speichern fehlgeschlagen: ${er.message}`, 'error');
+            }
+        });
     }
 
     async _edit(id) {
@@ -238,7 +320,7 @@ class PartLibraryDialog {
                 ['Auftrag', p.orderId], ['Kunde', p.customer || '–'], ['Material', `${matName ?? '–'} · ${p.technologyRef?.thickness ?? '–'} mm`],
                 ['Größe', `${p.geometry.bbox.w} × ${p.geometry.bbox.l} mm`], ['Netto-Fläche', `${p.geometry.netArea} m²`],
                 ['Schnittlänge', `${p.geometry.cutLength} m`], ['Anstiche', p.geometry.piercings], ['Konturen', p.geometry.contours.length],
-                ['Revision', p.revision], ['Stückzahl', p.qty ?? '–']] });
+                ['Revision', p.revision], ['Erstellt', p.createdAt ? new Date(p.createdAt).toLocaleString('de-DE') : '–'], ['Geändert', p.updatedAt ? new Date(p.updatedAt).toLocaleString('de-DE') : '–'], ['Stückzahl', p.qty ?? '–']] });
         } catch (e) { this._toast(`Vorschau nicht ladbar: ${e.message}`, 'error'); }
     }
 

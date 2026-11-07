@@ -12,7 +12,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-canvasprev
+ * Build: 20261107-group
+ * V1.8: Feat — Import standardmäßig als Gruppe (eine Datei = ein Teil, mehrere Außenkonturen bleiben zusammen); Aufteilen optional; geometry.groupSize
  * V1.7: Perf — ZoomPane zeichnet große Szenen (Schachtelplan) auf Canvas statt SVG (hunderte Teile hingen beim Zoomen), nur sichtbare Instanzen
  * V1.6: Fix — Mehrere Außenkonturen je DXF werden als eigene Teile importiert (analyzeSplit, identische zusammengefasst), REFERENZ-Layer standardmäßig ausgeschlossen (isReferenceLayer)
  * V1.5: Feat — ZoomPane (wiederverwendbare Zoom-/Verschiebefläche, auch im Autonest), PartViewer akzeptiert fertigen SVG-Inhalt
@@ -124,6 +125,7 @@ const PartGeometry = (() => {
         const tiny = closedCs.filter(c => c.area < 0.01).length;
         if (tiny) warnings.push(`${tiny} Kontur(en) mit Fläche < 0,01 mm²`);
 
+        const groupSize = closedCs.filter(c => c.level === 0).length;          // getrennte Außenkonturen (Gruppe, wenn > 1)
         const nb = bbox(cs.flatMap(c => c.points));
         const w = nb.maxX - nb.minX, l = nb.maxY - nb.minY;
         const discArea = cs.filter(c => c.role === 'disc').reduce((a, c) => a + c.area, 0);
@@ -139,7 +141,8 @@ const PartGeometry = (() => {
                 netArea: r6((discArea - holeArea) / 1e6),   // m²
                 rectArea: r6(w * l / 1e6),                  // m²
                 cutLength: r3(cutLen / 1000),               // m
-                piercings: closedCs.length
+                piercings: closedCs.length,
+                groupSize
             },
             thumbnailSvg: thumbnailSvg(cs, nb)
         };
@@ -393,7 +396,7 @@ class PartImportDialog {
                         <div id="pi-layers" style="font-size:11px"></div>
                     </div>
                 </div>
-                <label style="font-size:11px"><input type="checkbox" id="pi-split" checked> Getrennte Außenkonturen als eigene Teile importieren (identische Stücke werden zusammengefasst, Menge × Anzahl)</label>
+                <label style="font-size:11px" title="Standard: eine DXF-Datei = ein Teil. Mehrere Außenkonturen bleiben als Gruppe zusammen (Abstände wie gezeichnet) und werden als Einheit genestet."><input type="checkbox" id="pi-split"> Mehrere Außenkonturen einer Datei in einzelne Teile aufteilen (identische Stücke werden zusammengefasst, Menge × Anzahl) — sonst Import als Gruppe</label>
                 <div id="pi-summary" style="font-size:11px;color:#444"></div>
             </div>
             <div class="cldcl-row" style="padding:8px 12px;border-top:1px solid #ccc;justify-content:flex-end">
@@ -542,7 +545,7 @@ class PartImportDialog {
     }
 
     _revalidate() {
-        const split = this.overlay?.querySelector('#pi-split')?.checked !== false;
+        const split = this.overlay?.querySelector('#pi-split')?.checked === true;
         for (const it of this.items) {
             if (!it.raw) continue;
             const sel = it.raw.filter(c => this.layerSel.get(c.layer || '') !== false);
@@ -570,7 +573,7 @@ class PartImportDialog {
                 <td>${this._esc(it.fileName)}</td>
                 <td><input data-f="name" value="${this._esc(it.name)}" style="width:130px"></td>
                 <td><input data-f="orderId" value="${this._esc(it.orderId)}" style="width:150px"></td>
-                <td><input data-f="qty" type="number" min="1" value="${it.qty}" style="width:55px">${it.pieces && it.pieces.length > 1 || (it.pieces && it.pieces[0] && it.pieces[0].count > 1) ? `<div style="font-size:10px;color:#0b5cad" title="Aus dieser Datei entstehen ${it.pieces.length} Teil(e); identische Stücke werden zusammengefasst">${it.pieces.map(p => `${p.count}×`).join(' + ')} → ${it.pieces.length} Teil(e)</div>` : ''}</td>
+                <td><input data-f="qty" type="number" min="1" value="${it.qty}" style="width:55px">${it.pieces && it.pieces.length > 1 || (it.pieces && it.pieces[0] && it.pieces[0].count > 1) ? `<div style="font-size:10px;color:#0b5cad" title="Aus dieser Datei entstehen ${it.pieces.length} Teil(e); identische Stücke werden zusammengefasst">${it.pieces.map(p => `${p.count}×`).join(' + ')} → ${it.pieces.length} Teil(e)</div>` : (g && g.groupSize > 1 ? `<div style="font-size:10px;color:#0b5cad" title="Mehrere Außenkonturen bleiben als Gruppe zusammen und werden als Einheit genestet">Gruppe aus ${g.groupSize} Konturen</div>` : '')}</td>
                 <td>${g ? `${g.bbox.w} × ${g.bbox.l}` : ''}</td></tr>`;
         }).join('');
         tb.querySelectorAll('tr').forEach(tr => {

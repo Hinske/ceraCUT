@@ -513,7 +513,7 @@ test('Worker-Skript: Fortschritt + Ergebnis, Fehler werden gemeldet', async () =
     assert.strictEqual(m2.at(-1).type, 'error');
 });
 
-test('Import: DXF mit zwei identischen Stücken + REFERENZ-Layer → ein Teil, Menge × 2, Referenz standardmäßig aus', async () => {
+test('Import: DXF mit zwei Stücken + REFERENZ-Layer → standardmäßig EINE Gruppe, Aufteilen optional (identische × 2), Referenz aus', async () => {
     const h = await start();
     try {
         await quiet(async () => {
@@ -532,22 +532,28 @@ test('Import: DXF mit zwei identischen Stücken + REFERENZ-Layer → ein Teil, M
         await h.waitFor(() => imp.items[0]?.status === 'ready');
         assert.strictEqual(imp.layerSel.get('REFERENZ'), false, 'REFERENZ-Layer standardmäßig abgewählt');
         assert.strictEqual(imp.layerSel.get('SCHNEIDEN'), true);
+        assert.strictEqual($('#pi-split').checked, false, 'Aufteilen ist standardmäßig aus');
         const it = imp.items[0];
-        assert.strictEqual(it.pieces.length, 1); assert.strictEqual(it.pieces[0].count, 2);
-        assert.deepStrictEqual({ ...it.pieces[0].analysis.geometry.bbox }, { w: 140, l: 140 }, 'Teil ohne Referenzrahmen vermessen');
-        assert.match($('#pi-table').textContent, /2× → 1 Teil\(e\)/);
+        assert.strictEqual(it.pieces.length, 1); assert.strictEqual(it.pieces[0].count, 1);
+        const g0 = it.pieces[0].analysis.geometry;
+        assert.strictEqual(g0.groupSize, 2, 'Gruppe aus zwei Außenkonturen');
+        assert.deepStrictEqual({ w: g0.bbox.w, l: g0.bbox.l }, { w: 140, l: 290 }, 'Gruppe ohne Referenzrahmen vermessen');
+        assert.match($('#pi-table').textContent, /Gruppe aus 2 Konturen/);
         it.qty = 5;
         click($('[data-act="save"]'));
         await h.waitFor(() => h.stores.parts.list().length === 1);
         const part = h.stores.parts.list()[0];
-        assert.strictEqual(part.qty, 10, 'Menge × Anzahl identischer Stücke');
-        assert.strictEqual(part.name, 'ZWEI');
+        assert.strictEqual(part.qty, 5, 'Menge unverändert');
+        assert.strictEqual(part.geometry.contours.filter(c => c.role === 'disc').length, 2);
+        assert.strictEqual(part.geometry.groupSize, 2);
         assert.ok(!part.geometry.contours.some(c => c.layer === 'REFERENZ'));
 
-        // Aufteilen aus → ein Teil mit beiden Außenkonturen
-        const cb = $('#pi-split'); cb.checked = false; cb.dispatchEvent(new h.w.Event('change', { bubbles: true }));
-        assert.strictEqual(imp.items[0].pieces.length, 1); assert.strictEqual(imp.items[0].pieces[0].count, 1);
-        assert.strictEqual(imp.items[0].pieces[0].analysis.geometry.contours.filter(c => c.role === 'disc').length, 2);
+        // Aufteilen an → identische Stücke zusammengefasst: 1 Teil, Anzahl 2
+        const cb = $('#pi-split'); cb.checked = true; cb.dispatchEvent(new h.w.Event('change', { bubbles: true }));
+        assert.strictEqual(imp.items[0].pieces.length, 1); assert.strictEqual(imp.items[0].pieces[0].count, 2);
+        assert.deepStrictEqual({ w: imp.items[0].pieces[0].analysis.geometry.bbox.w, l: imp.items[0].pieces[0].analysis.geometry.bbox.l }, { w: 140, l: 140 });
+        assert.match($('#pi-table').textContent, /2× → 1 Teil\(e\)/);
+        cb.checked = false; cb.dispatchEvent(new h.w.Event('change', { bubbles: true }));
         // REFERENZ wieder einschalten → Teil wird groß, Warnung offene Kontur
         const refBox = $('#pi-layers input[data-layer="REFERENZ"]'); refBox.checked = true; refBox.dispatchEvent(new h.w.Event('change', { bubbles: true }));
         assert.strictEqual(imp.items[0].status, 'warning');

@@ -22,4 +22,22 @@ function overlaps(instances, sheets) {
     }
     return n;
 }
-module.exports = { overlaps };
+const sd = (p, a, b) => { const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy; let t = l2 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy); };
+const minDist = (A, B) => { let m = Infinity; for (const [P, Q] of [[A, B], [B, A]]) for (const p of P) for (let j = 0; j < Q.length; j++) m = Math.min(m, sd(p, Q[j], Q[(j + 1) % Q.length])); return m; };
+
+/** Je Instanz der Abstand der Außenkonturen (role 'disc') zum nächsten Nachbarn auf demselben Blech (nur Nachbarn im Umkreis `radius`). */
+function nearestGaps(instances, sheets, radius = 40) {
+    const discs = instances.map(cs => cs.filter(c => c.closed && c.role === 'disc').map(c => ({ pts: c.points, box: bb(c.points) })));
+    return discs.map((A, i) => {
+        let best = Infinity;
+        discs.forEach((B, j) => {
+            if (i === j || (sheets && sheets[i] !== sheets[j])) return;
+            for (const a of A) for (const b of B) {
+                if (a.box.x1 + radius < b.box.x0 || b.box.x1 + radius < a.box.x0 || a.box.y1 + radius < b.box.y0 || b.box.y1 + radius < a.box.y0) continue;
+                best = Math.min(best, minDist(a.pts, b.pts));
+            }
+        });
+        return best;
+    }).filter(Number.isFinite);
+}
+module.exports = { overlaps, nearestGaps };

@@ -165,3 +165,20 @@ test('sheetScene: ein Typ, je Instanz eine Matrix; Referenz-Konturen fehlen; svg
     assert.deepStrictEqual(c.box, { x: 0, y: -1000, w: 1500, h: 1000 });
     assert.strictEqual((c.svgInner.match(/<path/g) || []).length, onSheet * 4);               // 2 Außen + 2 Löcher je Teil
 });
+
+test('Reale Testdatei HEIDED856000W-115V1 als GRUPPE (Standard): 40 Stück → keine Überlagerung, gleichmäßige 3-mm-Fugen', { skip: !require('fs').existsSync('/mnt/dxf/Output Waricam/HEIDED856000W-115V1.DXF') }, () => {
+    const P = require('../js/dxf-parser.js'); const D = P.DXFParser || P;
+    const { PartGeometry } = require('../js/part-library.js');
+    const res = quiet(() => D.parse(PartGeometry.decodeDXF(require('fs').readFileSync('/mnt/dxf/Output Waricam/HEIDED856000W-115V1.DXF')), { chainingTolerance: 0.1, applyInsUnits: true }));
+    const a = PartGeometry.analyze(res.contours.filter(c => !PartGeometry.isReferenceLayer(c.layer)));
+    assert.strictEqual(a.geometry.groupSize, 2, 'zwei Außenkonturen = Gruppe');
+    const part = PartGeometry.toRecord(a, { partId: 'P-G', fileName: 'h.dxf', name: 'HEIDE', orderId: 'O', techRef: { materialId: 21, thickness: 10 } });
+    const { plan } = quiet(() => NestingPlan.run([{ partId: 'P-G', qty: 40 }], { 'P-G': part }, { width: 3000, length: 1500, partToPart: 3, partToEdge: 5 }));
+    assert.strictEqual(plan.stats.nested, 40);
+    const polys = plan.instances.map(i => NestingPlan.placePart(part, i.rot, i.tx, i.ty));
+    const sheets = plan.instances.map(i => i.sheetIndex);
+    assert.strictEqual(brute.overlaps(polys, sheets), 0);
+    const gaps = brute.nearestGaps(polys, sheets);
+    assert.ok(Math.min(...gaps) >= 3 - 0.01, `Mindestfuge ${Math.min(...gaps).toFixed(2)}`);
+    assert.ok(gaps.filter(g => g > 3.6).length <= gaps.length * 0.05, `Fugen: max ${Math.max(...gaps).toFixed(1)} mm`);
+});

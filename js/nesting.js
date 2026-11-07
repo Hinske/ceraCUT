@@ -9,7 +9,8 @@
  *   - Rotationsoptimierung (0°, 90°, 180°, 270° oder benutzerdefiniert)
  *
  * Last Modified: 2026-11-07
- * Build: 20261107-nestperf
+ * Build: 20261107-group
+ * V1.5: Feat — Teil nach der Platzierung bis zum Mindestabstand schieben (_slide): gleichmäßige Fugen statt 3…8 mm
  * V1.4: Perf — Polygon-Vereinfachung (simplifyTol), Kanten-Raster je platziertem Teil (_polysClash), Suchhinweis je Teiletyp/Variante, Variante-passt-nicht-mehr-Merker, Raumindex + vorübersetzte Polygone, Blech-voll-Merker je Teiletyp (typeKey), gemeinsame Rotationsvarianten, numerisches Dedupe, cfg.onProgress(done,total,sheets)
  * V1.3: Feat — cfg.order ('large-first'|'small-first'|'input'), Kontur-Felder priority und rotationSteps (Override je Teil), Node-Export
  * V1.2: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
@@ -20,7 +21,7 @@
 const NestingEngine = (() => {
     'use strict';
 
-    const VERSION = 'V1.4';
+    const VERSION = 'V1.5';
     const LOG_PREFIX = `[Nesting ${VERSION}]`;
     const EPSILON = 1e-8;
     const MAX_GRID_CELLS = 6000;   // Obergrenze Raster-Kandidaten je Platzierungsversuch
@@ -38,7 +39,7 @@ const NestingEngine = (() => {
         gravity: 'bottom-left', // 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right'
         maxSheets: 100,         // Maximale Anzahl Bleche
         mergeToleranceNFP: 0.1, // Toleranz für NFP-Vereinfachung
-        simplifyTol: 0.1        // mm: Polygon-Vereinfachung für die Platzierung (0 = aus); Abstand wird um 4×tol erhöht (garantiert den echten Mindestabstand)
+        simplifyTol: 0.05       // mm: Polygon-Vereinfachung für die Platzierung (0 = aus); Abstand wird um 4×tol erhöht (garantiert den echten Mindestabstand)
     };
 
     // ═══════════════════════════════════════════════════════════════════
@@ -445,11 +446,41 @@ const NestingEngine = (() => {
 
             // Kollision mit platzierten Teilen prüfen
             if (!_collidesWithPlaced(testBBox, partPoints, candidate, placedParts, spacing, grid)) {
-                return candidate;
+                return _slide(candidate, partPoints, partBBox, sheet, placedParts, spacing, grid, gravity);
             }
         }
 
         return null;
+    }
+
+    /**
+     * V1.5: Teil nach der Kandidatensuche in Schwerkraftrichtung (zuerst "nach unten", dann "zur Seite") schieben, bis
+     * der Mindestabstand erreicht ist. Das Raster der Kandidaten ist grob (bis 20 mm) und BBox-basiert: ohne diesen Schritt
+     * blieben je nach Kontur 3…8 mm statt der eingestellten Fuge. Schrittweite ≤ 2×Abstand: kein "Durchtunneln" dünner Teile.
+     */
+    function _slide(start, partPoints, partBBox, sheet, placedParts, spacing, grid, gravity) {
+        const dy = (gravity === 'top-left' || gravity === 'top-right') ? 1 : -1;
+        const dx = (gravity === 'bottom-right' || gravity === 'top-right') ? 1 : -1;
+        const cap = Math.max(1, spacing > 0 ? spacing * 2 : 1);
+        const fits = (x, y) => {
+            const b = { minX: partBBox.minX + x, minY: partBBox.minY + y, maxX: partBBox.maxX + x, maxY: partBBox.maxY + y };
+            if (b.minX < sheet.margin - EPSILON || b.minY < sheet.margin - EPSILON ||
+                b.maxX > sheet.width - sheet.margin + EPSILON || b.maxY > sheet.height - sheet.margin + EPSILON) return false;
+            return !_collidesWithPlaced(b, partPoints, { x, y }, placedParts, spacing, grid);
+        };
+        let x = start.x, y = start.y;
+        for (let pass = 0; pass < 4; pass++) {
+            let moved = false;
+            for (const [vx, vy] of [[0, dy], [dx, 0]]) {
+                let step = cap;
+                while (step >= 0.05) {
+                    if (fits(x + vx * step, y + vy * step)) { x += vx * step; y += vy * step; moved = true; }
+                    else step /= 2;
+                }
+            }
+            if (!moved) break;
+        }
+        return { x, y };
     }
 
     /**

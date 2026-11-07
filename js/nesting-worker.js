@@ -5,7 +5,7 @@
  * Abbruch erfolgt über worker.terminate() im Aufrufer (nesting-plan.js).
  *
  * Created: 2026-11-07
- * Build: 20261107-nestperf
+ * Build: 20261107-group
  *
  * (c) Cerasell GmbH
  */

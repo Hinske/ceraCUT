@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '9a38730',
+        hash: 'a0388f2',
         date: '2026-11-07',
-        message: 'perf: Plan-Vorschau auf Canvas (Szene statt tausender SVG-Pfade), Rueckfrage bei'
+        message: 'fix: gleichmaessige Fugen (nesting V1.5: Teile bis zum Mindestabstand schieben),'
     },
 
     modules: {
@@ -47,7 +47,7 @@ const CERACUT_BUILD = {
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.7', build: '20261107-leadmenu' },
         'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
-        'nesting':            { version: '1.4', build: '20261107-nestperf' },
+        'nesting':            { version: '1.5', build: '20261107-group' },
         'toolpath-simulator': { version: '1.5', build: '20261106-leadseg' },
         'cost-calculator':    { version: '1.3', build: '20261104-reviewfix' },
         'machine-profiles':   { version: '1.2', build: '20261104-reviewfix' },
@@ -72,18 +72,18 @@ const CERACUT_BUILD = {
         'session-store':      { version: '1.1', build: '20261104-reviewfix' },
         'auth-helper':        { version: '1.1', build: '20261104-reviewfix' },
         'store':              { version: '1.0', build: '20261107-store' },
-        'data-api':           { version: '1.4', build: '20261107-nestperf' },
+        'data-api':           { version: '1.5', build: '20261107-group' },
         'seed':               { version: '1.1', build: '20261107-techdb' },
-        'part-library':       { version: '1.7', build: '20261107-canvasprev' },
-        'nesting-plan':       { version: '1.7', build: '20261107-canvasprev' },
+        'part-library':       { version: '1.8', build: '20261107-group' },
+        'nesting-plan':       { version: '1.7', build: '20261107-group' },
         'nc-tools':           { version: '1.1', build: '20261107-techdb' },
         'cost-plan':          { version: '1.0', build: '20261107-plancost' },
         'cost-dialog':        { version: '1.0', build: '20261107-costdialog' },
         'report-pdf':         { version: '1.1', build: '20261107-nestperf' },
         'technology-db':      { version: '1.0', build: '20261107-techdb' },
         'plan-update':        { version: '1.0', build: '20261107-partedit' },
-        'part-editor':        { version: '1.1', build: '20261107-viewer' },
-        'nesting-worker':     { version: '1.0', build: '20261107-nestperf' }
+        'part-editor':        { version: '1.2', build: '20261107-group' },
+        'nesting-worker':     { version: '1.0', build: '20261107-group' }
     },
 
     changes: [

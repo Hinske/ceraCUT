@@ -12,7 +12,7 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-canvasprev
+ * Build: 20261107-group
  * V1.7: Perf — Vorschau über sheetScene (Canvas), Rückfrage beim Öffnen sehr großer Bleche im Editor (>400 Konturen)
  * V1.6: Fix — Teile mit mehreren Außenkonturen werden als starre Einheit (konvexe Hülle) genestet, REFERENZ-Layer-Konturen wandern nicht mehr mit (Überlagerungen)
  * V1.5: Feat — Schachtelplan als PDF (Autonest-Dialog, Planliste) über /api/reports/plan-pdf

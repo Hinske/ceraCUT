@@ -92,9 +92,8 @@
     <div class="ribbon-tabs">
         <div class="ribbon-tab file-tab" data-ribbon="file">Datei</div>
         <div class="ribbon-tab active" data-ribbon="cad">CAD</div>
-        <div class="ribbon-tab" data-ribbon="bearbeitung">Bearbeitung</div>
+        <div class="ribbon-tab" data-ribbon="bearbeitung">CAM</div>
         <div class="ribbon-tab" data-ribbon="nesting">Nesting</div>
-        <div class="ribbon-tab" data-ribbon="order">Reihenfolge</div>
         <div class="ribbon-tab" data-ribbon="extras">Extras</div>
         <div class="ribbon-tab" data-ribbon="export">Export</div>
         <div class="ribbon-tab" data-ribbon="view">Ansicht</div>
@@ -233,54 +232,7 @@
             <div class="ribbon-group-label">Einstellungen</div>
         </div>
 
-        <!-- ═══ Referenz & Nullpunkt (frueher Setup-Tab; laeuft beim Import automatisch) ═══ -->
-        <div class="ribbon-group">
-            <div class="ribbon-group-content">
-                <div class="ribbon-btn-lg" id="btn-auto-reference" title="Referenz erkennen">
-                    <div class="icon"><svg viewBox="0 0 32 32" fill="none"><rect x="4" y="4" width="24" height="24" stroke="#888" stroke-width="2" fill="none" stroke-dasharray="4 2"/><path d="M10 14l4 4 8-8" stroke="#0a0" stroke-width="2.5" fill="none"/></svg></div>
-                    <span class="label">Auto-Ref</span>
-                </div>
-                <div class="ribbon-sm-stack">
-                    <div class="ribbon-inline-row">
-                        <select class="ribbon-select" id="reference-contour-select">
-                            <option value="auto" selected>Auto (größte)</option>
-                            <option value="fliese">Layer "Fliese"</option>
-                            <option value="manual">Manuell</option>
-                        </select>
-                    </div>
-                    <div class="ribbon-inline-row">
-                        <input type="checkbox" id="chk-auto-setup">
-                        <label for="chk-auto-setup" class="ribbon-cb-label" title="Beim DXF-Import Referenz + Nullpunkt automatisch setzen und direkt zu Bearbeitung wechseln (wie Waricam)">Auto beim Import</label>
-                    </div>
-                    <div class="ribbon-btn-sm" id="btn-clear-ref" title="Referenzen aufheben">
-                        <div class="icon"><svg viewBox="0 0 16 16" fill="none"><line x1="3" y1="3" x2="13" y2="13" stroke="#e33" stroke-width="1.5"/><line x1="13" y1="3" x2="3" y2="13" stroke="#e33" stroke-width="1.5"/></svg></div>
-                        <span class="label">Ref löschen</span>
-                    </div>
-                </div>
-            </div>
-            <div class="ribbon-group-label">Referenz (auto)</div>
-        </div>
-
-        <div class="ribbon-group">
-            <div class="ribbon-group-content">
-                <div class="ribbon-btn-lg" id="btn-set-origin-from-snap" title="Snap-Punkt als Nullpunkt">
-                    <div class="icon"><svg viewBox="0 0 32 32" fill="none"><line x1="16" y1="2" x2="16" y2="30" stroke="#0078d4" stroke-width="1.5"/><line x1="2" y1="16" x2="30" y2="16" stroke="#0078d4" stroke-width="1.5"/><circle cx="16" cy="16" r="6" stroke="#0078d4" stroke-width="2" fill="none"/><circle cx="16" cy="16" r="2" fill="#0078d4"/></svg></div>
-                    <span class="label">Nullpunkt</span>
-                </div>
-                <div class="preset-grid-ribbon" style="margin-left:8px">
-                    <button class="preset-btn preset-btn-sm" data-pos="top-left" title="Oben-Links">◸</button>
-                    <button class="preset-btn preset-btn-sm" data-pos="top-center" title="Oben-Mitte">◬</button>
-                    <button class="preset-btn preset-btn-sm" data-pos="top-right" title="Oben-Rechts">◹</button>
-                    <button class="preset-btn preset-btn-sm" data-pos="center-left" title="Mitte-Links">◁</button>
-                    <button class="preset-btn preset-btn-sm" data-pos="center" title="Mitte">◉</button>
-                    <button class="preset-btn preset-btn-sm" data-pos="center-right" title="Mitte-Rechts">▷</button>
-                    <button class="preset-btn preset-btn-sm selected" data-pos="bottom-left" title="Unten-Links">◺</button>
-                    <button class="preset-btn preset-btn-sm" data-pos="bottom-center" title="Unten-Mitte">▽</button>
-                    <button class="preset-btn preset-btn-sm" data-pos="bottom-right" title="Unten-Rechts">◿</button>
-                </div>
-            </div>
-            <div class="ribbon-group-label">Nullpunkt (auto)</div>
-        </div>
+    </div>
 
     </div>
 
@@ -581,6 +533,54 @@
     </div>
     <!-- ── Bearbeitung Panel (Profil, Leads, Typ & Qualität) ── -->
     <div class="ribbon-panel" data-ribbon="bearbeitung" style="display:none">
+        <!-- ═══ Referenz & Nullpunkt (frueher Setup-Tab; laeuft beim Import automatisch) ═══ -->
+        <div class="ribbon-group">
+            <div class="ribbon-group-content">
+                <div class="ribbon-btn-lg" id="btn-auto-reference" title="Referenz erkennen">
+                    <div class="icon"><svg viewBox="0 0 32 32" fill="none"><rect x="4" y="4" width="24" height="24" stroke="#888" stroke-width="2" fill="none" stroke-dasharray="4 2"/><path d="M10 14l4 4 8-8" stroke="#0a0" stroke-width="2.5" fill="none"/></svg></div>
+                    <span class="label">Auto-Ref</span>
+                </div>
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row">
+                        <select class="ribbon-select" id="reference-contour-select">
+                            <option value="auto" selected>Auto (größte)</option>
+                            <option value="fliese">Layer "Fliese"</option>
+                            <option value="manual">Manuell</option>
+                        </select>
+                    </div>
+                    <div class="ribbon-inline-row">
+                        <input type="checkbox" id="chk-auto-setup">
+                        <label for="chk-auto-setup" class="ribbon-cb-label" title="Beim DXF-Import Referenz + Nullpunkt automatisch setzen und direkt zu Bearbeitung wechseln (wie Waricam)">Auto beim Import</label>
+                    </div>
+                    <div class="ribbon-btn-sm" id="btn-clear-ref" title="Referenzen aufheben">
+                        <div class="icon"><svg viewBox="0 0 16 16" fill="none"><line x1="3" y1="3" x2="13" y2="13" stroke="#e33" stroke-width="1.5"/><line x1="13" y1="3" x2="3" y2="13" stroke="#e33" stroke-width="1.5"/></svg></div>
+                        <span class="label">Ref löschen</span>
+                    </div>
+                </div>
+            </div>
+            <div class="ribbon-group-label">Referenz</div>
+        </div>
+
+        <div class="ribbon-group">
+            <div class="ribbon-group-content">
+                <div class="ribbon-btn-lg" id="btn-set-origin-from-snap" title="Snap-Punkt als Nullpunkt">
+                    <div class="icon"><svg viewBox="0 0 32 32" fill="none"><line x1="16" y1="2" x2="16" y2="30" stroke="#0078d4" stroke-width="1.5"/><line x1="2" y1="16" x2="30" y2="16" stroke="#0078d4" stroke-width="1.5"/><circle cx="16" cy="16" r="6" stroke="#0078d4" stroke-width="2" fill="none"/><circle cx="16" cy="16" r="2" fill="#0078d4"/></svg></div>
+                    <span class="label">Nullpunkt</span>
+                </div>
+                <div class="preset-grid-ribbon" style="margin-left:8px">
+                    <button class="preset-btn preset-btn-sm" data-pos="top-left" title="Oben-Links">◸</button>
+                    <button class="preset-btn preset-btn-sm" data-pos="top-center" title="Oben-Mitte">◬</button>
+                    <button class="preset-btn preset-btn-sm" data-pos="top-right" title="Oben-Rechts">◹</button>
+                    <button class="preset-btn preset-btn-sm" data-pos="center-left" title="Mitte-Links">◁</button>
+                    <button class="preset-btn preset-btn-sm" data-pos="center" title="Mitte">◉</button>
+                    <button class="preset-btn preset-btn-sm" data-pos="center-right" title="Mitte-Rechts">▷</button>
+                    <button class="preset-btn preset-btn-sm selected" data-pos="bottom-left" title="Unten-Links">◺</button>
+                    <button class="preset-btn preset-btn-sm" data-pos="bottom-center" title="Unten-Mitte">▽</button>
+                    <button class="preset-btn preset-btn-sm" data-pos="bottom-right" title="Unten-Rechts">◿</button>
+                </div>
+            </div>
+            <div class="ribbon-group-label">Nullpunkt</div>
+
         <!-- ═══ ① Loch / Scheibe prüfen (AP4 Waricam-Workflow) ═══ -->
         <div class="ribbon-group">
             <div class="ribbon-group-content">
@@ -594,6 +594,7 @@
                         <span class="ribbon-field-label">Richtung:</span>
                         <button class="ribbon-btn-mini" id="btn-direction-cw" title="CW">↻</button>
                         <button class="ribbon-btn-mini" id="btn-direction-ccw" title="CCW">↺</button>
+                        <button class="ribbon-btn-mini" id="btn-direction-reverse" title="Schneidrichtung umkehren (auch offene Konturen)">⇄</button>
                         <button class="ribbon-btn-mini" id="btn-arrow-mode" title="Schneidrichtungs-Pfeile: Auto (bei vielen Konturen nur Auswahl) / An / Aus">➤ Auto</button>
                     </div>
                     <div class="ribbon-inline-row">
@@ -626,7 +627,7 @@
                     </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">② Voreinstellung</div>
+            <div class="ribbon-group-label">Voreinstellung</div>
         </div>
 
         <!-- ═══ Außen-Lead (V3.15 — UX-Verbesserungen: Touch, Tooltips, Farbcodes) ═══ -->
@@ -806,7 +807,7 @@
                     </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">② Anschnitt &amp; Ausfahrt</div>
+            <div class="ribbon-group-label">Anschnitt &amp; Ausfahrt</div>
         </div>
 
         <!-- ═══ Innen-Lead (V3.15 — Tooltips + Stepper) ═══ -->
@@ -885,7 +886,7 @@
                     </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">② Innen-Lead</div>
+            <div class="ribbon-group-label">Innen-Lead</div>
         </div>
 
         <!-- ═══ Ecken-Lead (AP2: Anfahrt an Ecken — Form · Winkel · ab Eckwinkel) ═══ -->
@@ -930,7 +931,7 @@
                     </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">② Ecken-Lead</div>
+            <div class="ribbon-group-label">Ecken-Lead</div>
         </div>
 
         <!-- ═══ Flächenklassen-Popup (B.3) ═══ -->
@@ -970,95 +971,92 @@
                     </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">③ Schnittfuge &amp; Qualität</div>
+            <div class="ribbon-group-label">Schnittfuge &amp; Qualität</div>
         </div>
 
-        <!-- ═══ Technologie (V5.0 — CeraJet-Integration) ═══ -->
+
+        <!-- ═══ Reihenfolge (ehem. eigener Tab) ═══ -->
+        <div class="ribbon-group">
+            <div class="ribbon-group-content">
+                <div class="ribbon-btn-lg" id="btn-auto-sort" title="Auto-Sortieren">
+                    <div class="icon"><svg viewBox="0 0 32 32" fill="none"><path d="M6 8h20M6 16h14M6 24h8" stroke="#0078d4" stroke-width="2.5"/><path d="M24 20l4 4-4 4" fill="none" stroke="#0078d4" stroke-width="2"/></svg></div>
+                    <span class="label">Sortieren</span>
+                </div>
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row">
+                        <select class="ribbon-select" id="sort-method" style="width:170px">
+                            <option value="mosaic" selected>Mosaik (Rand zuletzt, ab Nullpunkt)</option>
+                            <option value="mosaic-meander">Mosaik-Mäander (durchgehend, Opferplatte)</option>
+                            <option value="shortest-path">Kürzester Weg (hinten-rechts)</option>
+                            <option value="shortest-path-selected">Kürzester Weg ab Auswahl</option>
+                            <option value="inside-out">Innen → Außen</option>
+                            <option value="outside-in">Außen → Innen</option>
+                            <option value="by-size">Nach Größe</option>
+                        </select>
+                    </div>
+                    <div class="ribbon-inline-row ribbon-stats">
+                        <span>Schnitte: <strong id="order-stat-count">0</strong></span>
+                        <span>Länge: <strong id="order-stat-length">0 mm</strong></span>
+                    </div>
+                    <div class="ribbon-inline-row ribbon-stats">
+                        <span>Verfahrweg: <strong id="order-stat-travel">0 mm</strong></span>
+                    </div>
+                </div>
+            </div>
+            <div class="ribbon-group-label">Reihenfolge</div>
+        </div>
+        <!-- ═══ Schnittreihenfolge manuell (V6.60) ═══ -->
         <div class="ribbon-group">
             <div class="ribbon-group-content">
                 <div class="ribbon-sm-stack">
                     <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label">◆</span>
-                        <select class="ribbon-select" id="tech-material" style="width:140px" title="Material"></select>
+                        <button class="ribbon-btn-mini" id="btn-cut-seq" title="Schnitte im Bild in der gewünschten Reihenfolge anklicken: sie kommen je Fliese an den Anfang. Esc = übernehmen, Rücktaste = letzten zurück">🖱 Anklicken</button>
                     </div>
-                    <div class="ribbon-inline-row tech-adv">
-                        <span class="ribbon-field-label">◎</span>
-                        <select class="ribbon-select" id="tech-nozzle" style="width:140px" title="Düsenkombination"></select>
+                    <div class="ribbon-inline-row" title="Auswahl verschieben (Schnitt im Bild anklicken, Shift = mehrere) — innerhalb der Fliese">
+                        <button class="ribbon-btn-mini" id="btn-cut-first" title="An den Anfang">⤒</button>
+                        <button class="ribbon-btn-mini" id="btn-cut-up" title="Einen früher">↑</button>
+                        <button class="ribbon-btn-mini" id="btn-cut-down" title="Einen später">↓</button>
+                        <button class="ribbon-btn-mini" id="btn-cut-last" title="Ans Ende">⤓</button>
                     </div>
                     <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label">▬</span>
-                        <input type="number" class="ribbon-input" value="10" step="0.5" min="0.5" max="300" id="material-thickness" style="width:50px" title="Materialdicke">
-                        <span class="ribbon-field-unit">mm</span>
-                        <button class="ribbon-btn-mini" id="btn-tech-adv-toggle" title="Düse, Druck, Optimierung ein-/ausblenden (Werte werden an der Anlage eingestellt, die Steuerung ignoriert die R-Parameter)">⚙</button>
-                        <span class="ribbon-field-label tech-adv" style="margin-left:4px">↕</span>
-                        <input type="number" class="ribbon-input" value="2900" step="100" min="1000" max="6000" id="tech-pressure" class="tech-adv" style="width:55px" title="Schneiddruck">
-                        <span class="ribbon-field-unit tech-adv">bar</span>
-                    </div>
-                </div>
-                <div class="ribbon-sm-stack tech-adv">
-                    <div class="ribbon-inline-row" id="tech-opt-row" style="gap:2px">
-                        <button class="ribbon-btn-mini tech-opt-btn active" data-opt="minKosten" title="Min. Kosten">Min.K</button>
-                        <button class="ribbon-btn-mini tech-opt-btn" data-opt="kostenProduktion" title="Kosten/Produktion">K/P</button>
-                        <button class="ribbon-btn-mini tech-opt-btn" data-opt="maxProduktion" title="Max. Produktion">Max.P</button>
-                    </div>
-                    <div class="ribbon-inline-row" id="tech-preview" style="font-size:9px;color:#4fc3f7;line-height:1.3">
-                        V: -- mm/min · Ansch: --
-                    </div>
-                    <div class="ribbon-inline-row" id="tech-verified-badge" style="font-size:8px;color:#666">
+                        <span class="ribbon-field-label">Nr.:</span>
+                        <input type="number" class="ribbon-input" id="cut-pos-input" min="1" step="1" style="width:45px" title="Auswahl auf diese Position (in der Fliese) setzen">
+                        <button class="ribbon-btn-mini" id="btn-cut-pos" title="Auswahl auf Position setzen">OK</button>
                     </div>
                 </div>
             </div>
-            <div class="ribbon-group-label">③ Technologie</div>
+            <div class="ribbon-group-label">Schnitte manuell</div>
         </div>
-
-        <!-- ═══ Strahlbreite / Machbarkeit (V6.49) ═══ -->
+        <!-- ═══ Fliesen (V7.01): Reihenfolge + Nullpunkt je Fliese ═══ -->
         <div class="ribbon-group">
             <div class="ribbon-group-content">
                 <div class="ribbon-sm-stack">
-                    <div class="ribbon-inline-row" style="gap:3px">
-                        <button class="ribbon-btn-mini" id="btn-feas-check" style="color:#f0a030;font-weight:600"
-                                title="Prüft alle Konturen gegen die Strahlbreite: zu schmal (rot) / zu nah am Nachbarn (orange)">⚠ Prüfen</button>
-                        <button class="ribbon-btn-mini" id="btn-feas-clear" title="Markierung ausblenden">✕</button>
-                        <span id="feas-kerf" style="font-size:9px;color:#888"></span>
-                    </div>
-                    <div class="ribbon-inline-row" id="feas-summary" style="font-size:10px;color:#888;min-height:13px">nicht geprüft</div>
-                    <div class="ribbon-inline-row" style="gap:3px">
-                        <button class="ribbon-btn-mini" id="btn-feas-sel-narrow" title="Alle zu schmalen Konturen auswählen (danach Entf zum Löschen)">Schmale wählen</button>
-                        <button class="ribbon-btn-mini" id="btn-feas-sel-close" title="Alle Konturen mit Nachbarabstand unter Strahlbreite auswählen">Nahe wählen</button>
-                    </div>
-                </div>
-                <div class="ribbon-sm-stack">
                     <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label" title="Konturen schmaler als dieser Wert (≈ 2·Fläche/Umfang)">Breite &lt;</span>
-                        <input type="number" class="ribbon-input" id="feas-width-lt" step="0.1" min="0" placeholder="mm" style="width:42px">
-                        <span class="ribbon-field-label" title="Konturen kleiner als diese Fläche">Fläche &lt;</span>
-                        <input type="number" class="ribbon-input" id="feas-area-lt" step="1" min="0" placeholder="mm²" style="width:42px">
-                        <button class="ribbon-btn-mini" id="btn-feas-sel-crit" title="Konturen nach diesen Kriterien auswählen (leere Felder werden ignoriert)">Wählen</button>
+                        <select class="ribbon-select" id="tile-order-preset" style="width:128px" title="Reihenfolge der Fliesen automatisch festlegen">
+                            <option value="rows" selected>Zeilenweise</option>
+                            <option value="rows-snake">Zeilen Schlangenlinie</option>
+                            <option value="cols">Spaltenweise</option>
+                            <option value="cols-snake">Spalten Schlangenlinie</option>
+                            <option value="nearest">Nächster Nachbar</option>
+                        </select>
+                    </div>
+                    <div class="ribbon-inline-row">
+                        <select class="ribbon-select" id="tile-order-corner" style="width:80px" title="Startecke">
+                            <option value="tl" selected>⌜ l.o.</option><option value="tr">⌝ r.o.</option>
+                            <option value="bl">⌞ l.u.</option><option value="br">⌟ r.u.</option>
+                        </select>
+                        <label style="font-size:10px;color:#ccc" title="Reihenfolge umkehren"><input type="checkbox" id="tile-order-reverse"> umkehren</label>
+                    </div>
+                    <div class="ribbon-inline-row">
+                        <button class="ribbon-btn-mini" id="btn-tile-seq" title="Fliesen im Zeichenbereich in der gewünschten Reihenfolge anklicken (Esc = fertig, Rücktaste = letzte zurück)">🖱 Anklicken</button>
+                        <span id="tile-order-state" style="font-size:10px;color:#888"></span>
                     </div>
                 </div>
-            </div>
-            <div class="ribbon-group-label">③ Strahlbreite</div>
-        </div>
-
-        <!-- ═══ Vereinfachen (V6.50) ═══ -->
-        <div class="ribbon-group">
-            <div class="ribbon-group-content">
-                <div class="ribbon-sm-stack">
-                    <div class="ribbon-inline-row" style="gap:4px">
-                        <span class="ribbon-field-label" title="Maximale Abweichung der vereinfachten Kontur vom Original">Toleranz</span>
-                        <input type="range" id="simp-tol" min="0" max="1" step="0.01" value="0" style="width:110px">
-                        <span id="simp-tol-val" style="font-size:10px;min-width:42px;color:#4fc3f7">aus</span>
-                    </div>
-                    <div class="ribbon-inline-row" id="simp-info" style="font-size:10px;color:#888;min-height:13px">Regler ziehen für Vorschau</div>
-                    <div class="ribbon-inline-row" style="gap:3px">
-                        <button class="ribbon-btn-mini" id="btn-simp-apply" style="color:#8bc34a;font-weight:600"
-                                title="Vereinfachung übernehmen (STRG+Z macht sie rückgängig)" disabled>Anwenden</button>
-                        <button class="ribbon-btn-mini" id="btn-simp-cancel" title="Vorschau verwerfen" disabled>Abbrechen</button>
-                        <span id="simp-scope" style="font-size:9px;color:#888"></span>
-                    </div>
+                <div id="tile-list" style="font-size:10px;max-height:80px;min-width:300px;overflow:auto;color:#ccc">
+                    <span style="color:#888">Keine Fliesen erkannt</span>
                 </div>
             </div>
-            <div class="ribbon-group-label">Vereinfachen</div>
+            <div class="ribbon-group-label">Fliesen · Reihenfolge &amp; Nullpunkt</div>
         </div>
     </div>
 
@@ -1190,6 +1188,93 @@
             </div>
             <div class="ribbon-group-label">Kollision</div>
         </div>
+
+        <!-- ═══ Strahlbreite / Machbarkeit (V6.49) ═══ -->
+        <div class="ribbon-group">
+            <div class="ribbon-group-content">
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row" style="gap:3px">
+                        <button class="ribbon-btn-mini" id="btn-feas-check" style="color:#f0a030;font-weight:600"
+                                title="Prüft alle Konturen gegen die Strahlbreite: zu schmal (rot) / zu nah am Nachbarn (orange)">⚠ Prüfen</button>
+                        <button class="ribbon-btn-mini" id="btn-feas-clear" title="Markierung ausblenden">✕</button>
+                        <span id="feas-kerf" style="font-size:9px;color:#888"></span>
+                    </div>
+                    <div class="ribbon-inline-row" id="feas-summary" style="font-size:10px;color:#888;min-height:13px">nicht geprüft</div>
+                    <div class="ribbon-inline-row" style="gap:3px">
+                        <button class="ribbon-btn-mini" id="btn-feas-sel-narrow" title="Alle zu schmalen Konturen auswählen (danach Entf zum Löschen)">Schmale wählen</button>
+                        <button class="ribbon-btn-mini" id="btn-feas-sel-close" title="Alle Konturen mit Nachbarabstand unter Strahlbreite auswählen">Nahe wählen</button>
+                    </div>
+                </div>
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row">
+                        <span class="ribbon-field-label" title="Konturen schmaler als dieser Wert (≈ 2·Fläche/Umfang)">Breite &lt;</span>
+                        <input type="number" class="ribbon-input" id="feas-width-lt" step="0.1" min="0" placeholder="mm" style="width:42px">
+                        <span class="ribbon-field-label" title="Konturen kleiner als diese Fläche">Fläche &lt;</span>
+                        <input type="number" class="ribbon-input" id="feas-area-lt" step="1" min="0" placeholder="mm²" style="width:42px">
+                        <button class="ribbon-btn-mini" id="btn-feas-sel-crit" title="Konturen nach diesen Kriterien auswählen (leere Felder werden ignoriert)">Wählen</button>
+                    </div>
+                </div>
+            </div>
+            <div class="ribbon-group-label">Strahlbreite</div>
+        </div>
+
+        <!-- ═══ Vereinfachen (V6.50) ═══ -->
+        <div class="ribbon-group">
+            <div class="ribbon-group-content">
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row" style="gap:4px">
+                        <span class="ribbon-field-label" title="Maximale Abweichung der vereinfachten Kontur vom Original">Toleranz</span>
+                        <input type="range" id="simp-tol" min="0" max="1" step="0.01" value="0" style="width:110px">
+                        <span id="simp-tol-val" style="font-size:10px;min-width:42px;color:#4fc3f7">aus</span>
+                    </div>
+                    <div class="ribbon-inline-row" id="simp-info" style="font-size:10px;color:#888;min-height:13px">Regler ziehen für Vorschau</div>
+                    <div class="ribbon-inline-row" style="gap:3px">
+                        <button class="ribbon-btn-mini" id="btn-simp-apply" style="color:#8bc34a;font-weight:600"
+                                title="Vereinfachung übernehmen (STRG+Z macht sie rückgängig)" disabled>Anwenden</button>
+                        <button class="ribbon-btn-mini" id="btn-simp-cancel" title="Vorschau verwerfen" disabled>Abbrechen</button>
+                        <span id="simp-scope" style="font-size:9px;color:#888"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="ribbon-group-label">Vereinfachen</div>
+        </div>
+        <!-- ═══ Technologie (V5.0 — CeraJet-Integration) ═══ -->
+        <div class="ribbon-group" style="display:none">
+            <div class="ribbon-group-content">
+                <div class="ribbon-sm-stack">
+                    <div class="ribbon-inline-row">
+                        <span class="ribbon-field-label">◆</span>
+                        <select class="ribbon-select" id="tech-material" style="width:140px" title="Material"></select>
+                    </div>
+                    <div class="ribbon-inline-row tech-adv">
+                        <span class="ribbon-field-label">◎</span>
+                        <select class="ribbon-select" id="tech-nozzle" style="width:140px" title="Düsenkombination"></select>
+                    </div>
+                    <div class="ribbon-inline-row">
+                        <span class="ribbon-field-label">▬</span>
+                        <input type="number" class="ribbon-input" value="10" step="0.5" min="0.5" max="300" id="material-thickness" style="width:50px" title="Materialdicke">
+                        <span class="ribbon-field-unit">mm</span>
+                        <button class="ribbon-btn-mini" id="btn-tech-adv-toggle" title="Düse, Druck, Optimierung ein-/ausblenden (Werte werden an der Anlage eingestellt, die Steuerung ignoriert die R-Parameter)">⚙</button>
+                        <span class="ribbon-field-label tech-adv" style="margin-left:4px">↕</span>
+                        <input type="number" class="ribbon-input" value="2900" step="100" min="1000" max="6000" id="tech-pressure" class="tech-adv" style="width:55px" title="Schneiddruck">
+                        <span class="ribbon-field-unit tech-adv">bar</span>
+                    </div>
+                </div>
+                <div class="ribbon-sm-stack tech-adv">
+                    <div class="ribbon-inline-row" id="tech-opt-row" style="gap:2px">
+                        <button class="ribbon-btn-mini tech-opt-btn active" data-opt="minKosten" title="Min. Kosten">Min.K</button>
+                        <button class="ribbon-btn-mini tech-opt-btn" data-opt="kostenProduktion" title="Kosten/Produktion">K/P</button>
+                        <button class="ribbon-btn-mini tech-opt-btn" data-opt="maxProduktion" title="Max. Produktion">Max.P</button>
+                    </div>
+                    <div class="ribbon-inline-row" id="tech-preview" style="font-size:9px;color:#4fc3f7;line-height:1.3">
+                        V: -- mm/min · Ansch: --
+                    </div>
+                    <div class="ribbon-inline-row" id="tech-verified-badge" style="font-size:8px;color:#666">
+                    </div>
+                </div>
+            </div>
+            <div class="ribbon-group-label">③ Technologie</div>
+        </div>
     </div>
 
     <!-- ── Nesting Panel (eigener Tab, vorher im Export-Tab) ── -->
@@ -1211,92 +1296,6 @@
                 </div>
             </div>
             <div class="ribbon-group-label">Plan</div>
-        </div>
-    </div>
-
-    <!-- ── Reihenfolge Panel ── -->
-    <div class="ribbon-panel" data-ribbon="order" style="display:none">
-        <div class="ribbon-group">
-            <div class="ribbon-group-content">
-                <div class="ribbon-btn-lg" id="btn-auto-sort" title="Auto-Sortieren">
-                    <div class="icon"><svg viewBox="0 0 32 32" fill="none"><path d="M6 8h20M6 16h14M6 24h8" stroke="#0078d4" stroke-width="2.5"/><path d="M24 20l4 4-4 4" fill="none" stroke="#0078d4" stroke-width="2"/></svg></div>
-                    <span class="label">Sortieren</span>
-                </div>
-                <div class="ribbon-sm-stack">
-                    <div class="ribbon-inline-row">
-                        <select class="ribbon-select" id="sort-method" style="width:170px">
-                            <option value="mosaic" selected>Mosaik (Rand zuletzt, ab Nullpunkt)</option>
-                            <option value="mosaic-meander">Mosaik-Mäander (durchgehend, Opferplatte)</option>
-                            <option value="shortest-path">Kürzester Weg (hinten-rechts)</option>
-                            <option value="shortest-path-selected">Kürzester Weg ab Auswahl</option>
-                            <option value="inside-out">Innen → Außen</option>
-                            <option value="outside-in">Außen → Innen</option>
-                            <option value="by-size">Nach Größe</option>
-                        </select>
-                    </div>
-                    <div class="ribbon-inline-row ribbon-stats">
-                        <span>Schnitte: <strong id="order-stat-count">0</strong></span>
-                        <span>Länge: <strong id="order-stat-length">0 mm</strong></span>
-                    </div>
-                    <div class="ribbon-inline-row ribbon-stats">
-                        <span>Verfahrweg: <strong id="order-stat-travel">0 mm</strong></span>
-                    </div>
-                </div>
-            </div>
-            <div class="ribbon-group-label">④ Sortierung</div>
-        </div>
-        <!-- ═══ Schnittreihenfolge manuell (V6.60) ═══ -->
-        <div class="ribbon-group">
-            <div class="ribbon-group-content">
-                <div class="ribbon-sm-stack">
-                    <div class="ribbon-inline-row">
-                        <button class="ribbon-btn-mini" id="btn-cut-seq" title="Schnitte im Bild in der gewünschten Reihenfolge anklicken: sie kommen je Fliese an den Anfang. Esc = übernehmen, Rücktaste = letzten zurück">🖱 Anklicken</button>
-                    </div>
-                    <div class="ribbon-inline-row" title="Auswahl verschieben (Schnitt im Bild anklicken, Shift = mehrere) — innerhalb der Fliese">
-                        <button class="ribbon-btn-mini" id="btn-cut-first" title="An den Anfang">⤒</button>
-                        <button class="ribbon-btn-mini" id="btn-cut-up" title="Einen früher">↑</button>
-                        <button class="ribbon-btn-mini" id="btn-cut-down" title="Einen später">↓</button>
-                        <button class="ribbon-btn-mini" id="btn-cut-last" title="Ans Ende">⤓</button>
-                    </div>
-                    <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label">Nr.:</span>
-                        <input type="number" class="ribbon-input" id="cut-pos-input" min="1" step="1" style="width:45px" title="Auswahl auf diese Position (in der Fliese) setzen">
-                        <button class="ribbon-btn-mini" id="btn-cut-pos" title="Auswahl auf Position setzen">OK</button>
-                    </div>
-                </div>
-            </div>
-            <div class="ribbon-group-label">④ Schnitte manuell</div>
-        </div>
-        <!-- ═══ Fliesen (V7.01): Reihenfolge + Nullpunkt je Fliese ═══ -->
-        <div class="ribbon-group">
-            <div class="ribbon-group-content">
-                <div class="ribbon-sm-stack">
-                    <div class="ribbon-inline-row">
-                        <select class="ribbon-select" id="tile-order-preset" style="width:128px" title="Reihenfolge der Fliesen automatisch festlegen">
-                            <option value="rows" selected>Zeilenweise</option>
-                            <option value="rows-snake">Zeilen Schlangenlinie</option>
-                            <option value="cols">Spaltenweise</option>
-                            <option value="cols-snake">Spalten Schlangenlinie</option>
-                            <option value="nearest">Nächster Nachbar</option>
-                        </select>
-                    </div>
-                    <div class="ribbon-inline-row">
-                        <select class="ribbon-select" id="tile-order-corner" style="width:80px" title="Startecke">
-                            <option value="tl" selected>⌜ l.o.</option><option value="tr">⌝ r.o.</option>
-                            <option value="bl">⌞ l.u.</option><option value="br">⌟ r.u.</option>
-                        </select>
-                        <label style="font-size:10px;color:#ccc" title="Reihenfolge umkehren"><input type="checkbox" id="tile-order-reverse"> umkehren</label>
-                    </div>
-                    <div class="ribbon-inline-row">
-                        <button class="ribbon-btn-mini" id="btn-tile-seq" title="Fliesen im Zeichenbereich in der gewünschten Reihenfolge anklicken (Esc = fertig, Rücktaste = letzte zurück)">🖱 Anklicken</button>
-                        <span id="tile-order-state" style="font-size:10px;color:#888"></span>
-                    </div>
-                </div>
-                <div id="tile-list" style="font-size:10px;max-height:80px;min-width:300px;overflow:auto;color:#ccc">
-                    <span style="color:#888">Keine Fliesen erkannt</span>
-                </div>
-            </div>
-            <div class="ribbon-group-label">④ Fliesen · Reihenfolge &amp; Nullpunkt</div>
         </div>
     </div>
 
@@ -1882,7 +1881,7 @@
 <script src="js/cnc-reader.js?v=20261104-reviewfix"></script>
 <script src="js/svg-parser.js?v=20261104-reviewfix"></script>
 <script src="js/properties-panel.js?v=20261107-leadmenu"></script>
-<script src="js/nesting.js?v=20261107-nestperf"></script>
+<script src="js/nesting.js?v=20261107-group"></script>
 <script src="js/toolpath-simulator.js?v=20261106-leadseg"></script>
 <script src="js/cost-calculator.js?v=20261104-reviewfix"></script>
 <script src="js/machine-profiles.js?v=20261104-reviewfix"></script>
@@ -1890,13 +1889,13 @@
 <script src="js/quality-zones.js?v=20261104-reviewfix"></script>
 <script src="js/project-manager.js?v=20261104-pushexecuted"></script>
 <script src="js/dxf-browser.js?v=20261107-pickmany"></script>
-<script src="js/part-library.js?v=20261107-canvasprev"></script>
+<script src="js/part-library.js?v=20261107-group"></script>
 <script src="js/technology-db.js?v=20261107-techdb"></script>
 <script src="js/cost-plan.js?v=20261107-plancost"></script>
 <script src="js/cost-dialog.js?v=20261107-costdialog"></script>
 <script src="js/plan-update.js?v=20261107-partedit"></script>
-<script src="js/part-editor.js?v=20261107-viewer"></script>
-<script src="js/nesting-plan.js?v=20261107-canvasprev"></script>
+<script src="js/part-editor.js?v=20261107-group"></script>
+<script src="js/nesting-plan.js?v=20261107-group"></script>
 <script src="js/nc-tools.js?v=20261107-nctools"></script>
 <script src="js/app.js?v=20261107-kerfopen"></script>
 
@@ -1914,20 +1913,14 @@
     
     // Ribbon-Tab → Wizard-Step Mapping
     const ribbonToStep = { file: 1, cad: 1, bearbeitung: 4, order: 5, extras: 4, export: 6, view: null };
-    const ribbonToName = { file: 'Datei laden', cad: 'Zeichnen', bearbeitung: 'Bearbeitung', order: 'Reihenfolge', extras: 'Extras', export: 'Export', view: 'Ansicht' };
+    const ribbonToName = { file: 'Datei laden', cad: 'Zeichnen', bearbeitung: 'CAM', extras: 'Extras', export: 'Export', view: 'Ansicht' };
 
     // V6.21: CAM-Tabs — erst klickbar nach abgeschlossenem Setup (Referenz + Nullpunkt)
-    const CAM_TABS = ['bearbeitung', 'order', 'extras', 'export'];
+    const CAM_TABS = ['bearbeitung', 'extras', 'export'];
 
     ribbonTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             const target = tab.dataset.ribbon;
-
-            // V6.21: CAM-Tab vor abgeschlossenem Setup sperren
-            if (CAM_TABS.includes(target) && !(window.app?.isSetupComplete?.())) {
-                window.app?.showToast?.('Bitte zuerst im Tab Datei Referenz und Nullpunkt festlegen (oder "Auto beim Import" einschalten)', 'warning');
-                return;
-            }
 
             // Update tab active state
             ribbonTabs.forEach(t => t.classList.remove('active'));
@@ -1978,13 +1971,6 @@
                 if (startHint && (this.fileLoaded || this.contours?.length)) {
                     startHint.classList.add('hidden');
                 }
-                // V6.21: CAM-Tabs visuell sperren, solange Setup nicht abgeschlossen ist
-                const unlocked = this.isSetupComplete?.();
-                document.querySelectorAll('.ribbon-tab[data-ribbon]').forEach(t => {
-                    if (CAM_TABS.includes(t.dataset.ribbon)) {
-                        t.classList.toggle('cam-locked', !unlocked);
-                    }
-                });
             };
             
             // CRITICAL FIX: goToStep — im Ribbon-UI gibt es keine Steps mehr.
@@ -2030,9 +2016,6 @@
                     const ribbon = tab.dataset.ribbon;
                     if (!window.app?.renderer) return;
 
-                    // V6.21: CAM-Tab vor abgeschlossenem Setup sperren (Modus/Step NICHT umschalten)
-                    if (CAM_TABS.includes(ribbon) && !window.app.isSetupComplete?.()) return;
-
                     // V5.0: DrawMode beenden wenn Tab gewechselt wird (sonst keine Selektion möglich!)
                     if (ribbon !== 'draw' && window.app.drawingTools?.drawMode) {
                         window.app.drawingTools.exitDrawMode();
@@ -2044,6 +2027,9 @@
                             window.app.renderer.currentMode = 'anschuss';
                             window.app.currentStep = 4;
                             window.app._applyLeadValues?.();
+                            window.app.rebuildCutOrder?.();
+                            window.app.updateCutOrderList?.();
+                            window.app.updateOrderStats?.();
                             break;
                         case 'extras':
                             window.app.renderer.currentMode = 'anschuss';
