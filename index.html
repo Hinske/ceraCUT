@@ -1212,35 +1212,6 @@
             </div>
             <div class="ribbon-group-label">Plan</div>
         </div>
-
-        <!-- ═══ Nesting (V5.5) ═══ -->
-        <div class="ribbon-group">
-            <div class="ribbon-group-content">
-                <div class="ribbon-btn-lg" id="btn-nesting" title="Teile automatisch auf Platte anordnen">
-                    <div class="icon"><svg viewBox="0 0 32 32" fill="none"><rect x="2" y="2" width="28" height="28" stroke="#22c55e" stroke-width="1.5" fill="none"/><rect x="4" y="4" width="10" height="8" stroke="#22c55e" stroke-width="1" fill="rgba(34,197,94,0.15)"/><rect x="16" y="4" width="12" height="6" stroke="#22c55e" stroke-width="1" fill="rgba(34,197,94,0.15)"/><rect x="4" y="14" width="7" height="14" stroke="#22c55e" stroke-width="1" fill="rgba(34,197,94,0.15)"/><rect x="13" y="12" width="15" height="8" stroke="#22c55e" stroke-width="1" fill="rgba(34,197,94,0.15)"/></svg></div>
-                    <span class="label">Nesting</span>
-                </div>
-                <div class="ribbon-sm-stack">
-                    <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label">Abst.:</span>
-                        <input type="number" class="ribbon-input" id="nesting-gap" value="3" step="0.5" min="0.5" max="20" style="width:45px">
-                        <span class="ribbon-field-unit">mm</span>
-                    </div>
-                    <div class="ribbon-inline-row">
-                        <span class="ribbon-field-label">Rot.:</span>
-                        <select class="ribbon-select" id="nesting-rotation" style="width:80px">
-                            <option value="0">0°</option>
-                            <option value="90" selected>0°/90°</option>
-                            <option value="45">45°-Schritte</option>
-                            <option value="free">Frei (10°)</option>
-                        </select>
-                    </div>
-                    <div class="ribbon-inline-row" id="nesting-result" style="font-size:9px;color:#888">
-                    </div>
-                </div>
-            </div>
-            <div class="ribbon-group-label">Nesting</div>
-        </div>
     </div>
 
     <!-- ── Reihenfolge Panel ── -->
@@ -4019,30 +3990,6 @@
                     app.contours.forEach(c => { delete c.qualityZones; });
                 }
                 app.renderer?.render();
-            });
-
-            // Nesting
-            document.getElementById('btn-nesting')?.addEventListener('click', () => {
-                if (typeof NestingEngine === 'undefined') return;
-                const app = window.app;
-                if (!app?.contours?.length) return;
-                const gap = parseFloat(document.getElementById('nesting-gap')?.value) || 3;
-                const rotOption = document.getElementById('nesting-rotation')?.value || '90';
-                let rotations = [0];
-                if (rotOption === '90') rotations = [0, 90, 180, 270];
-                else if (rotOption === '45') rotations = [0, 45, 90, 135, 180, 225, 270, 315];
-                else if (rotOption === 'free') rotations = Array.from({length: 36}, (_, i) => i * 10);
-                const ref = app.contours.find(c => c.isReference);
-                const sheetW = ref ? Math.abs(ref.points.reduce((max, p) => Math.max(max, p.x), -Infinity) - ref.points.reduce((min, p) => Math.min(min, p.x), Infinity)) : 3000;
-                const sheetH = ref ? Math.abs(ref.points.reduce((max, p) => Math.max(max, p.y), -Infinity) - ref.points.reduce((min, p) => Math.min(min, p.y), Infinity)) : 2000;
-                const parts = app.contours.filter(c => !c.isReference);
-                const result = NestingEngine.nest(parts, { sheetWidth: sheetW, sheetHeight: sheetH, sheetMargin: gap, spacing: gap, rotationSteps: rotations });
-                const resultEl = document.getElementById('nesting-result');
-                if (result && resultEl) {
-                    resultEl.textContent = `${result.placements?.length || 0} Teile, ${(result.totalUtilization || 0).toFixed(1)}% Nutzung`;
-                    if (result.placements) NestingEngine.applyPlacements(parts, result.placements);
-                    app.renderer?.render();
-                }
             });
 
             // Toolpath Simulation

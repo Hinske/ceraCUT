@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '98fe523',
+        hash: 'fa82808',
         date: '2026-11-07',
-        message: 'perf: Mehrfachimport — einmal rendern statt je Datei, Speichern in Paketen (part'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
+        message: 'refactor: alten Nesting-Button entfernt (Autonest ersetzt ihn)'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
     },
 
     modules: {

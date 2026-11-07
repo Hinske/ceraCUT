@@ -23,4 +23,4 @@
 - [ ] Autonest im Web-Worker (UI friert bei sehr großen Mengen kurz ein)
 - [ ] Plan-Speichern-Dialog laut FINest (Fälligkeit, Kommentar, Menge, NC-Flag)
 - [ ] Blechbibliothek-UI + Anbindung (siehe oben)
-- [x] Bestehender Button „Nesting“ (btn-nesting): falsche Config-Keys und `result.utilization` korrigiert (Phase 5, 2026-11-07); mit Autonest zusammenführen bleibt offen
+- [x] Bestehender Button „Nesting“ (btn-nesting): falsche Config-Keys und `result.utilization` korrigiert (Phase 5, 2026-11-07); danach ENTFERNT (2026-11-07): Der alte Button ordnete die Konturen des geöffneten Tabs per Referenz-Größe neu an, ohne Undo und ohne Plan; Autonest ersetzt ihn (Bibliotheksteile → Plan). Engine `applyPlacements` bleibt in nesting.js (API), wird aber nicht mehr verwendet
