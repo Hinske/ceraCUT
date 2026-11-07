@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **Letzte Aktualisierung:** 2026-11-07
 > **Version:** V7.36
-> **Build:** 20261107-dusch8
+> **Build:** 20261107-obext
 
 ---
 
@@ -211,7 +211,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 |-------|-------|---------|---------------|
 | **App** | `app.js` | **V6.75** | Wizard, Kontextmenu, Export-Modal, Undo (Granular per Kontur), ToolManager, Click-Routing, Window-Selection, DynamicInput, Print, FSAPI-Save, ProjectManager, CAM-Kontextmenu, Lead-Profiles, Intarsien V2.0, Layer-Visibility→Pipeline, Validation Engine, Multi-Material Export, Hatch-Entity, Undo/Redo-Button-Click, Snap-Modi-Statusbar, Cycle-Selection |
 | **Geometry** | `geometry.js` | **V2.14** | Vektoren, SplineUtils (De Boor), MicroHealing (5-Stage), Shoelace, interiorPoint |
-| **GeometryOps** | `geometry-ops.js` | **V2.7** | Intersection, Segment-Modell, Arabeske, circumscribedCircle, splitAndOverlap, Boundary (DCEL Planar Graph), filletPolyline/chamferPolyline |
+| **GeometryOps** | `geometry-ops.js` | **V2.8** | Intersection, Segment-Modell, Arabeske, circumscribedCircle, splitAndOverlap, Boundary (DCEL Planar Graph), filletPolyline/chamferPolyline |
 | **DXF-Parser** | `dxf-parser.js` | **V3.20** | DXF → Entities, SPLINE-Tessellation, Deque-Chaining, Layer-aware, TEXT/MTEXT, TEXT-Glyphs, Center/Radius-Passthrough, R12-Layer-Table, HATCH-Skip |
 | **CAMContour** | `cam-contour.js` | **V5.31** | Lead-In/Out, Overcut, Multi-Contour-Collision, Lead-Routing (Corner-Penalty, Flat-Segment-Bonus, Dog-Leg), Slit, Kerf-Flip, Arc-Metadaten, clone(), leadManualOverride, Flat-Preferred autoPlace, Hatch-Entity (cuttingMode='none', isHatchContour), materialGroup, intarsiaRole |
 | **Lead Profiles** | `lead-profiles.js` | **V1.1** | 8 Built-in Profile (inkl. Intarsien), Benutzerdefiniert (localStorage), Batch-Engine (disc/hole/smallHole/slit) |
@@ -221,8 +221,8 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **UndoManager** | `undo-manager.js` | **V1.4** | Command Pattern, Undo/Redo, Clipboard, WizardStepUndo |
 | **Arc-Fitting** | `arc-fitting.js` | **V3.4** | Polylinie → G02/G03 Bogen (fur PP-Ausgabe) |
 | **Pipeline** | `ceracut-pipeline.js` | **V3.12** | Topologie (disc/hole/reference/slit/none), Kerf-Offset, interiorPoint-basierte Nesting-Erkennung, Validation Engine (Pre-Export), Hatch-Konturen ausgeschlossen |
-| **Drawing Tools** | `drawing-tools.js` | **V2.24** | Tier 1+2 CAD-Tools, AutoCAD-Aliases, Continuous Mode, BreakTool, Enter/Rechtsklick=Beenden (AutoCAD), Layerfarbe, Auto-Apply pending Entities, Locked-Layer-Guard Window-Selection, ArcTool 8 Konstruktionsarten, PolylineTool Bogen-Modus, RectangleTool Fillet/Chamfer/Rotation, LineTool Fortsetzung, ALL/L-Selektion |
-| **Drawing Tools Ext** | `drawing-tools-ext.js` | **V1.11** | Ellipse, Spline, Donut, XLine, Overlap Break (OB), Hatch (H, eigenständige CamContour, Live-Preview, Farbpalette) |
+| **Drawing Tools** | `drawing-tools.js` | **V2.25** | Tier 1+2 CAD-Tools, AutoCAD-Aliases, Continuous Mode, BreakTool, Enter/Rechtsklick=Beenden (AutoCAD), Layerfarbe, Auto-Apply pending Entities, Locked-Layer-Guard Window-Selection, ArcTool 8 Konstruktionsarten, PolylineTool Bogen-Modus, RectangleTool Fillet/Chamfer/Rotation, LineTool Fortsetzung, ALL/L-Selektion |
+| **Drawing Tools Ext** | `drawing-tools-ext.js` | **V1.12** | Ellipse, Spline, Donut, XLine, Overlap Break (OB), Hatch (H, eigenständige CamContour, Live-Preview, Farbpalette) |
 | **Advanced Tools** | `advanced-tools.js` | **V1.9** | Fillet, Trim, Extend, Offset (Ghost-Preview), Chamfer, Arabeske, Aufteilen, Overkill, Boundary (DCEL) |
 | **CAM Tools** | `cam-tools.js` | **V1.7** | 7 CAM-Werkzeuge im Tab CAD (Gruppe CAM-Tools) (EF, REP, AN, BT, PJ, VZ, HULL); Schwerpunkt-/Kanten-korrekte Logik, Analyze mit BBox-Vorfilter, VZ via Simplify; Tests: tests/cam-tools.test.js |
 | **Zuschnitt-Generator** | `mosaic-generator.js` | **V1.3** | Menue CAD-Tools (Ribbon CAD nach CAM-Tools): Mosaik Wuerfel/Rechteck (Teilung = Stueck + 0,8 mm, Rand 3 mm, Verschnittpruefung, Dekor-Lage, Mischlage, Ueberlauf), Sockel-Streifen; Befehle MOSW/MOSR/MOSS; erzeugt DXF -> neuer Tab |
@@ -308,7 +308,7 @@ ceraCUT/
 │   ├── app.js                         ← Hauptanwendung V7.36 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.20 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.14
-│   ├── geometry-ops.js                ← GeometryOps V2.7 (Intersection, Arabeske, splitAndOverlap)
+│   ├── geometry-ops.js                ← GeometryOps V2.8 (Intersection, Arabeske, splitAndOverlap)
 │   ├── ceracut-pipeline.js            ← Pipeline V3.12
 │   ├── cam-contour.js                 ← Kontur-Klasse V5.31 (Flat-Preferred autoPlace)
 │   ├── lead-profiles.js               ← Lead-Profile V1.1 (8 Built-in inkl. Intarsien, Batch-Engine)
@@ -320,8 +320,8 @@ ceraCUT/
 │   ├── command-line.js                ← Command-Line UI V1.6 (History, Validation-Feedback)
 │   ├── dynamic-input.js              ← Dynamic Input HUD V1.1
 │   ├── snap-manager.js               ← Snap-System V1.9
-│   ├── drawing-tools.js              ← CAD-Tools V2.24 (Auto-Apply, Locked-Layer-Guard)
-│   ├── drawing-tools-ext.js           ← Ellipse, Spline, Donut, XLine, OB, Hatch V1.11
+│   ├── drawing-tools.js              ← CAD-Tools V2.25 (Auto-Apply, Locked-Layer-Guard)
+│   ├── drawing-tools-ext.js           ← Ellipse, Spline, Donut, XLine, OB, Hatch V1.12
 │   ├── advanced-tools.js              ← Tier 5 Tools V1.9 (Fillet/Trim/Extend/Offset/Chamfer/Overkill)
 │   ├── cam-tools.js                   ← CAM-Werkzeuge
 │   ├── mosaic-generator.js            ← Zuschnitt-Generator V1.3 (CAD-Tools-Menue: Mosaik Wuerfel/Rechteck, Sockel)
@@ -552,9 +552,9 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   sinumerik-pp: V2.9 (20261106-tileref)
   command-line: V1.6 (20261104-reviewfix)
   snap-manager: V1.9 (20261105-acmarker)
-  geometry-ops: V2.7 (20261104-reviewfix)
-  drawing-tools: V2.24 (20261107-camcad)
-  drawing-tools-ext: V1.11 (20261104-reviewfix)
+  geometry-ops: V2.8 (20261107-obext)
+  drawing-tools: V2.25 (20261107-obext)
+  drawing-tools-ext: V1.12 (20261107-obext)
   dynamic-input: V1.1 (20260623-autocadfeel)
   tool-manager: V2.2 (20260216-0015)
   layer-manager: V1.3 (20261104-reviewfix)

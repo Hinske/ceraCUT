@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing & Modification Tools V2.24
+ * CeraCUT Drawing & Modification Tools V2.25
  * AutoCAD-style CAD Tools für CeraCUT
  *
  * Tier 1 – Zeichnen:  Line (L), Circle (C), Rectangle (N), Arc (A), Polyline (P)
@@ -850,6 +850,15 @@ class DrawingToolManager {
                     ctx.arc(obPt.x, obPt.y, r * 1.5, 0, Math.PI * 2);
                     ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
                     ctx.stroke();
+                }
+                // Ghost-Preview der Außenenden-Verlängerung
+                if (rb.data.overlapLine?.outer) {
+                    ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+                    ctx.lineWidth = 3 / scale;
+                    ctx.setLineDash([3 / scale, 3 / scale]);
+                    for (const o of rb.data.overlapLine.outer) {
+                        ctx.beginPath(); ctx.moveTo(o.from.x, o.from.y); ctx.lineTo(o.to.x, o.to.y); ctx.stroke();
+                    }
                 }
                 // Ghost-Preview der Überlappungslinie
                 if (rb.data.overlapLine) {

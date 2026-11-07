@@ -9,15 +9,15 @@
 
 const CERACUT_BUILD = {
     version: '7.36',
-    build: '20261107-dusch8',
+    build: '20261107-obext',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'c038cd6',
+        hash: '247fcc8',
         date: '2026-11-07',
-        message: 'feat: Duschboard - Standardfliese 597x597, automatische Rasterlage, Fliesenbedarf'
+        message: 'feat: Overlap Break - aussenliegende Enden automatisch um 5 mm verlaengert'
     },
 
     modules: {
@@ -30,11 +30,11 @@ const CERACUT_BUILD = {
         'sinumerik-pp':       { version: '2.9', build: '20261106-tileref' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
         'snap-manager':       { version: '1.9', build: '20261105-acmarker' },
-        'geometry-ops':       { version: '2.7', build: '20261104-reviewfix' },
+        'geometry-ops':       { version: '2.8', build: '20261107-obext' },
         'feasibility':        { version: '1.0', build: '20261105-feas1' },
         'simplify':           { version: '1.0', build: '20261105-simp1' },
-        'drawing-tools':      { version: '2.24', build: '20261107-camcad' },
-        'drawing-tools-ext':  { version: '1.11', build: '20261104-reviewfix' },
+        'drawing-tools':      { version: '2.25', build: '20261107-obext' },
+        'drawing-tools-ext':  { version: '1.12', build: '20261107-obext' },
         'dynamic-input':      { version: '1.1', build: '20260623-autocadfeel' },
         'tool-manager':       { version: '2.2', build: '20260216-0015' },
         'layer-manager':      { version: '1.3', build: '20261104-reviewfix' },
@@ -67,8 +67,8 @@ const CERACUT_BUILD = {
         'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
-        'shower-board-generator': { version: '0.4', build: '20261107-dusch8' },
-        'shower-board-dialog': { version: '0.4', build: '20261107-dusch8' },
+        'shower-board-generator': { version: '0.4', build: '20261107-obext' },
+        'shower-board-dialog': { version: '0.4', build: '20261107-obext' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },
@@ -624,6 +624,7 @@ const CERACUT_BUILD = {
         'V5.5.1: splitContourAtPoint Vertex-Degeneration Fix — keine Null-Längen-Segmente bei Vertex-Split (geometry-ops V2.2)',
         'V5.5.1: Overlap Break Tool (OB) — Kontur trennen + tangentiale Überlappung für Wasserstrahl-Einläufe (drawing-tools-ext V1.1)',
         'V5.5.1: splitAndOverlap() — Split + feste tangentiale Verlängerung mit C1-Stetigkeit (geometry-ops V2.3)',
+        'V7.36: Overlap Break — aussenliegende Enden werden automatisch um 5 mm verlängert (änderbar per Eingabe A<Wert>, 0=aus) (geometry-ops V2.8, drawing-tools-ext V1.12)',
         'V5.5.1: Ghost-Preview (Gelb #FFFF00) mit Pfeilspitze + Längenanzeige für Überlappungsrichtung',
         'V5.5.1: Slit-Modus (kerfWidth=0) automatisch bei Überlappungs-Konturen, Pipeline-Revalidierung',
         'V5.5.1: TEXT/MTEXT Glyph-Import — echte Buchstaben-Konturen via opentype.js (dxf-parser V3.8, text-tool V1.2)',

@@ -1,5 +1,5 @@
 /**
- * CeraCUT Drawing Tools Extension V1.11
+ * CeraCUT Drawing Tools Extension V1.12
  * Zusätzliche Zeichentools: Ellipse, Spline, Donut, XLine, OverlapBreak, Hatch
  * V1.10: Fix SplineTool geschlossener Ringschluss — _tessellate erzwingt exakten
  *         Ringschluss (finalPts[last] = first) → Pipeline erkennt Disc/Hole korrekt.
@@ -382,6 +382,15 @@ class DonutTool extends BaseTool {
     }
 
     handleRawInput(value) {
+        const m = /^\s*a\s*(\d+(?:[.,]\d+)?)\s*$/i.exec(String(value));
+        if (m) {
+            const v = parseFloat(m[1].replace(',', '.'));
+            if (v <= 500) {
+                this.outerExtension = v;
+                this.cmd?.log(`Verlängerung Außenenden: ${v.toFixed(1)} mm${v === 0 ? ' (aus)' : ''}`, 'info');
+                return true;
+            }
+        }
         const num = parseFloat(value.trim());
         if (isNaN(num) || num < 0) return false;
 
@@ -638,13 +647,14 @@ class OverlapBreakTool extends BaseTool {
         this.targetContour = null;
         this.splitHit = null;         // { segmentIndex, t, point }
         this.overlapLength = 5.0;     // Default: 5mm
+        this.outerExtension = 5.0;    // Verlängerung der aussenliegenden Enden (Default 5mm, 0=aus)
         this.state = 'select';        // 'select' → 'pickPoint' → 'pickDirection'
     }
 
     start() {
         this.cmd?.setPrompt('OVERLAP BREAK — Kontur auswählen [Überlappung=' + this.overlapLength.toFixed(1) + 'mm]:');
         this.cmd?.log('✂️ Overlap Break: Kontur trennen + tangentiale Überlappung', 'info');
-        this.cmd?.log('   Optionen: Zahl eingeben = Überlappungslänge ändern', 'info');
+        this.cmd?.log('   Optionen: Zahl = Überlappungslänge ändern, A+Zahl (z.B. A8) = Verlängerung der Außenenden [' + this.outerExtension.toFixed(1) + 'mm, 0=aus]', 'info');
 
         // Noun-Verb: Genau eine offene Kontur vorausgewählt
         const selected = this.manager.getSelectedContours?.() || [];
@@ -749,7 +759,7 @@ class OverlapBreakTool extends BaseTool {
         // splitAndOverlap aufrufen
         const parts = GeometryOps.splitAndOverlap(
             target.points, target.isClosed, hit.segmentIndex, hit.point,
-            this.overlapLength, extendA
+            this.overlapLength, extendA, this.outerExtension
         );
 
         if (!parts || parts.length === 0) {
@@ -814,7 +824,7 @@ class OverlapBreakTool extends BaseTool {
         );
 
         app.undoManager?.execute(cmd);
-        const sideInfo = 'kurze Seite verlängert';
+        const sideInfo = 'kurze Seite verlängert' + (this.outerExtension > 0 && !target.isClosed ? `, Außenenden +${this.outerExtension.toFixed(1)}mm` : '');
         const closedInfo = target.isClosed ? ' (geschlossen → offen + Überlappung)' : '';
         this.cmd?.log(`✔ Overlap Break: ${sideInfo}, ${this.overlapLength.toFixed(1)}mm${closedInfo} (Strg+Z = Rückgängig)`, 'success');
 
@@ -839,7 +849,7 @@ class OverlapBreakTool extends BaseTool {
                 // Vorschau für Teil-A-Verlängerung (Standard)
                 const preview = GeometryOps.getOverlapPreview(
                     this.targetContour.points, this.targetContour.isClosed,
-                    hit.segmentIndex, hit.point, this.overlapLength, null
+                    hit.segmentIndex, hit.point, this.overlapLength, null, this.outerExtension
                 );
                 this.manager.rubberBand = {
                     type: 'overlapBreak',
@@ -859,7 +869,7 @@ class OverlapBreakTool extends BaseTool {
             const preview = GeometryOps.getOverlapPreview(
                 this.targetContour.points, this.targetContour.isClosed,
                 this.splitHit.segmentIndex, this.splitHit.point,
-                this.overlapLength, extendA
+                this.overlapLength, extendA, this.outerExtension
             );
             this.manager.rubberBand = {
                 type: 'overlapBreak',
@@ -875,6 +885,15 @@ class OverlapBreakTool extends BaseTool {
 
     /** Zahlen-Eingabe ändert die Überlappungslänge */
     handleRawInput(value) {
+        const m = /^\s*a\s*(\d+(?:[.,]\d+)?)\s*$/i.exec(String(value));
+        if (m) {
+            const v = parseFloat(m[1].replace(',', '.'));
+            if (v <= 500) {
+                this.outerExtension = v;
+                this.cmd?.log(`Verlängerung Außenenden: ${v.toFixed(1)} mm${v === 0 ? ' (aus)' : ''}`, 'info');
+                return true;
+            }
+        }
         const num = parseFloat(value);
         if (!isNaN(num) && num > 0 && num <= 500) {
             this.overlapLength = num;
@@ -1233,6 +1252,15 @@ class HatchTool extends BaseTool {
 
     /** Zahlen-Eingabe ändert Spacing (für Lines/Cross/Dots) */
     handleRawInput(value) {
+        const m = /^\s*a\s*(\d+(?:[.,]\d+)?)\s*$/i.exec(String(value));
+        if (m) {
+            const v = parseFloat(m[1].replace(',', '.'));
+            if (v <= 500) {
+                this.outerExtension = v;
+                this.cmd?.log(`Verlängerung Außenenden: ${v.toFixed(1)} mm${v === 0 ? ' (aus)' : ''}`, 'info');
+                return true;
+            }
+        }
         const num = parseFloat(value);
         if (!isNaN(num) && num > 0 && num <= 50) {
             this.spacing = num;

@@ -1,6 +1,7 @@
 /**
- * CeraCUT GeometryOps V2.7 — Geometry Operations Engine
+ * CeraCUT GeometryOps V2.8 — Geometry Operations Engine
  * Foundation für Tier 3+5 CAD Tools
+ * V2.8: splitAndOverlap/getOverlapPreview: outerExtension (Standard 5 mm) verlängert die aussenliegenden Enden
  *
  * V2.6: chamferPolyline() hinzugefügt (Pendant zu filletPolyline, für RectangleTool
  *       Chamfer-Option). Fix: filletPolyline()/chamferPolyline() verarbeiteten bei
@@ -783,9 +784,10 @@ const GeometryOps = {
      * @param {Object} splitPoint — {x, y} Punkt auf dem Segment
      * @param {number} overlapLength — Verlängerung in mm (Standard: 5)
      * @param {boolean} extendA — true=Teil A verlängern, false=Teil B
+     * @param {number} outerExtension — Verlängerung der aussenliegenden freien Enden in mm (Standard: 5, 0=aus; nur offene Kontur)
      * @returns {Array} Array von Punkt-Arrays (1 oder 2 Teile, eines mit Überlappung)
      */
-    splitAndOverlap(points, isClosed, segmentIndex, splitPoint, overlapLength = 5.0, extendA = null) {
+    splitAndOverlap(points, isClosed, segmentIndex, splitPoint, overlapLength = 5.0, extendA = null, outerExtension = 5.0) {
         if (!points || points.length < 2) return [points];
 
         const parts = this.splitContourAtPoint(points, isClosed, segmentIndex, splitPoint);
@@ -807,6 +809,11 @@ const GeometryOps = {
         if (extendA === null || extendA === undefined) extendA = this._shortSideIsA(parts);
         result[1] = result[1].slice().reverse();
         result[extendA ? 0 : 1] = this._extendEndTangential(result[extendA ? 0 : 1], 'end', overlapLength);
+        // Aussenliegende Enden (Start beider Teile = freie Enden der Originalkontur) tangential verlängern
+        if (outerExtension > 0) {
+            result[0] = this._extendEndTangential(result[0], 'start', outerExtension);
+            result[1] = this._extendEndTangential(result[1], 'start', outerExtension);
+        }
         return result;
     },
 
@@ -847,7 +854,7 @@ const GeometryOps = {
      * Berechnet die Vorschau-Linie für die Überlappung (Ghost-Preview).
      * @returns {Object} { from: {x,y}, to: {x,y} } — Verlängerungslinie
      */
-    getOverlapPreview(points, isClosed, segmentIndex, splitPoint, overlapLength, extendA) {
+    getOverlapPreview(points, isClosed, segmentIndex, splitPoint, overlapLength, extendA, outerExtension = 0) {
         if (!points || points.length < 2) return null;
         const parts = this.splitContourAtPoint(points, isClosed, segmentIndex, splitPoint);
         if (!parts || parts.length === 0) return null;
@@ -876,7 +883,16 @@ const GeometryOps = {
         const len = Math.hypot(dx, dy);
         if (len < 1e-10) return null;
         const extPt = { x: seg2.x + (dx / len) * overlapLength, y: seg2.y + (dy / len) * overlapLength };
-        return { from: { x: seg2.x, y: seg2.y }, to: extPt };
+        const res = { from: { x: seg2.x, y: seg2.y }, to: extPt };
+        if (!isClosed && outerExtension > 0 && parts.length >= 2) {
+            res.outer = [parts[0], parts[1].slice().reverse()].map(pp => {
+                const a = pp[1], b = pp[0];
+                const l = Math.hypot(b.x - a.x, b.y - a.y);
+                if (l < 1e-10) return null;
+                return { from: { x: b.x, y: b.y }, to: { x: b.x + (b.x - a.x) / l * outerExtension, y: b.y + (b.y - a.y) / l * outerExtension } };
+            }).filter(Boolean);
+        }
+        return res;
     },
 
     // ════════════════════════════════════════════════════════════════
