@@ -12,7 +12,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-nestplan
+ * Build: 20261107-planopen
+ * V1.1: Feat — Plan öffnen (PlanOpenDialog, toDXF, loadPlanParts), „Im Editor öffnen" im Autonest-Dialog
  *
  * (c) Cerasell GmbH
  */
@@ -147,12 +148,35 @@ const NestingPlan = (() => {
         };
     }
 
+    /** Teil zur Instanz: exakte Revision (`partId@rev`) bevorzugt, sonst aktuelles Teil. */
+    function partFor(partsMap, inst) {
+        return partsMap[`${inst.partId}@${inst.revision}`] || partsMap[inst.partId];
+    }
+
     /** Alle Instanzen eines Blechs als Polylinien (für Vorschau/Simulation). */
     function sheetPolylines(plan, partsMap, sheetIndex = 0) {
         return plan.instances.filter(i => (i.sheetIndex || 0) === sheetIndex).flatMap(i => {
-            const part = partsMap[i.partId];
+            const part = partFor(partsMap, i);
             return part ? placePart(part, i.rot, i.tx, i.ty).map(c => ({ ...c, instId: i.instId, partId: i.partId })) : [];
         });
+    }
+
+    /**
+     * Blech eines Plans als DXF (R12, POLYLINE): Blechumriss auf Layer BLECH (wird als Referenz erkannt),
+     * Teile auf Layer 0. Wird wie eine geöffnete Datei in einen neuen Tab geladen.
+     */
+    function toDXF(plan, partsMap, sheetIndex = 0) {
+        const out = ['0', 'SECTION', '2', 'ENTITIES'];
+        const poly = (layer, pts) => {
+            out.push('0', 'POLYLINE', '8', layer, '66', '1', '70', '1');
+            for (const p of pts) out.push('0', 'VERTEX', '8', layer, '10', String(Math.round(p.x * 1e4) / 1e4), '20', String(Math.round(p.y * 1e4) / 1e4));
+            out.push('0', 'SEQEND', '8', layer);
+        };
+        const W = plan.sheet.width, L = plan.sheet.length;
+        poly('BLECH', [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: L }, { x: 0, y: L }]);
+        for (const c of sheetPolylines(plan, partsMap, sheetIndex)) if (c.closed) poly('0', c.points);
+        out.push('0', 'ENDSEC', '0', 'EOF');
+        return out.join('\n') + '\n';
     }
 
     function previewSvg(plan, partsMap, sheetIndex = 0) {
@@ -169,8 +193,30 @@ const NestingPlan = (() => {
              + `<g transform="translate(0 ${L}) scale(1 -1)"><rect x="0" y="0" width="${W}" height="${L}" fill="#fff" stroke="#888" stroke-width="${Math.max(W, L) / 400}"/>${paths}</g></svg>`;
     }
 
-    return { run, placePart, sheetPolylines, previewSvg, outerContour, ROTATIONS, PRIORITY };
+    return { run, placePart, partFor, sheetPolylines, toDXF, previewSvg, outerContour, ROTATIONS, PRIORITY };
 })();
+
+/** Alle Teile eines Plans in exakter Revision laden → Map `partId@rev`. */
+async function loadPlanParts(plan) {
+    const map = {}, warn = [];
+    const keys = [...new Set(plan.instances.map(i => `${i.partId}@${i.revision}`))];
+    await Promise.all(keys.map(async k => {
+        const [id, rev] = k.split('@');
+        try { map[k] = await PartLibrary.get(id, Number(rev)); }
+        catch (e) { warn.push(`${id} (Rev. ${rev}): ${e.message}`); }
+    }));
+    return { map, warn };
+}
+
+/** Sheet eines Plans in neuem Tab öffnen (wie eine geladene DXF-Datei). */
+function openPlanSheet(app, plan, partsMap, sheetIndex = 0) {
+    const dxf = NestingPlan.toDXF(plan, partsMap, sheetIndex);
+    const sheets = plan.stats?.sheets || 1;
+    const name = `${plan.planId || 'PLAN'}${sheets > 1 ? '_B' + (sheetIndex + 1) : ''}.dxf`;
+    if (!app?.loadDXFContent) throw new Error('App nicht bereit');
+    app.loadDXFContent(name, dxf, (dxf.length / 1024).toFixed(1));
+    return name;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // Dialog
@@ -225,6 +271,7 @@ class AutoNestDialog {
                 <div id="an-stats" style="font-size:11px;color:#444"></div>
             </div>
             <div class="cldcl-row" style="padding:8px 12px;border-top:1px solid #ccc;justify-content:flex-end">
+                <button data-act="edit" title="Aktuelles Blech ungespeichert im Editor öffnen">Im Editor öffnen</button>
                 <input id="an-name" type="text" placeholder="Planname" style="width:180px;text-transform:uppercase">
                 <button data-act="save">Plan speichern</button>
                 <button data-act="close">Schließen</button>
@@ -237,7 +284,7 @@ class AutoNestDialog {
             const act = e.target.closest('[data-act]')?.dataset.act;
             if (!act) return;
             const i = e.target.closest('[data-i]')?.dataset.i;
-            ({ close: () => this.close(), search: () => this._search(), run: () => this._run(), save: () => this._save(),
+            ({ close: () => this.close(), search: () => this._search(), run: () => this._run(), save: () => this._save(), edit: () => this._openInEditor(),
                add: () => this._addPart(e.target.closest('[data-pid]').dataset.pid),
                del: () => { this.rows.splice(Number(i), 1); this._renderRows(); } }[act] || (() => {}))();
         });
@@ -322,6 +369,15 @@ class AutoNestDialog {
         this.overlay.querySelector('#an-preview').innerHTML = this.result ? NestingPlan.previewSvg(this.result.plan, this.partsMap, this.sheetIndex) : '';
     }
 
+    _openInEditor() {
+        if (!this.result) return this._toast('Bitte zuerst Nesting starten', 'warning');
+        try {
+            const name = this.overlay.querySelector('#an-name').value.trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '_') || 'NESTING';
+            openPlanSheet(this.app, { ...this.result.plan, planId: name }, this.partsMap, this.sheetIndex);
+            this.close();
+        } catch (e) { this._toast(`Öffnen fehlgeschlagen: ${e.message}`, 'error'); }
+    }
+
     async _save() {
         if (!this.result) return this._toast('Bitte zuerst Nesting starten', 'warning');
         const name = this.overlay.querySelector('#an-name').value.trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '_');
@@ -336,8 +392,78 @@ class AutoNestDialog {
     }
 }
 
+class PlanOpenDialog {
+    constructor(app) { this.app = app; this.overlay = null; this.items = []; }
+
+    _esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    _toast(m, t = 'info') { this.app?.showToast?.(m, t); }
+
+    async open() {
+        if (this.overlay) return;
+        const ov = document.createElement('div');
+        ov.className = 'modal-overlay plan-open-overlay';
+        ov.innerHTML = `
+        <div class="cldcl-dialog-box" style="min-width:720px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+            <div class="cldcl-header"><span>Plan öffnen</span><button class="cldcl-close" data-act="close">×</button></div>
+            <div class="cldcl-body" style="overflow:auto">
+                <div class="cldcl-row"><input id="po-q" type="text" placeholder="Suchen (Planname, Kommentar)" style="flex:1"><button data-act="search">Suchen</button></div>
+                <table style="width:100%;border-collapse:collapse;font-size:11px">
+                    <thead><tr style="background:#e8eef5;text-align:left"><th>Plan</th><th>Blech</th><th>Teile</th><th>Bleche</th><th>Auslastung</th><th>Geändert</th><th></th></tr></thead>
+                    <tbody id="po-rows"></tbody></table>
+                <div id="po-status" style="font-size:11px;color:#444"></div>
+            </div>
+        </div>`;
+        document.body.appendChild(ov);
+        this.overlay = ov;
+        ov.addEventListener('click', e => {
+            if (e.target === ov) return this.close();
+            const act = e.target.closest('[data-act]')?.dataset.act; if (!act) return;
+            if (act === 'close') this.close();
+            if (act === 'search') this._search();
+            if (act === 'open') this._open(e.target.closest('tr').dataset.id, Number(e.target.closest('tr').querySelector('select')?.value || 0));
+        });
+        ov.querySelector('#po-q').addEventListener('keydown', e => { if (e.key === 'Enter') this._search(); });
+        this._search();
+    }
+
+    close() { this.overlay?.remove(); this.overlay = null; }
+
+    async _search() {
+        try {
+            const q = this.overlay.querySelector('#po-q').value.trim();
+            const r = await fetch(`/api/plans?limit=200${q ? '&q=' + encodeURIComponent(q) : ''}`, { credentials: 'same-origin' });
+            const d = await r.json(); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+            this.overlay.querySelector('#po-rows').innerHTML = d.items.length ? d.items.map(p => {
+                const n = p.stats?.sheets || 1;
+                return `<tr data-id="${this._esc(p.planId)}" style="border-top:1px solid #ddd"><td>${this._esc(p.planId)}</td>
+                    <td>${p.sheet ? p.sheet.width + '×' + p.sheet.length : ''}</td><td>${p.stats?.nested ?? p.instanceCount}</td><td>${n}</td>
+                    <td>${p.stats?.utilization ?? ''}%</td><td>${this._esc((p.updatedAt || '').slice(0, 16).replace('T', ' '))}</td>
+                    <td>${n > 1 ? `<select>${Array.from({ length: n }, (_, i) => `<option value="${i}">Blech ${i + 1}</option>`).join('')}</select> ` : ''}<button data-act="open">Öffnen</button></td></tr>`;
+            }).join('') : '<tr><td colspan="7" style="padding:8px;color:#888">Keine Pläne gefunden</td></tr>';
+        } catch (e) { this._toast(`Planliste nicht ladbar: ${e.message}`, 'error'); }
+    }
+
+    async _open(planId, sheetIndex) {
+        const st = this.overlay.querySelector('#po-status');
+        st.textContent = 'Lade Plan …';
+        try {
+            const r = await fetch(`/api/plans/${encodeURIComponent(planId)}`, { credentials: 'same-origin' });
+            const plan = await r.json(); if (!r.ok) throw new Error(plan.error || `HTTP ${r.status}`);
+            const { map, warn } = await loadPlanParts(plan);
+            if (warn.length) this._toast(`Teile fehlen, Plan unvollständig: ${warn.join('; ')}`, 'warning');
+            openPlanSheet(this.app, plan, map, sheetIndex);
+            this.close();
+        } catch (e) { st.textContent = ''; this._toast(`Plan öffnen fehlgeschlagen: ${e.message}`, 'error'); }
+    }
+}
+
 if (typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', () => {
+        let po = null;
+        document.getElementById('btn-plan-open')?.addEventListener('click', () => {
+            if (!po || !po.overlay) po = new PlanOpenDialog(window.app);
+            po.open();
+        });
         let dlg = null;
         document.getElementById('btn-autonest')?.addEventListener('click', () => {
             if (!dlg || !dlg.overlay) dlg = new AutoNestDialog(window.app);
@@ -347,5 +473,5 @@ if (typeof document !== 'undefined') {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { NestingPlan, AutoNestDialog };
+    module.exports = { NestingPlan, AutoNestDialog, PlanOpenDialog };
 }

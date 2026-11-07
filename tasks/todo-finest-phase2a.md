@@ -14,8 +14,11 @@
 - [x] `nesting-plan.js` V1.0: `NestingPlan.run` (Bedarf → Plan), `placePart`, Vorschau-SVG; Dialog „Automatisches Nesting“ (Nesting-Tab → Autonest)
 - [x] Plan speichern über `POST /api/plans` (Instanzen mit `sheetIndex`, Stats je Teil)
 
+- [x] Plan öffnen (V1.1): Button „Plan öffnen" im Tab Nesting → Planliste → Blech als DXF (Layer BLECH = Referenz, Teile auf Layer 0) in neuem Tab; exakte Teile-Revision über `?rev=`; „Im Editor öffnen" direkt aus dem Autonest-Dialog
+
 ## Offen
-- [ ] Plan laden/öffnen (Liste, in Editor/Canvas als eigener Tab) — Voraussetzung für Simulation/NC je Plan
+- [ ] Geöffneter Plan ist ein normaler DXF-Tab: Änderungen am Plan (Verschieben im Tab) werden nicht in den Plan zurückgeschrieben; Teile-Update (In-Place-Edit, Phase 4) braucht echte Instanzbindung
+- [ ] Beim Öffnen gehen Löcher/Stückzahl-Zuordnung (Teilename je Kontur) nicht in den Tab ein — Konturnamen sind generisch
 - [ ] Spiegeln erlauben (Engine kennt es nicht), `innerPlacement` (True-Shape) → Phase 2c
 - [ ] Autonest im Web-Worker (UI friert bei sehr großen Mengen kurz ein)
 - [ ] Plan-Speichern-Dialog laut FINest (Fälligkeit, Kommentar, Menge, NC-Flag)

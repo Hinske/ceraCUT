@@ -68,3 +68,17 @@ test('Fehlerfälle: kein Teil, Blech 0, gemischtes Material', () => {
     assert.strictEqual(r.plan.materialId, null);
     assert.match(NestingPlan.previewSvg(r.plan, parts), /<svg/);
 });
+
+test('toDXF: Parser-Round-Trip (Blechumriss + Teile + Löcher)', () => {
+    const P = require('../js/dxf-parser.js'); const D = P.DXFParser || P;
+    const parts = { A: rectPart('A', 100, 60) };
+    const { plan } = quiet(() => NestingPlan.run([{ partId: 'A', qty: 4 }], parts, cfg));
+    const dxf = NestingPlan.toDXF(plan, { 'A@1': parts.A }, 0);
+    const res = quiet(() => D.parse(dxf, { chainingTolerance: 0.1 }));
+    assert.ok(res.success);
+    assert.strictEqual(res.contours.length, 1 + 4 * 2);                    // Blech + 4 × (Außen + Loch)
+    const sheet = res.contours.find(c => c.layer === 'BLECH');
+    assert.ok(sheet && sheet.isClosed);
+    const b = bb(sheet.points);
+    assert.deepStrictEqual([b.maxX - b.minX, b.maxY - b.minY], [1000, 500]);
+});

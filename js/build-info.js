@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '5b747f6',
+        hash: 'e395f15',
         date: '2026-11-07',
-        message: 'feat: Autonest aus Teilebibliothek (nesting-plan V1.0, nesting V1.3), Blech vore'
+        message: 'feat: Plan oeffnen (neuer Tab als DXF) + Im Editor oeffnen (nesting-plan V1.1)'
     },
 
     modules: {
@@ -75,7 +75,7 @@ const CERACUT_BUILD = {
         'data-api':           { version: '1.0', build: '20261107-dataapi' },
         'seed':               { version: '1.0', build: '20261107-seed' },
         'part-library':       { version: '1.0', build: '20261107-partimport' },
-        'nesting-plan':       { version: '1.0', build: '20261107-nestplan' }
+        'nesting-plan':       { version: '1.1', build: '20261107-planopen' }
     },
 
     changes: [
