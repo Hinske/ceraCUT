@@ -1,5 +1,6 @@
 /**
  * CeraCUT V3.52 - Canvas Renderer
+ * V3.67: Feat — Fliesenumrisse (automatische Referenz) werden im Tab CAD als normale Linie in Layerfarbe gezeichnet, nicht als gestrichelte Referenz; Referenz-Optik erst in CAM-Tabs.
  * V3.66: Feat — Richtungspfeile klein und rot, max. 4 je Kontur; rote Kerf-Bahn-Dreiecke entfernt (doppelt).
  * V3.64: Fix — Schnittfugenband auch bei offenen Konturen (mittig auf dem Pfad, Breite = Kerf).
  * V3.65: Fix — Fugenband offener Konturen bei Kerf-Seite Links/Rechts neben der Kontur (G41/G42), sonst mittig.
@@ -1149,6 +1150,15 @@ class CanvasRenderer {
                 this.drawPath(ctx, points, color, baseWidth * 0.7);
                 ctx.setLineDash([]);
             }
+            return;
+        }
+
+        // V3.67: Fliesenumrisse (Layer Fliese/Fliesen) sind intern automatisch Referenz (Pipeline). Im Tab "CAD" nicht als
+        // Referenz (gestrichelt grau) zeigen, sondern als normale duenne Linie in Layerfarbe — Referenz-Optik erst in den CAM-Tabs.
+        if (contour.isReference && contour.isClosed && !isHovered && !isSelected && typeof CeraCutPipeline !== 'undefined'
+            && CeraCutPipeline.isTileOutline(contour) && this.app?.isGeometryEditAllowed?.()) {
+            const lc = this.app?.layerManager?.getLayer?.(contour.layer)?.color || '#9ab';
+            this.drawPath(ctx, points.length > 2 ? [...points, points[0]] : points, lc, baseWidth * 0.7);
             return;
         }
 

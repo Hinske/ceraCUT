@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.39',
-    build: '20261107-dusch11',
+    version: '7.40',
+    build: '20261107-tileref2',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '4473989',
+        hash: '4101b6e',
         date: '2026-11-07',
-        message: 'feat: Duschboard-PDF - Varianten nach Rasterlage statt Verlegemuster'
+        message: 'feat: Fliesenumrisse im CAD-Tab als normale Linie, Referenz-Optik erst in CAM'
     },
 
     modules: {
@@ -25,7 +25,7 @@ const CERACUT_BUILD = {
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.12', build: '20261106-tileref' },
         'cam-contour':        { version: '5.31', build: '20261107-occorner' },
-        'canvas-renderer':    { version: '3.66', build: '20261107-dirarrows' },
+        'canvas-renderer':    { version: '3.67', build: '20261107-tileref2' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.9', build: '20261106-tileref' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },

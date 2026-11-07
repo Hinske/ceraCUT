@@ -1833,7 +1833,7 @@
 <!-- Scripts -->
 <!-- DebugMonitor: MUSS als ERSTES geladen werden — fängt alle Fehler ab -->
 <script src="js/debug-monitor.js?v=20261107-wildcard"></script>
-<script src="js/build-info.js?v=20261107-dusch11"></script>
+<script src="js/build-info.js?v=20261107-tileref2"></script>
 <script src="js/constants.js?v=20261107-tips"></script>
 <script src="js/geometry.js?v=20261104-reviewfix"></script>
 <script src="js/arc-fitting.js?v=20261105-meander"></script>
@@ -1843,7 +1843,7 @@
 <script src="js/lead-profiles.js?v=20261106-arcangle"></script>
 <script src="js/cerajet-engine.js?v=20261104-reviewfix"></script>
 <script src="js/ceracut-pipeline.js?v=20261106-tileref"></script>
-<script src="js/canvas-renderer.js?v=20261107-dirarrows"></script>
+<script src="js/canvas-renderer.js?v=20261107-tileref2"></script>
 <script src="js/undo-manager.js?v=20261104-reviewfix"></script>
 <script src="js/sinumerik-postprocessor.js?v=20261106-tileref"></script>
 <script src="js/command-line.js?v=20261104-reviewfix"></script>
@@ -1937,6 +1937,7 @@
             if (step && window.app && window.app.currentStep !== step) {
                 window.app.goToStep(step);
             }
+            window.app?.renderer?.render?.();   // Referenz-Optik der Fliesenumrisse haengt vom Tab ab (CAD = normal, CAM = Referenz)
         });
     });
     
