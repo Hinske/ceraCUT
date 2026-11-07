@@ -8,24 +8,24 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.41',
-    build: '20261107-dusch12',
+    version: '7.42',
+    build: '20261107-tileref3',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'fb513a6',
+        hash: '70e9402',
         date: '2026-11-07',
-        message: 'feat: Duschboard-DXF - nur echte Schnittkanten als Ketten, Overlap Break in der Mitte'
+        message: 'fix: Fliesenumriss im CAD-Tab nicht als Referenz gesperrt, in CAM wieder Referenz'
     },
 
     modules: {
         'dxf-parser':         { version: '3.20', build: '20261106-fliese4' },
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
-        'pipeline':           { version: '3.12', build: '20261106-tileref' },
+        'pipeline':           { version: '3.13', build: '20261107-tileref3' },
         'cam-contour':        { version: '5.31', build: '20261107-occorner' },
-        'canvas-renderer':    { version: '3.67', build: '20261107-tileref2' },
+        'canvas-renderer':    { version: '3.68', build: '20261107-tileref3' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.9', build: '20261106-tileref' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },

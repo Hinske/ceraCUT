@@ -1,5 +1,6 @@
 /**
  * CeraCUT V3.12 - Processing Pipeline
+ * V3.13: Feat — releaseTileRefs()/restoreTileRefs(): automatische Fliesen-Referenz im Tab CAD aufheben (Fliesenumriss bearbeitbar/verschiebbar), in CAM wiederherstellen
  * V3.12: Feat — Jede geschlossene Kontur auf Layer Fliese/Fliesen ist Referenz (isTileOutline): nie geschnitten, in der Topologie transparent
  * Last Modified: 2026-11-06
  * Build: 20261106-tileref
@@ -40,6 +41,24 @@ const CeraCutPipeline = {
     isTileOutline(c) {
         return !!c && !!c.isClosed && ['fliese', 'fliesen'].includes(String(c.layer || '').trim().toLowerCase());
     },
+    /**
+     * V3.13: Fliesenumrisse sind nur fuer CAM Referenz. Im Tab CAD sollen sie normale, bearbeitbare Konturen sein (auswaehlen, verschieben, ...) —
+     * die Referenz-Sperre blockiert dort das Editieren. releaseTileRefs() hebt die AUTOMATISCH gesetzte Referenz-Markierung im CAD auf,
+     * restoreTileRefs() setzt sie beim Wechsel in einen CAM-/anderen Tab wieder (Nullpunkt/Export arbeiten mit den Fliesen als Referenz).
+     * Manuell gesetzte Referenzen (kein _autoTileRef) bleiben unberuehrt.
+     * @returns {number} Anzahl geaenderter Konturen
+     */
+    releaseTileRefs(contours) {
+        let n = 0;
+        for (const c of contours || []) if (c._autoTileRef && c.isReference && this.isTileOutline(c)) { c.isReference = false; n++; }
+        return n;
+    },
+    restoreTileRefs(contours) {
+        let n = 0;
+        for (const c of contours || []) if (c._autoTileRef && !c.isReference && this.isTileOutline(c)) { c.isReference = true; n++; }
+        return n;
+    },
+
     kerfWidth: 1.0,
     healingStats: null,
 
@@ -287,7 +306,7 @@ const CeraCutPipeline = {
         if (!honorRefFlags) sorted.forEach(c => { c.isReference = false; });
         // V3.12: alle Fliesenumrisse sind Referenz (transparent in der Topologie, nicht geschnitten)
         let hasTiles = false;
-        sorted.forEach(c => { if (this.isTileOutline(c)) { c.isReference = true; hasTiles = true; } });
+        sorted.forEach(c => { if (this.isTileOutline(c)) { c.isReference = true; c._autoTileRef = true; hasTiles = true; } });
 
         for (let i = 0; i < sorted.length; i++) {
             const contour = sorted[i];

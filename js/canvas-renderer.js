@@ -1,5 +1,6 @@
 /**
  * CeraCUT V3.52 - Canvas Renderer
+ * V3.68: Feat — Fliesenumrisse sind im Tab CAD nicht mehr als Referenz gesperrt (render() ruft CeraCutPipeline.releaseTileRefs), bleiben duenne Linie in Layerfarbe.
  * V3.67: Feat — Fliesenumrisse (automatische Referenz) werden im Tab CAD als normale Linie in Layerfarbe gezeichnet, nicht als gestrichelte Referenz; Referenz-Optik erst in CAM-Tabs.
  * V3.66: Feat — Richtungspfeile klein und rot, max. 4 je Kontur; rote Kerf-Bahn-Dreiecke entfernt (doppelt).
  * V3.64: Fix — Schnittfugenband auch bei offenen Konturen (mittig auf dem Pfad, Breite = Kerf).
@@ -871,6 +872,8 @@ class CanvasRenderer {
     }
 
     render() {
+        // V3.68: Fliesenumrisse im Tab CAD nicht als Referenz sperren (bearbeitbar); Wiederherstellung beim Tab-Wechsel (index.html)
+        if (typeof CeraCutPipeline !== 'undefined' && this.contours?.length && this.app?.isGeometryEditAllowed?.()) CeraCutPipeline.releaseTileRefs(this.contours);
         const ctx = this.ctx;
         const dpr = this._dpr || 1;
         this._leadWarnAreas = [];   // V3.62: Trefferflaechen der Warnsymbole (Hover-Hinweis)
@@ -1155,7 +1158,7 @@ class CanvasRenderer {
 
         // V3.67: Fliesenumrisse (Layer Fliese/Fliesen) sind intern automatisch Referenz (Pipeline). Im Tab "CAD" nicht als
         // Referenz (gestrichelt grau) zeigen, sondern als normale duenne Linie in Layerfarbe — Referenz-Optik erst in den CAM-Tabs.
-        if (contour.isReference && contour.isClosed && !isHovered && !isSelected && typeof CeraCutPipeline !== 'undefined'
+        if (contour.isClosed && !isHovered && !isSelected && typeof CeraCutPipeline !== 'undefined'
             && CeraCutPipeline.isTileOutline(contour) && this.app?.isGeometryEditAllowed?.()) {
             const lc = this.app?.layerManager?.getLayer?.(contour.layer)?.color || '#9ab';
             this.drawPath(ctx, points.length > 2 ? [...points, points[0]] : points, lc, baseWidth * 0.7);
