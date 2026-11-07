@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '75c9995',
+        hash: 'b0d2c56',
         date: '2026-11-07',
-        message: 'feat: NC erstellen — NC-Editor mit Pruefung, Werkstattbericht (nc-tools V1.0)'
+        message: 'Fix: Kerf-Aenderung wirkt auch auf offene Konturen, Fugenband offen (V7.18)'
     },
 
     modules: {
