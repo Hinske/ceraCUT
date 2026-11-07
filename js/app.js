@@ -14,6 +14,7 @@
  * V6.60: Feat — Schnittreihenfolge manuell: Schnitte anklicken, Auswahl Anfang/↑/↓/Ende/Position N (je Fliese, Undo); alte Schnittliste war seit V5.7 nicht mehr im HTML
  * V6.59: Feat — Fliesen-Reihenfolge im Tab Reihenfolge: Presets (Zeile/Spalte/Schlangenlinie/Nachbar, Startecke, umkehren), Anklick-Modus, Drag&Drop, Sperre bei manueller Reihenfolge; Button "Fliesen erkennen" entfällt (Erkennung automatisch)
  * V6.58: Fix — Fliesen nach Auto-Referenz neu zuordnen, Nullpunkt-Gedaechtnis, Rechteck-Erkennung tolerant (verkettete Linien)
+ * V6.73: Fix — Ribbon-Tooltips per JS (CSS-Tooltip wurde im Ribbon abgeschnitten, z.B. Analyze)
  * V6.72: Feat — Tooltips auch fuer Flyout-Eintraege (data-fly-tool, Position rechts)
  * V6.57: Feat — Konturgeometrie nur im Tab CAD änderbar (isGeometryEditAllowed: Tools, Grips, Löschen); Schnittliste hält Fliesengruppen
  * V6.56: Fix — Fliesen-Zuordnung bleibt nach Konturaenderungen aktuell (_ensureTilesFresh, Signatur), vorher veraltete Indizes
@@ -7627,6 +7628,38 @@ document.addEventListener('DOMContentLoaded', () => {
             measureBtn.removeAttribute('title');
         }
     }
+
+    // V6.73: Ribbon-Tooltips per JS (fixed, an <body>): das CSS-::after wurde vom Ribbon-Panel (overflow hidden) abgeschnitten
+    (function initRibbonTips() {
+        const tip = document.createElement('div');
+        tip.id = 'ribbon-tip';
+        tip.style.cssText = 'position:fixed;display:none;z-index:200000;max-width:300px;white-space:pre-line;pointer-events:none;' +
+            'background:var(--tooltip-bg,#1e1e1e);color:var(--tooltip-text,#eee);border:1px solid var(--tooltip-border,#555);' +
+            'border-radius:4px;padding:6px 10px;font-size:12px;line-height:1.4;box-shadow:0 3px 8px rgba(0,0,0,.4)';
+        document.body.appendChild(tip);
+        let timer = null, cur = null;
+        const hide = () => { clearTimeout(timer); timer = null; cur = null; tip.style.display = 'none'; };
+        document.addEventListener('mouseover', (e) => {
+            const el = e.target.closest ? e.target.closest('.ribbon-panel [data-tip]') : null;
+            if (el === cur) return;
+            hide();
+            if (!el) return;
+            cur = el;
+            timer = setTimeout(() => {
+                tip.textContent = el.getAttribute('data-tip');
+                tip.style.display = 'block';
+                const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+                let x, y;
+                if (el.getAttribute('data-tip-pos') === 'right') { x = r.right + 8; y = r.top + r.height / 2 - h / 2; }
+                else { x = r.left + r.width / 2 - w / 2; y = r.bottom + 6; }
+                x = Math.max(4, Math.min(x, window.innerWidth - w - 4));
+                y = Math.max(4, Math.min(y, window.innerHeight - h - 4));
+                tip.style.left = x + 'px'; tip.style.top = y + 'px';
+            }, 400);
+        });
+        document.addEventListener('mousedown', hide);
+        document.addEventListener('mouseleave', hide);
+    })();
 
     window.app = new CeraCutApp();
 });

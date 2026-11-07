@@ -2507,6 +2507,9 @@ html, body {
     transition-delay: 0.4s;
 }
 
+/* Im Ribbon zeichnet app.js (initRibbonTips) den Tooltip — das ::after wuerde abgeschnitten */
+.ribbon-panel [data-tip]::after { display: none; }
+
 /* Tooltip rechts neben dem Element (Flyout-Eintraege) */
 [data-tip-pos="right"]::after {
     bottom: auto;

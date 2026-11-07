@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.27',
-    build: '20261107-anrun',
+    version: '7.28',
+    build: '20261107-ribtip',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'ebdbc80',
+        hash: '7073cf2',
         date: '2026-11-07',
-        message: 'fix: Analyze startet sofort ohne Auswahl und meldet Ergebnis (cam-tools V1.9)'
+        message: 'fix: Ribbon-Tooltips per JS, CSS-Tooltip wurde im Ribbon abgeschnitten (app V6.7'
     },
 
     modules: {
@@ -42,7 +42,7 @@ const CERACUT_BUILD = {
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.5', build: '20261106-arcangle' },
         'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
-        'app':                { version: '6.72', build: '20261107-tips' },
+        'app':                { version: '6.73', build: '20261107-ribtip' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.7', build: '20261107-leadmenu' },
