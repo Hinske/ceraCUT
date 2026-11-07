@@ -171,6 +171,7 @@ const TOOL_TOOLTIPS = {
     'VERB':  { label: 'Verband',            tip: 'Verlegemuster auf Wand: Laeufer 1/2, Drittel, Viertel, Gitter, diagonal; Randzuschnitte + Stueckliste', shortcut: 'VERB', group: 'cam' },
     'AUSS':  { label: 'Ausschnitte',        tip: 'Ausschnitte in Fliese: Steckdose, Rohr, Ecke, Randkerbe, eckiges Loch (mit Stegpruefung)', shortcut: 'AUSS', group: 'cam' },
     'MOSS':  { label: 'Zuschnitt Sockel',   tip: 'Sockel-Zuschnitt: Streifen ueber volle Fliesenseite, Raster Hoehe + 0,8 mm', shortcut: 'MOSS', group: 'cam' },
+    'DUSCH': { label: 'Duschboard', tip: 'Duschboard-Generator: Masse, Ablauf, Fugenbild mit Live-Vorschau und Bemassung -> Zuschnitt-Teile mit Gehrung', shortcut: 'DUSCH', group: 'cam' },
 };
 
 // V1.0: AutoCAD-Style Command-Echo (Unterstrich-Praefix in Command-Line, z.B. "_LINE")

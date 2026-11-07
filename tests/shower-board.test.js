@@ -76,3 +76,14 @@ test('DXF: geschlossene LWPOLYLINE je Teil auf Layer Fliesen', () => {
     assert.strictEqual((r.dxf.match(/LWPOLYLINE/g) || []).length, r.count);
     assert.ok(r.dxf.includes('Fliesen'));
 });
+
+test('Dialog: Vorschau-SVG und Stueckliste liefern Bemassung (Smoke)', () => {
+    const D = require('../js/shower-board-dialog.js');
+    const r = G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { x: 300, y: 300 } });
+    const svg = D._internals.previewSVG(r, true);
+    assert.ok(svg.startsWith('<svg') && svg.includes('Fliesenfeld 1300'));
+    assert.strictEqual((svg.match(/<polygon/g) || []).length, r.count);
+    const items = D._internals.numbered(r.pieces);
+    assert.deepStrictEqual(items.map(i => i.nr), items.map((_, i) => i + 1));
+    assert.ok(D._internals.resultHTML(r).includes(`${r.count} Teile`));
+});

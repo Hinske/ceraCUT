@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.29',
-    build: '20261107-dusch1',
+    version: '7.30',
+    build: '20261107-dusch2',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'bc6d769',
+        hash: 'ae34e0d',
         date: '2026-11-07',
-        message: 'feat: CNC-Import oeffnet neue Datei (eigener Tab); Server-Listing stat parallel'
+        message: 'feat: Duschboard-Dialog Phase 2b (Live-Vorschau mit Bemassung, Stueckliste, Befe'
     },
 
     modules: {
@@ -67,6 +67,7 @@ const CERACUT_BUILD = {
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
         'shower-board-generator': { version: '0.1', build: '20261107-dusch1' },
+        'shower-board-dialog': { version: '0.1', build: '20261107-dusch2' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },
