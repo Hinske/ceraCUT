@@ -8,8 +8,9 @@
  *   - Multi-Sheet Overflow
  *   - Rotationsoptimierung (0°, 90°, 180°, 270° oder benutzerdefiniert)
  *
- * Last Modified: 2026-11-04
- * Build: 20261104-reviewfix
+ * Last Modified: 2026-11-07
+ * Build: 20261107-nestplan
+ * V1.3: Feat — cfg.order ('large-first'|'small-first'|'input'), Kontur-Felder priority und rotationSteps (Override je Teil), Node-Export
  * V1.2: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * (c) Cerasell GmbH
@@ -18,9 +19,10 @@
 const NestingEngine = (() => {
     'use strict';
 
-    const VERSION = 'V1.0';
+    const VERSION = 'V1.3';
     const LOG_PREFIX = `[Nesting ${VERSION}]`;
     const EPSILON = 1e-8;
+    const MAX_GRID_CELLS = 6000;   // Obergrenze Raster-Kandidaten je Platzierungsversuch
 
     // ═══════════════════════════════════════════════════════════════════
     // Standardkonfiguration
@@ -394,8 +396,15 @@ const NestingEngine = (() => {
         // Raster-Auflösung für Kandidatenpositionen
         const partW = partBBox.maxX - partBBox.minX;
         const partH = partBBox.maxY - partBBox.minY;
-        const stepX = Math.max(0.5, Math.min(partW / 4, 5));
-        const stepY = Math.max(0.5, Math.min(partH / 4, 5));
+        let stepX = Math.max(0.5, Math.min(partW / 4, 5));
+        let stepY = Math.max(0.5, Math.min(partH / 4, 5));
+        // V1.3: Raster deckeln — bei großen Blechen (3000×1500, Schritt 5 mm = 180k Kandidaten je Teil)
+        // war das Nesting unbenutzbar langsam. Enge Packung kommt aus den Kandidaten neben platzierten Teilen.
+        const gridCells = ((bounds.maxX - bounds.minX) / stepX + 1) * ((bounds.maxY - bounds.minY) / stepY + 1);
+        if (gridCells > MAX_GRID_CELLS) {
+            const f = Math.sqrt(gridCells / MAX_GRID_CELLS);
+            stepX *= f; stepY *= f;
+        }
 
         // Kandidatenpositionen generieren
         const candidates = _generateCandidatePositions(
@@ -706,10 +715,13 @@ const NestingEngine = (() => {
         // Teile vorbereiten: normalisieren und Rotationsvarianten erzeugen
         const preparedParts = _prepareParts(contours, cfg);
 
-        // Nach Fläche sortieren (größte zuerst)
+        // Reihenfolge: Priorität (höher zuerst), dann nach cfg.order
+        //   'large-first' (Standard) | 'small-first' | 'input' (Eingabereihenfolge)
+        const orderDir = cfg.order === 'small-first' ? 1 : -1;
         const sortedIndices = preparedParts
-            .map((p, i) => ({ index: i, area: p.width * p.height }))
-            .sort((a, b) => b.area - a.area)
+            .map((p, i) => ({ index: i, area: p.width * p.height, priority: p.priority }))
+            .sort((a, b) => (b.priority - a.priority)
+                || (cfg.order === 'input' ? a.index - b.index : orderDir * (a.area - b.area)))
             .map(item => item.index);
 
         // Platzierung
@@ -722,7 +734,7 @@ const NestingEngine = (() => {
             let placed = false;
 
             // Rotationsvarianten durchprobieren
-            const rotationVariants = _getRotationVariants(part, cfg.rotationSteps);
+            const rotationVariants = _getRotationVariants(part, part.rotationSteps || cfg.rotationSteps);
 
             // Auf existierenden Blechen versuchen
             for (let si = 0; si < sheets.length && !placed; si++) {
@@ -882,7 +894,10 @@ const NestingEngine = (() => {
                 height: norm.height,
                 area: _polygonArea(norm.points),
                 isClosed: contour?.isClosed ?? true,
-                name: contour?.name || `Contour_${index}`
+                name: contour?.name || `Contour_${index}`,
+                priority: Number(contour?.priority) || 0,                       // V1.3: höher = zuerst
+                rotationSteps: Array.isArray(contour?.rotationSteps) && contour.rotationSteps.length
+                    ? contour.rotationSteps : null                                // V1.3: Override je Teil
             };
         });
     }
@@ -1139,3 +1154,7 @@ const NestingEngine = (() => {
         VERSION
     };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = NestingEngine;
+}

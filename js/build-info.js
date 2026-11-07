@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '2658092',
+        hash: '5b747f6',
         date: '2026-11-07',
-        message: 'feat: Teileimport-Dialog (Datei-Tab), Seed Materialien/Technologien, Nesting-Tab'
+        message: 'feat: Autonest aus Teilebibliothek (nesting-plan V1.0, nesting V1.3), Blech vore'
     },
 
     modules: {
@@ -47,7 +47,7 @@ const CERACUT_BUILD = {
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.7', build: '20261107-leadmenu' },
         'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
-        'nesting':            { version: '1.2', build: '20261104-reviewfix' },
+        'nesting':            { version: '1.3', build: '20261107-nestplan' },
         'toolpath-simulator': { version: '1.5', build: '20261106-leadseg' },
         'cost-calculator':    { version: '1.3', build: '20261104-reviewfix' },
         'machine-profiles':   { version: '1.2', build: '20261104-reviewfix' },
@@ -74,7 +74,8 @@ const CERACUT_BUILD = {
         'store':              { version: '1.0', build: '20261107-store' },
         'data-api':           { version: '1.0', build: '20261107-dataapi' },
         'seed':               { version: '1.0', build: '20261107-seed' },
-        'part-library':       { version: '1.0', build: '20261107-partimport' }
+        'part-library':       { version: '1.0', build: '20261107-partimport' },
+        'nesting-plan':       { version: '1.0', build: '20261107-nestplan' }
     },
 
     changes: [

@@ -237,7 +237,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Dimension Tool** | `dimension-tool.js` | **V2.4** | Bemaßung, Selektion, Grip-Editing, Text-Override, Einzeln-Löschen, Undo/Redo |
 | **Measure Tool** | `measure-tool.js` | — | Messmodus |
 | **Debug Monitor** | `debug-monitor.js` | **V1.2** | Error-Catcher, Fallen-Erkennung, Strg+Shift+D Overlay |
-| **Nesting** | `nesting.js` | **V1.2** | BLF-Algorithmus, Multi-Rotation, Multi-Sheet |
+| **Nesting** | `nesting.js` | **V1.3** | BLF-Algorithmus, Multi-Rotation, Multi-Sheet |
 | **Toolpath Simulator** | `toolpath-simulator.js` | **V1.5** | Pfad-Verifikation, Animation, Kollisionsmatrix |
 | **Cost Calculator** | `cost-calculator.js` | **V1.3** | Kosten-/Zeitkalkulation mit CeraJet-Integration |
 | **Machine Profiles** | `machine-profiles.js` | **V1.2** | Maschinenpark-Verwaltung, PP-Profile, localStorage |
@@ -250,6 +250,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Session-Store** | `lib/session-store.js` | **V1.0** | In-Memory Session-Map, Sliding Expiry |
 | **Auth-Helper** | `lib/auth.js` | **V1.0** | Cookie-Parsing, Session-Cookie-Helper, JSON-Body-Parsing |
 | **Part Library** | `part-library.js` | **V1.0** | Teileimport-Dialog (Ribbon Datei), PartGeometry (DXF-Konturen -> Teile-Datensatz), API-Client |
+| **Nesting Plan** | `nesting-plan.js` | **V1.0** | Autonest aus Teilebibliothek (Bedarf -> Plan), Dialog im Tab Nesting; Blech vorerst manuell, sheetId spaeter aus Blechbibliothek (tasks/todo-finest-phase2a.md) |
 | **Seed** | `lib/seed.js` | **V1.0** | Erststart-Befuellung materials/technologies aus CeraJetEngine (nie ueberschreibend) |
 | **Data-API** | `lib/data-api.js` | **V1.0** | REST: /api/parts,plans,sheets,orders,materials,technologies, /api/technology/resolve; If-Match, Filter, Admin-only fuer Preise/Technologie |
 | **Store** | `lib/store.js` | **V1.0** | JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftraege, Technologie): atomar, Versions-Sperre (If-Match), ID-Validierung |
@@ -322,7 +323,7 @@ ceraCUT/
 │   ├── dimension-tool.js             ← Bemassung
 │   ├── measure-tool.js               ← Messmodus
 │   ├── debug-monitor.js              ← Debug-Overlay (Strg+Shift+D)
-│   ├── nesting.js                    ← Nesting Engine V1.2
+│   ├── nesting.js                    ← Nesting Engine V1.3
 │   ├── toolpath-simulator.js         ← Toolpath Simulator V1.5
 │   ├── cost-calculator.js            ← Kalkulation V1.3
 │   ├── machine-profiles.js           ← Maschinenpark V1.2
@@ -549,7 +550,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   project-manager: V1.2 (20261104-pushexecuted)
   properties-panel: V1.7 (20261107-leadmenu)
   debug-monitor: V1.2 (20260630-consolelog)
-  nesting: V1.2 (20261104-reviewfix)
+  nesting: V1.3 (20261107-nestplan)
   toolpath-simulator: V1.5 (20261106-leadseg)
   cost-calculator: V1.3 (20261104-reviewfix)
   machine-profiles: V1.2 (20261104-reviewfix)

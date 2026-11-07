@@ -1167,6 +1167,17 @@
 
     <!-- ── Nesting Panel (eigener Tab, vorher im Export-Tab) ── -->
     <div class="ribbon-panel" data-ribbon="nesting" style="display:none">
+        <!-- ═══ Autonest aus Teilebibliothek (FINest-Integration, Phase 2a) ═══ -->
+        <div class="ribbon-group">
+            <div class="ribbon-group-content">
+                <div class="ribbon-btn-lg" id="btn-autonest" title="Automatisches Nesting: Teile aus der Bibliothek mit Menge, Priorität und Drehung auf ein Blech (Breite × Länge) schachteln und als Plan speichern">
+                    <div class="icon"><svg viewBox="0 0 32 32" fill="none"><rect x="2" y="2" width="28" height="28" stroke="#0078d4" stroke-width="1.5" fill="none"/><rect x="4" y="4" width="12" height="9" stroke="#0078d4" stroke-width="1" fill="rgba(0,120,212,0.15)"/><rect x="18" y="4" width="10" height="14" stroke="#0078d4" stroke-width="1" fill="rgba(0,120,212,0.15)"/><rect x="4" y="15" width="12" height="13" stroke="#0078d4" stroke-width="1" fill="rgba(0,120,212,0.15)"/><rect x="18" y="20" width="10" height="8" stroke="#0078d4" stroke-width="1" fill="rgba(0,120,212,0.15)"/></svg></div>
+                    <span class="label">Autonest</span>
+                </div>
+            </div>
+            <div class="ribbon-group-label">Plan</div>
+        </div>
+
         <!-- ═══ Nesting (V5.5) ═══ -->
         <div class="ribbon-group">
             <div class="ribbon-group-content">
@@ -1861,7 +1872,7 @@
 <script src="js/cnc-reader.js?v=20261104-reviewfix"></script>
 <script src="js/svg-parser.js?v=20261104-reviewfix"></script>
 <script src="js/properties-panel.js?v=20261107-leadmenu"></script>
-<script src="js/nesting.js?v=20261104-reviewfix"></script>
+<script src="js/nesting.js?v=20261107-nestplan"></script>
 <script src="js/toolpath-simulator.js?v=20261106-leadseg"></script>
 <script src="js/cost-calculator.js?v=20261104-reviewfix"></script>
 <script src="js/machine-profiles.js?v=20261104-reviewfix"></script>
@@ -1870,6 +1881,7 @@
 <script src="js/project-manager.js?v=20261104-pushexecuted"></script>
 <script src="js/dxf-browser.js?v=20261105-sort2"></script>
 <script src="js/part-library.js?v=20261107-partimport"></script>
+<script src="js/nesting-plan.js?v=20261107-nestplan"></script>
 <script src="js/app.js?v=20261107-leadmenu"></script>
 
 <!-- Hidden Image Input -->
