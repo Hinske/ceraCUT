@@ -104,3 +104,9 @@ FugenModell = { xLines: [x0, x1, ...],   // Fugenmitten in Board-Koordinaten
 Muster: Kreuzfuge, Verband (1/2, 1/3, 1/4, frei; Reihen- oder Spaltenversatz; Treppe oder wechselnd; gegenläufig; Startreihe), Wilder Verband (Seed), Fischgrät 90°, Korbgeflecht (ganzzahliges Seitenverhältnis), kein Raster. Dazu Ausrichtung horizontal/vertikal, Drehwinkel (45° = diagonal) und Anker (Ecken, Fliese mittig auf Ablauf, Fugenkreuz auf Ablauf, Kreuzfuge zusätzlich „ab Ablaufkante“).
 Modell: Fliese = Zelle − Fuge/2 an allen Seiten, Teil = Fliese ∩ Sektor (Gehrung). Nur die achsparallele Kreuzfuge hat editierbare Fugenlinien (2c); für Verbände/Fischgrät folgt Editieren auf Reihen-/Fliesenebene.
 Nicht umgesetzt: Römischer Verband (Mischformate), Fischgrät 45°-Gehrungs-Variante mit Eckfliese, Kreis-/Bogenmuster.
+
+## 11. Fugenbild bearbeiten (V0.3, Phase 2c)
+
+Modell `layout = { strips: 'rows'|'cols', lines[], sub[][], coupled }`: Reihen (bzw. Spalten) mit eigener Fugenliste je Reihe; Kreuzfuge ist `coupled` (Änderung gilt für alle Reihen), Verband/Zufall nicht (Fuge einer Reihe einzeln verschiebbar). Gilt für Kreuzfuge, Verband, Zufall ohne Drehung; Fischgrät/Korb/gedrehte Raster sind nur über Parameter einstellbar.
+Dialog: Modi Ansicht / Fuge ziehen (Snap 1 mm) / senkrecht setzen / waagerecht setzen / Fuge löschen; Fugenlisten numerisch editierbar; Undo/Redo (Strg+Z/Y); „Fugenbild zurücksetzen“. Ändert der User Muster, Fliese, Anker, Maße usw., wird das editierte Layout verworfen (Fuge, Randfuge, Warnschwelle, Ablaufmaße/-lage behalten es). Fugen lassen sich nicht über Nachbarfugen oder die Feldkante ziehen (Mindestabstand 1 mm).
+Kein Sperren/Teil-Neuberechnen: das editierte Layout gilt komplett bis zum Zurücksetzen.
