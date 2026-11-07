@@ -13,6 +13,7 @@
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
  * Build: 20261107-partedit
+ * V1.3: Feat — PartViewer (große Vorschau mit Zoom/Verschieben), PartGeometry.previewSvg; größere Vorschau in der Importtabelle
  * V1.2: Feat — „Vom Server…" (DXFBrowser.pickMany), PartGeometry.decodeDXF (UTF-8/ISO-8859-1 wie app.js)
  * V1.1: Feat — PartGeometry.toDXF / fromAppContours (Teil bearbeiten, part-editor.js)
  *
@@ -203,7 +204,27 @@ const PartGeometry = (() => {
             .replace(/\\U\+([0-9A-Fa-f]{4})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
     }
 
-    return { analyze, toRecord, toDXF, fromAppContours, decodeDXF, namesFromFile, newPartId, signedArea, pointInPolygon };
+    /**
+     * Große Vorschau aus der vollen Geometrie (nicht die verkleinerte Liste-Vorschau): y-Achse nach oben
+     * (Koordinaten (x, -y)), Konturstärke bleibt beim Zoomen konstant (non-scaling-stroke).
+     * @returns {{svgInner:string, box:{x:number,y:number,w:number,h:number}}}  box = Modell-Ausdehnung in SVG-Koordinaten
+     */
+    function previewSvg(geometry) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const c of geometry.contours) for (const p of c.points) {
+            if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0];
+            if (-p[1] < minY) minY = -p[1]; if (-p[1] > maxY) maxY = -p[1];
+        }
+        if (!Number.isFinite(minX)) return { svgInner: '', box: { x: 0, y: 0, w: 100, h: 100 } };
+        const style = { disc: 'fill="#0078d4" fill-opacity="0.12" stroke="#0b5cad"', hole: 'fill="#fafafa" stroke="#c0392b"', open: 'fill="none" stroke="#e8a020"' };
+        const paths = geometry.contours.map(c => {
+            const d = c.points.map((p, i) => `${i ? 'L' : 'M'}${r3(p[0])} ${r3(-p[1])}`).join('') + (c.closed ? 'Z' : '');
+            return `<path d="${d}" ${style[c.role] || style.open} stroke-width="1.3" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+        }).join('');
+        return { svgInner: paths, box: { x: minX, y: minY, w: Math.max(maxX - minX, 1e-6), h: Math.max(maxY - minY, 1e-6) } };
+    }
+
+    return { analyze, toRecord, toDXF, fromAppContours, decodeDXF, previewSvg, namesFromFile, newPartId, signedArea, pointInPolygon };
 })();
 
 // ═══════════════════════════════════════════════════════════════════
@@ -351,6 +372,14 @@ class PartImportDialog {
             await this._addFiles([...e.target.files]);
             e.target.value = '';
         });
+        ov.querySelector('#pi-table tbody').addEventListener('click', e => {
+            const v = e.target.closest('[data-view]'); if (!v) return;
+            const it = this.items[Number(v.dataset.view)];
+            if (it?.analysis?.geometry) PartViewer.open({ title: it.name, geometry: it.analysis.geometry, info: [
+                ['Datei', it.fileName], ['Größe', `${it.analysis.geometry.bbox.w} × ${it.analysis.geometry.bbox.l} mm`],
+                ['Konturen', it.analysis.geometry.contours.length], ['Anstiche', it.analysis.geometry.piercings],
+                ['Schnittlänge', `${it.analysis.geometry.cutLength} m`], ['Netto-Fläche', `${it.analysis.geometry.netArea} m²`]] });
+        });
         ov.querySelector('#pi-table tbody').addEventListener('input', e => {
             const tr = e.target.closest('tr'); if (!tr) return;
             const it = this.items[Number(tr.dataset.i)]; if (!it) return;
@@ -468,7 +497,7 @@ class PartImportDialog {
             return `<tr data-i="${i}" style="border-top:1px solid #ddd">
                 <td><input type="checkbox" ${it.checked ? 'checked' : ''}></td>
                 <td title="${tip}">${icon[it.status] || it.status}</td>
-                <td style="width:54px;height:40px">${g && it.analysis.thumbnailSvg ? `<div style="width:50px;height:36px">${it.analysis.thumbnailSvg.replace('<svg ', '<svg width="50" height="36" ')}</div>` : ''}</td>
+                <td style="width:92px">${g && it.analysis.thumbnailSvg ? `<div data-view="${i}" title="Klicken für große Vorschau mit Zoom" style="width:84px;height:62px;cursor:zoom-in;border:1px solid #ddd;background:#fff">${it.analysis.thumbnailSvg.replace('<svg ', '<svg width="84" height="62" ')}</div>` : ''}</td>
                 <td>${this._esc(it.fileName)}</td>
                 <td><input data-f="name" value="${this._esc(it.name)}" style="width:130px"></td>
                 <td><input data-f="orderId" value="${this._esc(it.orderId)}" style="width:150px"></td>
@@ -516,6 +545,126 @@ class PartImportDialog {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Große Vorschau mit Zoom (Teilebibliothek, Import-Tabelle)
+// ═══════════════════════════════════════════════════════════════════
+
+class PartViewer {
+    /** @param {{title:string, geometry:object, info?:Array<[string,string]>}} o */
+    static open(o) { const v = new PartViewer(o); v.show(); return v; }
+
+    constructor(o) { this.o = o; this.overlay = null; this.vb = null; this.fit = null; this.drag = null; }
+
+    _esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+    show() {
+        const { svgInner, box } = PartGeometry.previewSvg(this.o.geometry);
+        const pad = Math.max(box.w, box.h) * 0.05;
+        this.fit = { x: box.x - pad, y: box.y - pad, w: box.w + 2 * pad, h: box.h + 2 * pad };
+        this.vb = { ...this.fit };
+        const info = (this.o.info || []).map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:#666">${this._esc(k)}</span><b>${this._esc(v)}</b></div>`).join('');
+        const ov = document.createElement('div');
+        ov.className = 'modal-overlay part-viewer-overlay';
+        ov.style.zIndex = 9800;
+        ov.innerHTML = `
+        <div class="cldcl-dialog-box" style="width:min(1000px,96vw);max-width:96vw;height:84vh;display:flex;flex-direction:column">
+            <div class="cldcl-header"><span>${this._esc(this.o.title)}</span><button class="cldcl-close" data-act="close">×</button></div>
+            <div class="cldcl-row" style="padding:6px 12px;gap:6px">
+                <button data-act="zin" title="Vergrößern (+)">＋</button><button data-act="zout" title="Verkleinern (−)">－</button>
+                <button data-act="fit" title="Einpassen (0 / Doppelklick)">Einpassen</button>
+                <span id="pv-zoom" style="min-width:60px;font-size:11px;color:#555"></span>
+                <span style="margin-left:auto;font-size:11px;color:#888">Mausrad: Zoom · Ziehen: Verschieben · Doppelklick: Einpassen</span>
+            </div>
+            <div style="display:flex;flex:1;min-height:0">
+                <div id="pv-stage" style="flex:1;min-width:0;background:#fafafa;border-top:1px solid #ddd;position:relative;cursor:grab;touch-action:none;overflow:hidden">
+                    <svg id="pv-svg" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block" preserveAspectRatio="xMidYMid meet">${svgInner}</svg>
+                </div>
+                <div style="width:230px;border-left:1px solid #ddd;padding:10px;font-size:11px;display:flex;flex-direction:column;gap:5px;overflow:auto">
+                    ${info}
+                    <div style="margin-top:10px;color:#666">Legende</div>
+                    <div><span style="display:inline-block;width:12px;height:12px;border:2px solid #0b5cad;background:rgba(0,120,212,.12);vertical-align:middle"></span> Teil</div>
+                    <div><span style="display:inline-block;width:12px;height:12px;border:2px solid #c0392b;vertical-align:middle"></span> Loch / Ausschnitt</div>
+                    <div><span style="display:inline-block;width:12px;height:0;border-top:2px solid #e8a020;vertical-align:middle"></span> Offene Kontur</div>
+                </div>
+            </div>
+        </div>`;
+        document.body.appendChild(ov);
+        this.overlay = ov;
+        this._apply();
+        const stage = ov.querySelector('#pv-stage');
+        ov.addEventListener('click', e => {
+            if (e.target === ov) return this.close();
+            const act = e.target.closest('[data-act]')?.dataset.act;
+            if (act === 'close') this.close();
+            if (act === 'zin') this.zoomAt(1.4);
+            if (act === 'zout') this.zoomAt(1 / 1.4);
+            if (act === 'fit') this.reset();
+        });
+        ov.addEventListener('keydown', e => e.stopPropagation());
+        ov.addEventListener('keyup', e => e.stopPropagation());
+        this._key = e => {
+            if (!this.overlay) return;
+            if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
+            else if (e.key === '+' || e.key === '=') this.zoomAt(1.4);
+            else if (e.key === '-') this.zoomAt(1 / 1.4);
+            else if (e.key === '0') this.reset();
+        };
+        document.addEventListener('keydown', this._key, true);
+        stage.addEventListener('wheel', e => { e.preventDefault(); e.stopPropagation(); this.zoomAt(Math.pow(1.0018, -e.deltaY), e.clientX, e.clientY); }, { passive: false });
+        stage.addEventListener('dblclick', () => this.reset());
+        stage.addEventListener('pointerdown', e => {
+            this.drag = { x: e.clientX, y: e.clientY, vb: { ...this.vb } };
+            try { stage.setPointerCapture(e.pointerId); } catch { /* jsdom */ }
+            stage.style.cursor = 'grabbing';
+        });
+        stage.addEventListener('pointermove', e => {
+            if (!this.drag) return;
+            const s = this._scale(); if (!s) return;
+            this.vb.x = this.drag.vb.x - (e.clientX - this.drag.x) / s.k;
+            this.vb.y = this.drag.vb.y - (e.clientY - this.drag.y) / s.k;
+            this._apply();
+        });
+        const end = () => { this.drag = null; stage.style.cursor = 'grab'; };
+        stage.addEventListener('pointerup', end); stage.addEventListener('pointercancel', end);
+    }
+
+    close() {
+        document.removeEventListener('keydown', this._key, true);
+        this.overlay?.remove(); this.overlay = null;
+    }
+
+    reset() { this.vb = { ...this.fit }; this._apply(); }
+
+    /** Pixel pro Modelleinheit und Versatz des zentrierten Ausschnitts (preserveAspectRatio=meet). */
+    _scale() {
+        const r = this.overlay?.querySelector('#pv-svg').getBoundingClientRect();
+        if (!r || !r.width || !r.height) return null;
+        const k = Math.min(r.width / this.vb.w, r.height / this.vb.h);
+        return { k, r, ox: (r.width - this.vb.w * k) / 2, oy: (r.height - this.vb.h * k) / 2 };
+    }
+
+    /** Zoom um den Punkt unter dem Cursor (ohne Position: Mitte). factor > 1 = hineinzoomen. */
+    zoomAt(factor, cx, cy) {
+        const total = this.fit.w / this.vb.w;                       // aktueller Zoom relativ zu "Einpassen"
+        const nextTotal = Math.min(300, Math.max(0.5, total * factor));
+        factor = nextTotal / total;
+        if (factor === 1) return;
+        const s = this._scale();
+        let mx = this.vb.x + this.vb.w / 2, my = this.vb.y + this.vb.h / 2;    // Modellpunkt, der fix bleibt
+        if (s && cx !== undefined) { mx = this.vb.x + (cx - s.r.left - s.ox) / s.k; my = this.vb.y + (cy - s.r.top - s.oy) / s.k; }
+        const nw = this.vb.w / factor, nh = this.vb.h / factor;
+        this.vb = { x: mx - (mx - this.vb.x) / factor, y: my - (my - this.vb.y) / factor, w: nw, h: nh };
+        this._apply();
+    }
+
+    _apply() {
+        const svg = this.overlay?.querySelector('#pv-svg'); if (!svg) return;
+        svg.setAttribute('viewBox', `${this.vb.x} ${this.vb.y} ${this.vb.w} ${this.vb.h}`);
+        const z = this.overlay.querySelector('#pv-zoom');
+        if (z) z.textContent = `Zoom ${Math.round(this.fit.w / this.vb.w * 100)} %`;
+    }
+}
+
 // Ribbon-Button (Datei → Import): eigenständig verdrahtet, damit app.js unberührt bleibt
 if (typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', () => {
@@ -528,5 +677,5 @@ if (typeof document !== 'undefined') {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { PartGeometry, PartLibrary, PartImportDialog };
+    module.exports = { PartGeometry, PartLibrary, PartImportDialog, PartViewer };
 }

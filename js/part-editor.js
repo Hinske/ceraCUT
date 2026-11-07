@@ -12,7 +12,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-partedit
+ * Build: 20261107-viewer
+ * V1.1: Feat — Teilebibliothek: größere Vorschau (124×92), Klick → PartViewer mit Zoom
  *
  * (c) Cerasell GmbH
  */
@@ -185,6 +186,7 @@ class PartLibraryDialog {
             if (act === 'search') this._search(true);
             if (act === 'more') this._search(false);
             if (act === 'reset') { ov.querySelectorAll('input').forEach(i => { i.value = ''; }); ov.querySelectorAll('select').forEach(s => { s.value = ''; }); this._search(true); }
+            if (act === 'view') { e.preventDefault(); this._view(id); }
             if (act === 'edit') this._edit(id);
             if (act === 'dxf') this._dxf(id);
             if (act === 'del') this._del(id);
@@ -212,8 +214,8 @@ class PartLibraryDialog {
         const matName = id => this.materials.find(m => String(m.materialId) === String(id))?.name || id;
         this.overlay.querySelector('#pl-rows').innerHTML = this.items.map(p => `
             <tr data-id="${esc(p.partId)}" style="border-top:1px solid #ddd">
-                <td style="width:64px"><div style="width:56px;height:40px">${p.thumbnailSvg ? p.thumbnailSvg.replace('<svg ', '<svg width="56" height="40" ') : ''}</div></td>
-                <td>${esc(p.name)}</td><td>${esc(p.orderId)}</td><td>${esc(p.customer)}</td>
+                <td style="width:136px"><div data-act="view" title="Klicken für große Vorschau mit Zoom" style="width:124px;height:92px;cursor:zoom-in;border:1px solid #ddd;background:#fff">${p.thumbnailSvg ? p.thumbnailSvg.replace('<svg ', '<svg width="124" height="92" ') : ''}</div></td>
+                <td><a href="#" data-act="view" style="color:#0b5cad;text-decoration:none">${esc(p.name)}</a></td><td>${esc(p.orderId)}</td><td>${esc(p.customer)}</td>
                 <td>${esc(matName(p.technologyRef?.materialId))} · ${esc(p.technologyRef?.thickness)} mm</td>
                 <td>${p.bbox ? `${p.bbox.w} × ${p.bbox.l}` : ''}</td><td>${p.qty ?? ''}</td><td>${p.revision}</td>
                 <td style="white-space:nowrap"><button data-act="edit">Bearbeiten</button> <button data-act="dxf">DXF</button> <button data-act="del">Löschen</button></td></tr>`).join('')
@@ -225,6 +227,19 @@ class PartLibraryDialog {
     async _edit(id) {
         try { await PartEditor.openPart(this.app, id); this.close(); }
         catch (e) { this._toast(`Öffnen fehlgeschlagen: ${e.message}`, 'error'); }
+    }
+
+    /** Große Vorschau mit Zoom: volle Geometrie nachladen (die Liste enthält nur die verkleinerte Vorschau). */
+    async _view(id) {
+        try {
+            const p = await PartLibrary.get(id);
+            const matName = this.materials.find(m => String(m.materialId) === String(p.technologyRef?.materialId))?.name || p.technologyRef?.materialId;
+            PartViewer.open({ title: p.name, geometry: p.geometry, info: [
+                ['Auftrag', p.orderId], ['Kunde', p.customer || '–'], ['Material', `${matName ?? '–'} · ${p.technologyRef?.thickness ?? '–'} mm`],
+                ['Größe', `${p.geometry.bbox.w} × ${p.geometry.bbox.l} mm`], ['Netto-Fläche', `${p.geometry.netArea} m²`],
+                ['Schnittlänge', `${p.geometry.cutLength} m`], ['Anstiche', p.geometry.piercings], ['Konturen', p.geometry.contours.length],
+                ['Revision', p.revision], ['Stückzahl', p.qty ?? '–']] });
+        } catch (e) { this._toast(`Vorschau nicht ladbar: ${e.message}`, 'error'); }
     }
 
     async _dxf(id) {

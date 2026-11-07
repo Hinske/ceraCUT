@@ -9,6 +9,8 @@
 - [x] **Teilebibliothek** (Datei-Tab): Suche/Filter (Name/Auftrag/Kunde/Kommission, Material, Dicke, Status), Vorschau, DXF-Export, Löschen, Nachladen
 - [x] UI-Test (jsdom): Plan → Teile → Bearbeiten → Textmarke → Aktualisieren (gleiche Transformation) → Plan-Revisionen geprüft
 
+- [x] **Große Vorschau** (Teilebibliothek + Importtabelle): Vorschau 124×92 bzw. 84×62 statt 56×40; Klick → `PartViewer` mit voller Geometrie (nicht die verkleinerte Listen-Vorschau): Zoom per Mausrad (um den Cursor), ＋/－, Verschieben per Ziehen, Einpassen (Doppelklick/0), Zoom 50 %…300×, konstante Linienstärke, Legende, Teil-Infos
+
 ## Grenzen
 - Die Tab-Sitzung hängt am Dateinamen; „Speichern unter" mit anderem Namen löst die Bindung (Hinweis erscheint)
 - Textmarken/Gravuren sind als Konturen im Teil (Innenkontur → `hole`); Gravurmodus ohne Durchschnitt nicht modelliert

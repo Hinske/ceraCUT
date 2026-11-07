@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'bc9bd8b',
+        hash: '2f9a101',
         date: '2026-11-07',
-        message: 'feat: Teileimport 'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
+        message: 'feat: Teilebibliothek — groessere Vorschau + PartViewer mit Zoom/Verschieben (pa'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
     },
 
     modules: {
@@ -74,7 +74,7 @@ const CERACUT_BUILD = {
         'store':              { version: '1.0', build: '20261107-store' },
         'data-api':           { version: '1.3', build: '20261107-partedit' },
         'seed':               { version: '1.1', build: '20261107-techdb' },
-        'part-library':       { version: '1.2', build: '20261107-pickmany' },
+        'part-library':       { version: '1.3', build: '20261107-viewer' },
         'nesting-plan':       { version: '1.3', build: '20261107-partedit' },
         'nc-tools':           { version: '1.1', build: '20261107-techdb' },
         'cost-plan':          { version: '1.0', build: '20261107-plancost' },
@@ -82,7 +82,7 @@ const CERACUT_BUILD = {
         'report-pdf':         { version: '1.0', build: '20261107-reportpdf' },
         'technology-db':      { version: '1.0', build: '20261107-techdb' },
         'plan-update':        { version: '1.0', build: '20261107-partedit' },
-        'part-editor':        { version: '1.0', build: '20261107-partedit' }
+        'part-editor':        { version: '1.1', build: '20261107-viewer' }
     },
 
     changes: [

@@ -65,3 +65,14 @@ test('fromAppContours filtert Referenz/Schraffur/zu kurze', () => {
         { isHatchContour: true, points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] }, { points: [{ x: 0, y: 0 }] }, null]);
     assert.strictEqual(out.length, 1);
 });
+
+test('previewSvg: y nach oben, Rollen-Stile, Ausdehnung', () => {
+    const a = PartGeometry.analyze([rect(0, 0, 100, 50), rect(20, 10, 20, 20),
+        { points: [{ x: 5, y: 5 }, { x: 15, y: 5 }], isClosed: false }]);
+    const { svgInner, box } = PartGeometry.previewSvg(a.geometry);
+    assert.deepStrictEqual(box, { x: 0, y: -50, w: 100, h: 50 });          // y gespiegelt: -50…0
+    assert.strictEqual((svgInner.match(/<path/g) || []).length, 3);
+    assert.ok(/fill-opacity/.test(svgInner) && /#c0392b/.test(svgInner) && /#e8a020/.test(svgInner));
+    assert.ok(svgInner.includes('vector-effect="non-scaling-stroke"'));
+    assert.deepStrictEqual(PartGeometry.previewSvg({ contours: [] }).box, { x: 0, y: 0, w: 100, h: 100 });
+});

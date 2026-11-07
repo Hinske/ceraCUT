@@ -280,3 +280,71 @@ test('Teileimport „Vom Server…": Mehrfachauswahl über Ordner, Alle im Ordne
         assert.deepStrictEqual([...(await p)], []);
     } finally { h.close(); }
 });
+
+test('Große Vorschau: Teilebibliothek-Klick öffnet Viewer, Zoom ±/Rad/Einpassen, Esc; Import-Tabelle ebenso', async () => {
+    const h = await start();
+    try {
+        await quiet(async () => {
+            h.w.CeraJetEngine = CeraJetEngine;
+            await seedIfEmpty(h.stores);
+            h.load('dxf-parser.js', ['DXFParser']);
+            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer']);
+            h.load('plan-update.js', ['PlanUpdate']);
+            h.load('part-editor.js', ['PartEditor', 'PartUpdateDialog', 'PartLibraryDialog']);
+        });
+        const $ = s => h.doc.querySelector(s);
+        const an = await quiet(() => h.w.PartGeometry.analyze([
+            { points: [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 100 }, { x: 0, y: 100 }], isClosed: true, layer: 'Teil' },
+            { points: [{ x: 80, y: 40 }, { x: 120, y: 40 }, { x: 120, y: 60 }, { x: 80, y: 60 }], isClosed: true, layer: 'Loch' }]));
+        await h.stores.parts.put(JSON.parse(JSON.stringify(h.w.PartGeometry.toRecord(an, { partId: 'P-V', fileName: 'v.dxf', name: 'VORSCHAU', orderId: 'O-V', customer: 'Heide', qty: 3,
+            techRef: { machineId: null, materialId: 21, thickness: 10 } }))));
+
+        const lib = new h.w.PartLibraryDialog(h.app);
+        await lib.open();
+        await h.waitFor(() => $('.part-library-overlay tr[data-id="P-V"]'));
+        const thumb = $('.part-library-overlay tr[data-id="P-V"] div[data-act="view"]');
+        assert.ok(thumb.querySelector('svg').getAttribute('width') === '124', 'Vorschau ist größer als vorher (124 statt 56)');
+        click(thumb);
+        await h.waitFor(() => $('.part-viewer-overlay #pv-svg path'));
+        assert.strictEqual(h.doc.querySelectorAll('.part-viewer-overlay #pv-svg path').length, 2);
+        assert.match($('.part-viewer-overlay').textContent, /VORSCHAU/);
+        assert.match($('.part-viewer-overlay').textContent, /200 × 100 mm/);
+        const vb = () => $('#pv-svg').getAttribute('viewBox').split(' ').map(Number);
+        const fit = vb();
+        assert.match($('#pv-zoom').textContent, /100 %/);
+        click($('.part-viewer-overlay [data-act="zin"]'));
+        assert.ok(vb()[2] < fit[2] && Math.abs((vb()[0] + vb()[2] / 2) - (fit[0] + fit[2] / 2)) < 1e-6, 'zoomt um die Mitte');
+        assert.match($('#pv-zoom').textContent, /140 %/);
+        $('#pv-stage').dispatchEvent(new h.w.WheelEvent('wheel', { deltaY: -400, clientX: 0, clientY: 0, bubbles: true, cancelable: true }));
+        assert.ok(vb()[2] < fit[2] / 1.4, 'Mausrad zoomt weiter');
+        for (let i = 0; i < 40; i++) click($('.part-viewer-overlay [data-act="zin"]'));
+        assert.match($('#pv-zoom').textContent, /300(0)? ?%|30000 %/, 'Zoom ist nach oben begrenzt (300×)');
+        for (let i = 0; i < 40; i++) click($('.part-viewer-overlay [data-act="zout"]'));
+        assert.match($('#pv-zoom').textContent, /50 %/, 'Zoom ist nach unten begrenzt (50 %)');
+        click($('.part-viewer-overlay [data-act="fit"]'));
+        assert.deepStrictEqual(vb(), fit);
+        $('#pv-stage').dispatchEvent(new h.w.MouseEvent('dblclick', { bubbles: true }));
+        h.doc.dispatchEvent(new h.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.ok(!$('.part-viewer-overlay'), 'Esc schließt den Viewer');
+        assert.ok($('.part-library-overlay'), 'Bibliothek bleibt offen');
+        // Klick auf den Namen öffnet ebenfalls
+        click($('.part-library-overlay tr[data-id="P-V"] a[data-act="view"]'));
+        await h.waitFor(() => $('.part-viewer-overlay'));
+        click($('.part-viewer-overlay [data-act="close"]'));
+        assert.ok(!$('.part-viewer-overlay'));
+        lib.close();
+
+        // Import-Tabelle: Vorschau klickbar
+        const imp = new h.w.PartImportDialog(h.app);
+        await imp.open();
+        await quiet(() => imp._addFiles([new h.w.File([dxfRect(120, 60, true)], 'X.dxf')]));
+        await h.waitFor(() => imp.items[0]?.status === 'ready');
+        const t2 = $('#pi-table [data-view="0"]');
+        assert.ok(t2 && t2.querySelector('svg').getAttribute('width') === '84');
+        click(t2);
+        await h.waitFor(() => $('.part-viewer-overlay #pv-svg path'));
+        assert.match($('.part-viewer-overlay').textContent, /X\.dxf/);
+        click($('.part-viewer-overlay [data-act="close"]'));
+        imp.close();
+    } finally { h.close(); }
+});
