@@ -711,9 +711,8 @@ class OverlapBreakTool extends BaseTool {
                 this.splitHit = null;
                 return;
             } else {
-                // Offene Kontur: Richtung wählen
-                this.state = 'pickDirection';
-                this.cmd?.setPrompt('OVERLAP BREAK — Seite für Überlappung anklicken (A=vor Split / B=nach Split):');
+                // Offene Kontur: kurze Seite wird automatisch verlängert
+                this._executeOverlapBreak(null);
             }
             return;
         }
@@ -815,7 +814,7 @@ class OverlapBreakTool extends BaseTool {
         );
 
         app.undoManager?.execute(cmd);
-        const sideInfo = extendA ? 'Teil A verlängert' : 'Teil B verlängert';
+        const sideInfo = 'kurze Seite verlängert';
         const closedInfo = target.isClosed ? ' (geschlossen → offen + Überlappung)' : '';
         this.cmd?.log(`✔ Overlap Break: ${sideInfo}, ${this.overlapLength.toFixed(1)}mm${closedInfo} (Strg+Z = Rückgängig)`, 'success');
 
@@ -840,7 +839,7 @@ class OverlapBreakTool extends BaseTool {
                 // Vorschau für Teil-A-Verlängerung (Standard)
                 const preview = GeometryOps.getOverlapPreview(
                     this.targetContour.points, this.targetContour.isClosed,
-                    hit.segmentIndex, hit.point, this.overlapLength, true
+                    hit.segmentIndex, hit.point, this.overlapLength, null
                 );
                 this.manager.rubberBand = {
                     type: 'overlapBreak',
@@ -856,7 +855,7 @@ class OverlapBreakTool extends BaseTool {
 
         if (this.state === 'pickDirection') {
             // Richtungs-Vorschau: zeige Überlappung auf der mausnahen Seite
-            const extendA = this._isCloserToPartA(point);
+            const extendA = null;
             const preview = GeometryOps.getOverlapPreview(
                 this.targetContour.points, this.targetContour.isClosed,
                 this.splitHit.segmentIndex, this.splitHit.point,
@@ -867,7 +866,7 @@ class OverlapBreakTool extends BaseTool {
                 data: {
                     point: this.splitHit.point,
                     overlapLine: preview,
-                    label: (extendA ? 'A: ' : 'B: ') + this.overlapLength.toFixed(1) + ' mm'
+                    label: this.overlapLength.toFixed(1) + ' mm'
                 }
             };
             this.manager.renderer?.render();
@@ -889,9 +888,6 @@ class OverlapBreakTool extends BaseTool {
     finish() {
         if (this.state === 'select') {
             this.cancel();
-        } else if (this.state === 'pickDirection') {
-            // Enter = Standard (Teil A verlängern)
-            this._executeOverlapBreak(true);
         }
     }
 }

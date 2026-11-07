@@ -785,7 +785,7 @@ const GeometryOps = {
      * @param {boolean} extendA — true=Teil A verlängern, false=Teil B
      * @returns {Array} Array von Punkt-Arrays (1 oder 2 Teile, eines mit Überlappung)
      */
-    splitAndOverlap(points, isClosed, segmentIndex, splitPoint, overlapLength = 5.0, extendA = true) {
+    splitAndOverlap(points, isClosed, segmentIndex, splitPoint, overlapLength = 5.0, extendA = null) {
         if (!points || points.length < 2) return [points];
 
         const parts = this.splitContourAtPoint(points, isClosed, segmentIndex, splitPoint);
@@ -798,17 +798,22 @@ const GeometryOps = {
             return [this._extendEndTangential(openPart, extendA ? 'end' : 'start', overlapLength)];
         }
 
-        // Offene Kontur → 2 Teile
+        // Offene Kontur → 2 Teile. Standard: die KURZE Seite wird verlängert (extendA=null).
+        // Schneidrichtung immer von aussen nach innen, d.h. beide Teile enden am Split-Punkt
+        // (Teil A: Start→Split, Teil B wird umgedreht: Ende→Split). Die Verlängerung liegt
+        // damit immer am Pfadende = Überlappung wird zuletzt geschnitten.
         if (parts.length < 2) return parts;
         const result = parts.map(p => p.slice());
-        if (extendA) {
-            // Teil A am Ende (= Split-Punkt) verlängern
-            result[0] = this._extendEndTangential(result[0], 'end', overlapLength);
-        } else {
-            // Teil B am Anfang (= Split-Punkt) verlängern
-            result[1] = this._extendEndTangential(result[1], 'start', overlapLength);
-        }
+        if (extendA === null || extendA === undefined) extendA = this._shortSideIsA(parts);
+        result[1] = result[1].slice().reverse();
+        result[extendA ? 0 : 1] = this._extendEndTangential(result[extendA ? 0 : 1], 'end', overlapLength);
         return result;
+    },
+
+    /** true wenn Teil A (vor Split) nicht länger ist als Teil B */
+    _shortSideIsA(parts) {
+        const len = pts => { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y); return l; };
+        return len(parts[0]) <= len(parts[1]);
     },
 
     /**
@@ -847,18 +852,13 @@ const GeometryOps = {
         const parts = this.splitContourAtPoint(points, isClosed, segmentIndex, splitPoint);
         if (!parts || parts.length === 0) return null;
 
-        let sourcePart, whichEnd;
+        let sourcePart, whichEnd = 'end';
         if (isClosed) {
             sourcePart = parts[0];
             whichEnd = extendA ? 'end' : 'start';
         } else if (parts.length >= 2) {
-            if (extendA) {
-                sourcePart = parts[0];
-                whichEnd = 'end';
-            } else {
-                sourcePart = parts[1];
-                whichEnd = 'start';
-            }
+            if (extendA === null || extendA === undefined) extendA = this._shortSideIsA(parts);
+            sourcePart = extendA ? parts[0] : parts[1].slice().reverse();
         } else {
             return null;
         }

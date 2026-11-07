@@ -511,7 +511,7 @@ Seit V1.0 (2026-02-13) funktional, V1.3 mit Multi-Head:
 | Lead-Routing | 🟢 | V4.8: Startpunkt-Rotation (5°) + Dog-Leg Routing |
 | Postprozessor | 🟢 | Funktional komplett (V1.3) |
 | Modification Tools | 🟢 | Tier 3/5 komplett: Trim, Extend, Fillet, Chamfer, Offset (V1.3) |
-| Overlap Break | 🟢 | Sonderfunktion: Split + tangentiale Überlappung für WJ-Einläufe (OB, V1.1) |
+| Overlap Break | 🟢 | Sonderfunktion: Split + tangentiale Überlappung für WJ-Einläufe (OB, V1.2: kurze Seite automatisch, Schnitt aussen→innen) |
 | Koordinatensystem | 🟡 | 90-Grad-Drehung Software vs. Maschine (offen) |
 
 ---
