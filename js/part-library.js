@@ -12,7 +12,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-partedit
+ * Build: 20261107-nestperf
+ * V1.5: Feat — ZoomPane (wiederverwendbare Zoom-/Verschiebefläche, auch im Autonest), PartViewer akzeptiert fertigen SVG-Inhalt
  * V1.4: Perf — Importtabelle rendert beim Mehrfachimport einmal statt je Datei (200 Dateien: 26 s → s. Test), Fortschritt „Lese Dateien …"
  * V1.3: Feat — PartViewer (große Vorschau mit Zoom/Verschieben), PartGeometry.previewSvg; größere Vorschau in der Importtabelle
  * V1.2: Feat — „Vom Server…" (DXFBrowser.pickMany), PartGeometry.decodeDXF (UTF-8/ISO-8859-1 wie app.js)
@@ -584,20 +585,102 @@ class PartImportDialog {
 // Große Vorschau mit Zoom (Teilebibliothek, Import-Tabelle)
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * Zoom-/Verschiebe-Fläche für SVG-Inhalt (Modell-Koordinaten, y bereits nach oben gespiegelt):
+ * Mausrad = Zoom um den Cursor, Ziehen = Verschieben, Doppelklick = Einpassen, Zoom 50 %…300×.
+ * Wird im Vorschau-Fenster (PartViewer) und eingebettet im Autonest-Dialog verwendet.
+ */
+class ZoomPane {
+    /** @param {HTMLElement} stage  @param {{svgInner:string, box:{x,y,w,h}, svgId?:string, onZoom?:(pct:number)=>void}} o */
+    constructor(stage, o) {
+        this.stage = stage; this.onZoom = o.onZoom || (() => {}); this.drag = null;
+        this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        if (o.svgId) this.svg.id = o.svgId;
+        this.svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        this.svg.style.cssText = 'width:100%;height:100%;display:block';
+        stage.appendChild(this.svg);
+        stage.style.cursor = 'grab'; stage.style.touchAction = 'none'; stage.style.overflow = 'hidden';
+        this._wheel = e => { e.preventDefault(); e.stopPropagation(); this.zoomAt(Math.pow(1.0018, -e.deltaY), e.clientX, e.clientY); };
+        this._dbl = () => this.reset();
+        this._down = e => { this.drag = { x: e.clientX, y: e.clientY, vb: { ...this.vb } }; try { stage.setPointerCapture(e.pointerId); } catch { /* jsdom */ } stage.style.cursor = 'grabbing'; };
+        this._move = e => {
+            if (!this.drag) return;
+            const sc = this._scale(); if (!sc) return;
+            this.vb.x = this.drag.vb.x - (e.clientX - this.drag.x) / sc.k;
+            this.vb.y = this.drag.vb.y - (e.clientY - this.drag.y) / sc.k;
+            this._apply();
+        };
+        this._up = () => { this.drag = null; stage.style.cursor = 'grab'; };
+        stage.addEventListener('wheel', this._wheel, { passive: false });
+        stage.addEventListener('dblclick', this._dbl);
+        stage.addEventListener('pointerdown', this._down);
+        stage.addEventListener('pointermove', this._move);
+        stage.addEventListener('pointerup', this._up);
+        stage.addEventListener('pointercancel', this._up);
+        this.setContent(o);
+    }
+
+    setContent({ svgInner, box }) {
+        const pad = Math.max(box.w, box.h) * 0.05;
+        this.fit = { x: box.x - pad, y: box.y - pad, w: box.w + 2 * pad, h: box.h + 2 * pad };
+        this.vb = { ...this.fit };
+        this.svg.innerHTML = svgInner;
+        this._apply();
+    }
+
+    destroy() {
+        const st = this.stage;
+        st.removeEventListener('wheel', this._wheel); st.removeEventListener('dblclick', this._dbl);
+        st.removeEventListener('pointerdown', this._down); st.removeEventListener('pointermove', this._move);
+        st.removeEventListener('pointerup', this._up); st.removeEventListener('pointercancel', this._up);
+        this.svg.remove();
+    }
+
+    reset() { this.vb = { ...this.fit }; this._apply(); }
+    percent() { return Math.round(this.fit.w / this.vb.w * 100); }
+
+    /** Pixel pro Modelleinheit und Versatz des zentrierten Ausschnitts (preserveAspectRatio=meet). */
+    _scale() {
+        const r = this.svg.getBoundingClientRect();
+        if (!r || !r.width || !r.height) return null;
+        const k = Math.min(r.width / this.vb.w, r.height / this.vb.h);
+        return { k, r, ox: (r.width - this.vb.w * k) / 2, oy: (r.height - this.vb.h * k) / 2 };
+    }
+
+    /** Zoom um den Punkt unter dem Cursor (ohne Position: Mitte). factor > 1 = hineinzoomen. */
+    zoomAt(factor, cx, cy) {
+        const total = this.fit.w / this.vb.w;                       // aktueller Zoom relativ zu "Einpassen"
+        const nextTotal = Math.min(300, Math.max(0.5, total * factor));
+        factor = nextTotal / total;
+        if (factor === 1) return;
+        const sc = this._scale();
+        let mx = this.vb.x + this.vb.w / 2, my = this.vb.y + this.vb.h / 2;    // Modellpunkt, der fix bleibt
+        if (sc && cx !== undefined) { mx = this.vb.x + (cx - sc.r.left - sc.ox) / sc.k; my = this.vb.y + (cy - sc.r.top - sc.oy) / sc.k; }
+        this.vb = { x: mx - (mx - this.vb.x) / factor, y: my - (my - this.vb.y) / factor, w: this.vb.w / factor, h: this.vb.h / factor };
+        this._apply();
+    }
+
+    _apply() {
+        this.svg.setAttribute('viewBox', `${this.vb.x} ${this.vb.y} ${this.vb.w} ${this.vb.h}`);
+        this.onZoom(this.percent());
+    }
+}
+
 class PartViewer {
-    /** @param {{title:string, geometry:object, info?:Array<[string,string]>}} o */
+    /** @param {{title:string, geometry?:object, svg?:{svgInner:string,box:object}, info?:Array<[string,string]>, legend?:string}} o */
     static open(o) { const v = new PartViewer(o); v.show(); return v; }
 
-    constructor(o) { this.o = o; this.overlay = null; this.vb = null; this.fit = null; this.drag = null; }
+    constructor(o) { this.o = o; this.overlay = null; this.pane = null; }
 
     _esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
     show() {
-        const { svgInner, box } = PartGeometry.previewSvg(this.o.geometry);
-        const pad = Math.max(box.w, box.h) * 0.05;
-        this.fit = { x: box.x - pad, y: box.y - pad, w: box.w + 2 * pad, h: box.h + 2 * pad };
-        this.vb = { ...this.fit };
+        const content = this.o.svg || PartGeometry.previewSvg(this.o.geometry);
         const info = (this.o.info || []).map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:#666">${this._esc(k)}</span><b>${this._esc(v)}</b></div>`).join('');
+        const legend = this.o.legend || `<div style="margin-top:10px;color:#666">Legende</div>
+                    <div><span style="display:inline-block;width:12px;height:12px;border:2px solid #0b5cad;background:rgba(0,120,212,.12);vertical-align:middle"></span> Teil</div>
+                    <div><span style="display:inline-block;width:12px;height:12px;border:2px solid #c0392b;vertical-align:middle"></span> Loch / Ausschnitt</div>
+                    <div><span style="display:inline-block;width:12px;height:0;border-top:2px solid #e8a020;vertical-align:middle"></span> Offene Kontur</div>`;
         const ov = document.createElement('div');
         ov.className = 'modal-overlay part-viewer-overlay';
         ov.style.zIndex = 9800;
@@ -611,92 +694,38 @@ class PartViewer {
                 <span style="margin-left:auto;font-size:11px;color:#888">Mausrad: Zoom · Ziehen: Verschieben · Doppelklick: Einpassen</span>
             </div>
             <div style="display:flex;flex:1;min-height:0">
-                <div id="pv-stage" style="flex:1;min-width:0;background:#fafafa;border-top:1px solid #ddd;position:relative;cursor:grab;touch-action:none;overflow:hidden">
-                    <svg id="pv-svg" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block" preserveAspectRatio="xMidYMid meet">${svgInner}</svg>
-                </div>
-                <div style="width:230px;border-left:1px solid #ddd;padding:10px;font-size:11px;display:flex;flex-direction:column;gap:5px;overflow:auto">
-                    ${info}
-                    <div style="margin-top:10px;color:#666">Legende</div>
-                    <div><span style="display:inline-block;width:12px;height:12px;border:2px solid #0b5cad;background:rgba(0,120,212,.12);vertical-align:middle"></span> Teil</div>
-                    <div><span style="display:inline-block;width:12px;height:12px;border:2px solid #c0392b;vertical-align:middle"></span> Loch / Ausschnitt</div>
-                    <div><span style="display:inline-block;width:12px;height:0;border-top:2px solid #e8a020;vertical-align:middle"></span> Offene Kontur</div>
-                </div>
+                <div id="pv-stage" style="flex:1;min-width:0;background:#fafafa;border-top:1px solid #ddd;position:relative"></div>
+                <div style="width:230px;border-left:1px solid #ddd;padding:10px;font-size:11px;display:flex;flex-direction:column;gap:5px;overflow:auto">${info}${legend}</div>
             </div>
         </div>`;
         document.body.appendChild(ov);
         this.overlay = ov;
-        this._apply();
-        const stage = ov.querySelector('#pv-stage');
+        this.pane = new ZoomPane(ov.querySelector('#pv-stage'), { ...content, svgId: 'pv-svg',
+            onZoom: pct => { const z = ov.querySelector('#pv-zoom'); if (z) z.textContent = `Zoom ${pct} %`; } });
         ov.addEventListener('click', e => {
             if (e.target === ov) return this.close();
             const act = e.target.closest('[data-act]')?.dataset.act;
             if (act === 'close') this.close();
-            if (act === 'zin') this.zoomAt(1.4);
-            if (act === 'zout') this.zoomAt(1 / 1.4);
-            if (act === 'fit') this.reset();
+            if (act === 'zin') this.pane.zoomAt(1.4);
+            if (act === 'zout') this.pane.zoomAt(1 / 1.4);
+            if (act === 'fit') this.pane.reset();
         });
         ov.addEventListener('keydown', e => e.stopPropagation());
         ov.addEventListener('keyup', e => e.stopPropagation());
         this._key = e => {
             if (!this.overlay) return;
             if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
-            else if (e.key === '+' || e.key === '=') this.zoomAt(1.4);
-            else if (e.key === '-') this.zoomAt(1 / 1.4);
-            else if (e.key === '0') this.reset();
+            else if (e.key === '+' || e.key === '=') this.pane.zoomAt(1.4);
+            else if (e.key === '-') this.pane.zoomAt(1 / 1.4);
+            else if (e.key === '0') this.pane.reset();
         };
         document.addEventListener('keydown', this._key, true);
-        stage.addEventListener('wheel', e => { e.preventDefault(); e.stopPropagation(); this.zoomAt(Math.pow(1.0018, -e.deltaY), e.clientX, e.clientY); }, { passive: false });
-        stage.addEventListener('dblclick', () => this.reset());
-        stage.addEventListener('pointerdown', e => {
-            this.drag = { x: e.clientX, y: e.clientY, vb: { ...this.vb } };
-            try { stage.setPointerCapture(e.pointerId); } catch { /* jsdom */ }
-            stage.style.cursor = 'grabbing';
-        });
-        stage.addEventListener('pointermove', e => {
-            if (!this.drag) return;
-            const s = this._scale(); if (!s) return;
-            this.vb.x = this.drag.vb.x - (e.clientX - this.drag.x) / s.k;
-            this.vb.y = this.drag.vb.y - (e.clientY - this.drag.y) / s.k;
-            this._apply();
-        });
-        const end = () => { this.drag = null; stage.style.cursor = 'grab'; };
-        stage.addEventListener('pointerup', end); stage.addEventListener('pointercancel', end);
     }
 
     close() {
         document.removeEventListener('keydown', this._key, true);
+        this.pane?.destroy(); this.pane = null;
         this.overlay?.remove(); this.overlay = null;
-    }
-
-    reset() { this.vb = { ...this.fit }; this._apply(); }
-
-    /** Pixel pro Modelleinheit und Versatz des zentrierten Ausschnitts (preserveAspectRatio=meet). */
-    _scale() {
-        const r = this.overlay?.querySelector('#pv-svg').getBoundingClientRect();
-        if (!r || !r.width || !r.height) return null;
-        const k = Math.min(r.width / this.vb.w, r.height / this.vb.h);
-        return { k, r, ox: (r.width - this.vb.w * k) / 2, oy: (r.height - this.vb.h * k) / 2 };
-    }
-
-    /** Zoom um den Punkt unter dem Cursor (ohne Position: Mitte). factor > 1 = hineinzoomen. */
-    zoomAt(factor, cx, cy) {
-        const total = this.fit.w / this.vb.w;                       // aktueller Zoom relativ zu "Einpassen"
-        const nextTotal = Math.min(300, Math.max(0.5, total * factor));
-        factor = nextTotal / total;
-        if (factor === 1) return;
-        const s = this._scale();
-        let mx = this.vb.x + this.vb.w / 2, my = this.vb.y + this.vb.h / 2;    // Modellpunkt, der fix bleibt
-        if (s && cx !== undefined) { mx = this.vb.x + (cx - s.r.left - s.ox) / s.k; my = this.vb.y + (cy - s.r.top - s.oy) / s.k; }
-        const nw = this.vb.w / factor, nh = this.vb.h / factor;
-        this.vb = { x: mx - (mx - this.vb.x) / factor, y: my - (my - this.vb.y) / factor, w: nw, h: nh };
-        this._apply();
-    }
-
-    _apply() {
-        const svg = this.overlay?.querySelector('#pv-svg'); if (!svg) return;
-        svg.setAttribute('viewBox', `${this.vb.x} ${this.vb.y} ${this.vb.w} ${this.vb.h}`);
-        const z = this.overlay.querySelector('#pv-zoom');
-        if (z) z.textContent = `Zoom ${Math.round(this.fit.w / this.vb.w * 100)} %`;
     }
 }
 
@@ -712,5 +741,5 @@ if (typeof document !== 'undefined') {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { PartGeometry, PartLibrary, PartImportDialog, PartViewer };
+    module.exports = { PartGeometry, PartLibrary, PartImportDialog, PartViewer, ZoomPane };
 }

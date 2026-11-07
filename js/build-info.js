@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'fa82808',
+        hash: 'c0d89fe',
         date: '2026-11-07',
-        message: 'refactor: alten Nesting-Button entfernt (Autonest ersetzt ihn)'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
+        message: 'perf+feat: Autonest fuer grosse Stueckzahlen (nesting V1.4: ~50x schneller, Web 'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
     },
 
     modules: {
@@ -47,7 +47,7 @@ const CERACUT_BUILD = {
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.7', build: '20261107-leadmenu' },
         'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
-        'nesting':            { version: '1.3', build: '20261107-nestplan' },
+        'nesting':            { version: '1.4', build: '20261107-nestperf' },
         'toolpath-simulator': { version: '1.5', build: '20261106-leadseg' },
         'cost-calculator':    { version: '1.3', build: '20261104-reviewfix' },
         'machine-profiles':   { version: '1.2', build: '20261104-reviewfix' },
@@ -72,17 +72,18 @@ const CERACUT_BUILD = {
         'session-store':      { version: '1.1', build: '20261104-reviewfix' },
         'auth-helper':        { version: '1.1', build: '20261104-reviewfix' },
         'store':              { version: '1.0', build: '20261107-store' },
-        'data-api':           { version: '1.3', build: '20261107-partedit' },
+        'data-api':           { version: '1.4', build: '20261107-nestperf' },
         'seed':               { version: '1.1', build: '20261107-techdb' },
-        'part-library':       { version: '1.4', build: '20261107-bulk' },
-        'nesting-plan':       { version: '1.3', build: '20261107-partedit' },
+        'part-library':       { version: '1.5', build: '20261107-nestperf' },
+        'nesting-plan':       { version: '1.5', build: '20261107-nestperf' },
         'nc-tools':           { version: '1.1', build: '20261107-techdb' },
         'cost-plan':          { version: '1.0', build: '20261107-plancost' },
         'cost-dialog':        { version: '1.0', build: '20261107-costdialog' },
-        'report-pdf':         { version: '1.0', build: '20261107-reportpdf' },
+        'report-pdf':         { version: '1.1', build: '20261107-nestperf' },
         'technology-db':      { version: '1.0', build: '20261107-techdb' },
         'plan-update':        { version: '1.0', build: '20261107-partedit' },
-        'part-editor':        { version: '1.1', build: '20261107-viewer' }
+        'part-editor':        { version: '1.1', build: '20261107-viewer' },
+        'nesting-worker':     { version: '1.0', build: '20261107-nestperf' }
     },
 
     changes: [

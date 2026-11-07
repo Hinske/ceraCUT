@@ -12,7 +12,9 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-partedit
+ * Build: 20261107-nestperf
+ * V1.5: Feat — Schachtelplan als PDF (Autonest-Dialog, Planliste) über /api/reports/plan-pdf
+ * V1.4: Feat — Autonest im Web Worker (Fortschritt, Abbrechen), Vorschau mit Zoom/Verschieben + Große Ansicht, runAsync/prepare/finish
  * V1.3: Feat — Teil bearbeiten (Planliste „Teile", Autonest-Treffer) → part-editor.js
  * V1.2: Feat — Button „Kalkulation" (Autonest-Dialog, Planliste) → cost-dialog.js
  * V1.1: Feat — Plan öffnen (PlanOpenDialog, toDXF, loadPlanParts), „Im Editor öffnen" im Autonest-Dialog
@@ -82,11 +84,10 @@ const NestingPlan = (() => {
      * @param {Object<string,object>} partsMap  partId → Teile-Datensatz (mit geometry)
      * @param {{width:number,length:number,partToPart:number,partToEdge:number,order?:string,maxSheets?:number}} cfg
      */
-    function run(demand, partsMap, cfg) {
+    /** Bedarf → Engine-Eingabe (Pseudo-Konturen mit gemeinsamem Punktefeld je Teil, typeKey = Teil+Revision+Drehung). */
+    function prepare(demand, partsMap, cfg) {
         const errors = [];
-        if (typeof NestingEngine === 'undefined') throw new Error('NestingEngine nicht geladen');
         if (!(cfg.width > 0) || !(cfg.length > 0)) throw new Error('Blechbreite und -länge müssen > 0 sein');
-
         const items = [];      // Pseudo-Konturen für die Engine
         const meta = [];       // parallel zu items: {partId}
         for (const d of demand) {
@@ -95,24 +96,27 @@ const NestingPlan = (() => {
             if (!part) { errors.push(`${d.partId}: Teil nicht geladen`); continue; }
             const outer = outerContour(part);
             if (!outer) { errors.push(`${part.name}: keine geschlossene Außenkontur`); continue; }
+            const pts = toPts(outer.points);                                  // gemeinsam für alle Exemplare (kleinere Worker-Nachricht)
+            const priority = PRIORITY[d.priority || 'normal'] ?? 0;
+            const rotationSteps = ROTATIONS[d.angles || 'r90'] || ROTATIONS.r90;
+            const typeKey = `${d.partId}@${part.revision}|${d.angles || 'r90'}`;
             for (let i = 0; i < qty; i++) {
-                items.push({
-                    points: toPts(outer.points), isClosed: true, name: part.name,
-                    priority: PRIORITY[d.priority || 'normal'] ?? 0,
-                    rotationSteps: ROTATIONS[d.angles || 'r90'] || ROTATIONS.r90
-                });
+                items.push({ points: pts, isClosed: true, name: part.name, priority, rotationSteps, typeKey });
                 meta.push({ partId: d.partId });
             }
         }
         if (!items.length) throw new Error(errors[0] || 'Keine Teile mit Stückzahl > 0');
-
-        const t0 = Date.now();
-        const res = NestingEngine.nest(items, {
+        const engineCfg = {
             sheetWidth: cfg.width, sheetHeight: cfg.length,
             sheetMargin: cfg.partToEdge, spacing: cfg.partToPart,
             order: cfg.order || 'large-first', maxSheets: cfg.maxSheets || 20
-        });
+        };
+        return { items, meta, errors, engineCfg, demand, partsMap, cfg };
+    }
 
+    /** Engine-Ergebnis → Plan-Datensatz. */
+    function finish(prep, res, ms) {
+        const { meta, errors, demand, partsMap, cfg, items } = prep;
         const instances = res.placements.map((pl, n) => ({
             instId: `i${n + 1}`, partId: meta[pl.contourIndex].partId,
             revision: partsMap[meta[pl.contourIndex].partId].revision,
@@ -129,7 +133,7 @@ const NestingPlan = (() => {
         const refs = demand.map(d => partsMap[d.partId]?.technologyRef).filter(Boolean);
         const same = k => refs.length && refs.every(r => r[k] === refs[0][k]) ? refs[0][k] : null;
         const mixedTech = refs.some(r => r.materialId !== refs[0].materialId || r.thickness !== refs[0].thickness);
-        if (mixedTech) errors.push('Teile haben unterschiedliches Material/Dicke — bitte getrennt nesten');
+        const errs = mixedTech ? [...errors, 'Teile haben unterschiedliches Material/Dicke — bitte getrennt nesten'] : errors;
 
         return {
             plan: {
@@ -144,9 +148,53 @@ const NestingPlan = (() => {
                 cutOrder: [], remnants: [],
                 stats: { requested: items.length, nested: instances.length, unplaced: res.unplaced.length,
                          sheets: res.sheets.length, utilization: res.totalUtilization, sheetStats: res.sheets,
-                         nestedByPart, unplacedByPart: unplaced, ms: Date.now() - t0 }
+                         nestedByPart, unplacedByPart: unplaced, ms }
             },
-            errors
+            errors: errs
+        };
+    }
+
+    /** Synchron (Tests, Fallback ohne Web Worker). */
+    function run(demand, partsMap, cfg, onProgress) {
+        if (typeof NestingEngine === 'undefined') throw new Error('NestingEngine nicht geladen');
+        const prep = prepare(demand, partsMap, cfg);
+        const t0 = Date.now();
+        const res = NestingEngine.nest(prep.items, { ...prep.engineCfg, onProgress });
+        return finish(prep, res, Date.now() - t0);
+    }
+
+    /**
+     * Asynchron im Web Worker (UI bleibt bedienbar, Fortschritt, Abbruch). Ohne Worker-Unterstützung läuft es
+     * synchron nach einem setTimeout — dann ohne Abbruchmöglichkeit.
+     * @returns {{promise:Promise<{plan,errors}>, cancel:Function}}
+     */
+    function runAsync(demand, partsMap, cfg, { onProgress, workerUrl } = {}) {
+        const prep = prepare(demand, partsMap, cfg);
+        const t0 = Date.now();
+        let worker = null, rejectFn = null, cancelled = false;
+        const promise = new Promise((resolve, reject) => {
+            rejectFn = reject;
+            const canWorker = typeof Worker !== 'undefined' && workerUrl;
+            if (!canWorker) {
+                setTimeout(() => {
+                    try { resolve(finish(prep, NestingEngine.nest(prep.items, { ...prep.engineCfg, onProgress }), Date.now() - t0)); }
+                    catch (e) { reject(e); }
+                }, 20);
+                return;
+            }
+            try { worker = new Worker(workerUrl); } catch (e) { return reject(e); }
+            worker.onmessage = e => {
+                const m = e.data;
+                if (m.type === 'progress') onProgress?.(m.done, m.total, m.sheets);
+                else if (m.type === 'done') { worker.terminate(); resolve(finish(prep, m.res, Date.now() - t0)); }
+                else if (m.type === 'error') { worker.terminate(); reject(new Error(m.message)); }
+            };
+            worker.onerror = e => { worker.terminate(); reject(new Error(e.message || 'Worker-Fehler')); };
+            worker.postMessage({ items: prep.items, cfg: prep.engineCfg });
+        });
+        return {
+            promise,
+            cancel() { if (cancelled) return; cancelled = true; worker?.terminate(); rejectFn?.(new Error('abgebrochen')); }
         };
     }
 
@@ -181,6 +229,34 @@ const NestingPlan = (() => {
         return out.join('\n') + '\n';
     }
 
+    const COLORS = ['#0078d4', '#22c55e', '#e8a020', '#a855f7', '#ef4444', '#14b8a6', '#f97316', '#64748b'];
+
+    /** Blech als SVG-Inhalt für ZoomPane/PartViewer: Koordinaten (x, -y) (y nach oben), Konturstärke konstant, Farbe je Teil. */
+    function sheetContent(plan, partsMap, sheetIndex = 0) {
+        const W = plan.sheet.width, L = plan.sheet.length;
+        const partIds = Object.keys(plan.demand);
+        const r2 = v => Math.round(v * 100) / 100;
+        const paths = sheetPolylines(plan, partsMap, sheetIndex).map(c => {
+            const d = c.points.map((p, k) => `${k ? 'L' : 'M'}${r2(p.x)} ${r2(-p.y)}`).join('') + (c.closed ? 'Z' : '');
+            const col = COLORS[partIds.indexOf(c.partId) % COLORS.length];
+            return `<path d="${d}" stroke="${col}" ${c.role === 'disc' ? `fill="${col}" fill-opacity="0.15"` : 'fill="#fff"'} stroke-width="1.2" vector-effect="non-scaling-stroke"/>`;
+        }).join('');
+        const outline = `<rect x="0" y="${-L}" width="${W}" height="${L}" fill="#fff" stroke="#888" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+        return { svgInner: outline + paths, box: { x: 0, y: -L, w: W, h: L } };
+    }
+
+    /** Legende (Teil → Farbe, Menge auf diesem Blech) als HTML für den Vorschau-Dialog. */
+    function sheetLegend(plan, partsMap, sheetIndex = 0) {
+        const partIds = Object.keys(plan.demand);
+        const cnt = {};
+        for (const i of plan.instances) if ((i.sheetIndex || 0) === sheetIndex) cnt[i.partId] = (cnt[i.partId] || 0) + 1;
+        const esc = v => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        return '<div style="margin-top:10px;color:#666">Teile auf diesem Blech</div>' + partIds.filter(id => cnt[id]).map(id => {
+            const p = partsMap[id] || partsMap[Object.keys(partsMap).find(k => k.startsWith(id + '@'))];
+            return `<div><span style="display:inline-block;width:12px;height:12px;border:2px solid ${COLORS[partIds.indexOf(id) % COLORS.length]};vertical-align:middle"></span> ${esc(p?.name || id)} <b>× ${cnt[id]}</b></div>`;
+        }).join('');
+    }
+
     function previewSvg(plan, partsMap, sheetIndex = 0) {
         const W = plan.sheet.width, L = plan.sheet.length;
         const partIds = Object.keys(plan.demand);
@@ -195,7 +271,7 @@ const NestingPlan = (() => {
              + `<g transform="translate(0 ${L}) scale(1 -1)"><rect x="0" y="0" width="${W}" height="${L}" fill="#fff" stroke="#888" stroke-width="${Math.max(W, L) / 400}"/>${paths}</g></svg>`;
     }
 
-    return { run, placePart, partFor, sheetPolylines, toDXF, previewSvg, outerContour, ROTATIONS, PRIORITY };
+    return { run, runAsync, prepare, finish, sheetContent, sheetLegend, placePart, partFor, sheetPolylines, toDXF, previewSvg, outerContour, ROTATIONS, PRIORITY };
 })();
 
 /** Alle Teile eines Plans in exakter Revision laden → Map `partId@rev`. */
@@ -218,6 +294,21 @@ function openPlanSheet(app, plan, partsMap, sheetIndex = 0) {
     if (!app?.loadDXFContent) throw new Error('App nicht bereit');
     app.loadDXFContent(name, dxf, (dxf.length / 1024).toFixed(1));
     return name;
+}
+
+/** Schachtelplan als PDF vom Server holen und speichern (planId = gespeicherter Plan, plan = ungespeichert). */
+async function downloadPlanPdf(app, source) {
+    try {
+        const r = await fetch('/api/reports/plan-pdf', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(source.planId ? { planId: source.planId } : { plan: source.plan }) });
+        if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || `HTTP ${r.status}`); }
+        const blob = await r.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Schachtelplan_${String(source.planId || source.plan?.planId || 'PLAN').replace(/[^A-Za-z0-9._-]/g, '_')}.pdf`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+    } catch (e) { app?.showToast?.(`PDF fehlgeschlagen: ${e.message}`, 'error'); }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -266,13 +357,21 @@ class AutoNestDialog {
                         <div style="color:#888;margin-top:6px">Blech vorerst von Hand; Auswahl aus der Blechbibliothek folgt.</div>
                     </div>
                 </div>
-                <div class="cldcl-row"><button data-act="run" style="font-weight:600">Nesting starten</button>
+                <div class="cldcl-row"><button data-act="run" id="an-run" style="font-weight:600">Nesting starten</button>
+                    <button data-act="cancel" id="an-cancel" style="display:none">Abbrechen</button>
+                    <progress id="an-progress" max="100" value="0" style="display:none;width:180px"></progress>
                     <span id="an-status" style="font-size:11px;color:#444"></span>
                     <select id="an-sheet" style="margin-left:auto;display:none"></select></div>
-                <div id="an-preview"></div>
+                <div class="cldcl-row" id="an-zoombar" style="display:none;gap:6px;font-size:11px">
+                    <button data-act="zin" title="Vergrößern">＋</button><button data-act="zout" title="Verkleinern">－</button>
+                    <button data-act="fit">Einpassen</button><button data-act="big" title="Große Ansicht mit Zoom in eigenem Fenster">Große Ansicht</button>
+                    <span id="an-zoom" style="color:#555"></span>
+                    <span style="margin-left:auto;color:#888">Mausrad: Zoom · Ziehen: Verschieben · Doppelklick: Einpassen</span></div>
+                <div id="an-preview" style="height:340px;background:#fafafa;border:1px solid #ddd;display:none;position:relative"></div>
                 <div id="an-stats" style="font-size:11px;color:#444"></div>
             </div>
             <div class="cldcl-row" style="padding:8px 12px;border-top:1px solid #ccc;justify-content:flex-end">
+                <button data-act="pdf" title="Schachtelplan als PDF (alle Bleche + Teileliste)">Plan als PDF</button>
                 <button data-act="cost" title="Kostenkalkulation für das aktuelle Nesting-Ergebnis">Kalkulation</button>
                 <button data-act="edit" title="Aktuelles Blech ungespeichert im Editor öffnen">Im Editor öffnen</button>
                 <input id="an-name" type="text" placeholder="Planname" style="width:180px;text-transform:uppercase">
@@ -288,6 +387,7 @@ class AutoNestDialog {
             if (!act) return;
             const i = e.target.closest('[data-i]')?.dataset.i;
             ({ close: () => this.close(), search: () => this._search(), run: () => this._run(), save: () => this._save(), edit: () => this._openInEditor(), cost: () => this._cost(),
+               pdf: () => this._pdf(), cancel: () => this._cancel(), zin: () => this.pane?.zoomAt(1.4), zout: () => this.pane?.zoomAt(1 / 1.4), fit: () => this.pane?.reset(), big: () => this._bigView(),
                add: () => this._addPart(e.target.closest('[data-pid]').dataset.pid),
                editpart: () => PartEditor.openPart(this.app, e.target.closest('[data-pid]').dataset.pid).then(() => this.close()).catch(err => this._toast(`Öffnen fehlgeschlagen: ${err.message}`, 'error')),
                del: () => { this.rows.splice(Number(i), 1); this._renderRows(); } }[act] || (() => {}))();
@@ -305,7 +405,7 @@ class AutoNestDialog {
         this._renderRows();
     }
 
-    close() { this.overlay?.remove(); this.overlay = null; this.result = null; }
+    close() { this.job?.cancel(); this.pane?.destroy(); this.pane = null; this.overlay?.remove(); this.overlay = null; this.result = null; }
 
     async _search() {
         const q = this.overlay.querySelector('#an-q').value.trim();
@@ -348,29 +448,91 @@ class AutoNestDialog {
                  order: this.overlay.querySelector('#an-order').value, maxSheets: parseInt(this.overlay.querySelector('#an-max').value, 10) || 5 };
     }
 
+    /** Worker-URL (Cache-Busting über die Version des eigenen Skripts). */
+    _workerUrl() {
+        const me = [...document.scripts].find(sc => /nesting-plan\.js/.test(sc.src));
+        const v = me ? (me.src.match(/\?(v=[^&]+)/) || [])[1] : '';
+        return `js/nesting-worker.js${v ? '?' + v : ''}`;
+    }
+
+    _setBusy(busy) {
+        const q = id => this.overlay?.querySelector('#' + id);
+        if (!this.overlay) return;
+        q('an-run').disabled = busy;
+        q('an-cancel').style.display = busy ? '' : 'none';
+        q('an-progress').style.display = busy ? '' : 'none';
+        if (busy) q('an-progress').value = 0;
+    }
+
+    _cancel() { this.job?.cancel(); }
+
     _run() {
         const st = this.overlay.querySelector('#an-status');
+        if (this.job) return;
         if (!this.rows.length) return this._toast('Bitte zuerst Teile hinzufügen', 'warning');
-        st.textContent = 'Rechne …';
-        setTimeout(() => {   // UI zuerst aktualisieren lassen
-            try {
-                this.result = NestingPlan.run(this.rows, this.partsMap, this._cfg());
-                const s = this.result.plan.stats;
-                st.textContent = `${s.nested}/${s.requested} Teile · ${s.sheets} Blech(e) · ${s.utilization}% Auslastung · ${s.ms} ms`;
-                this.sheetIndex = 0;
-                const sel = this.overlay.querySelector('#an-sheet');
-                sel.innerHTML = Array.from({ length: s.sheets }, (_, i) => `<option value="${i}">Blech ${i + 1}</option>`).join('');
-                sel.style.display = s.sheets > 1 ? '' : 'none';
-                this._renderPreview(); this._renderRows();
-                const msgs = [...this.result.errors];
-                if (s.unplaced) msgs.push(`${s.unplaced} Teil(e) passen nicht (Blech zu klein oder Max. Bleche erreicht)`);
-                this.overlay.querySelector('#an-stats').textContent = msgs.join(' · ');
-            } catch (e) { st.textContent = ''; this._toast(`Nesting fehlgeschlagen: ${e.message}`, 'error'); }
-        }, 30);
+        const total = this.rows.reduce((a, r) => a + Math.max(0, r.qty | 0), 0);
+        st.textContent = `Rechne … 0/${total}`;
+        this._setBusy(true);
+        let job;
+        try {
+            job = NestingPlan.runAsync(this.rows, this.partsMap, this._cfg(), {
+                workerUrl: typeof Worker !== 'undefined' && this.useWorker !== false ? this._workerUrl() : null,
+                onProgress: (done, tot, sheets) => {
+                    if (!this.overlay) return;
+                    st.textContent = `Rechne … ${done}/${tot} Teile · Blech ${sheets}`;
+                    const pr = this.overlay.querySelector('#an-progress'); pr.max = tot; pr.value = done;
+                }
+            });
+        } catch (e) { this._setBusy(false); st.textContent = ''; return this._toast(`Nesting fehlgeschlagen: ${e.message}`, 'error'); }
+        this.job = job;
+        job.promise.then(result => {
+            this.job = null;
+            if (!this.overlay) return;
+            this._setBusy(false);
+            this.result = result;
+            const s = result.plan.stats;
+            st.textContent = `${s.nested}/${s.requested} Teile · ${s.sheets} Blech(e) · ${s.utilization}% Auslastung · ${(s.ms / 1000).toFixed(1)} s`;
+            this.sheetIndex = 0;
+            const sel = this.overlay.querySelector('#an-sheet');
+            sel.innerHTML = Array.from({ length: s.sheets }, (_, i) => `<option value="${i}">Blech ${i + 1}</option>`).join('');
+            sel.style.display = s.sheets > 1 ? '' : 'none';
+            this._renderPreview(); this._renderRows();
+            const msgs = [...result.errors];
+            if (s.unplaced) msgs.push(`${s.unplaced} Teil(e) passen nicht (Blech zu klein oder Max. Bleche erreicht)`);
+            this.overlay.querySelector('#an-stats').textContent = msgs.join(' · ');
+        }, err => {
+            this.job = null;
+            if (!this.overlay) return;
+            this._setBusy(false);
+            st.textContent = err.message === 'abgebrochen' ? 'Abgebrochen' : '';
+            if (err.message !== 'abgebrochen') this._toast(`Nesting fehlgeschlagen: ${err.message}`, 'error');
+        });
     }
 
     _renderPreview() {
-        this.overlay.querySelector('#an-preview').innerHTML = this.result ? NestingPlan.previewSvg(this.result.plan, this.partsMap, this.sheetIndex) : '';
+        const host = this.overlay.querySelector('#an-preview'), bar = this.overlay.querySelector('#an-zoombar');
+        if (!this.result) { this.pane?.destroy(); this.pane = null; host.style.display = bar.style.display = 'none'; return; }
+        host.style.display = ''; bar.style.display = 'flex';
+        const content = NestingPlan.sheetContent(this.result.plan, this.partsMap, this.sheetIndex);
+        if (this.pane) this.pane.setContent(content);
+        else this.pane = new ZoomPane(host, { ...content, onZoom: pct => { const z = this.overlay?.querySelector('#an-zoom'); if (z) z.textContent = `Zoom ${pct} %`; } });
+    }
+
+    _bigView() {
+        if (!this.result) return;
+        const plan = this.result.plan, s = plan.stats;
+        PartViewer.open({
+            title: `Schachtelplan — Blech ${this.sheetIndex + 1}/${s.sheets}`, svg: NestingPlan.sheetContent(plan, this.partsMap, this.sheetIndex),
+            legend: NestingPlan.sheetLegend(plan, this.partsMap, this.sheetIndex),
+            info: [['Blech', `${plan.sheet.width} × ${plan.sheet.length} mm`], ['Teile gesamt', `${s.nested}/${s.requested}`], ['Auslastung', `${s.utilization}%`],
+                   ['Abstand Teil–Teil', `${plan.config.partToPart} mm`], ['Abstand Teil–Rand', `${plan.config.partToEdge} mm`]]
+        });
+    }
+
+    _pdf() {
+        if (!this.result) return this._toast('Bitte zuerst Nesting starten', 'warning');
+        const name = this.overlay.querySelector('#an-name').value.trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '_') || 'NESTING';
+        downloadPlanPdf(this.app, { plan: { ...this.result.plan, planId: name } });
     }
 
     _cost() {
@@ -433,6 +595,7 @@ class PlanOpenDialog {
             if (act === 'close') this.close();
             if (act === 'search') this._search();
             if (act === 'parts') this._parts(e.target.closest('tr').dataset.id);
+            if (act === 'pdf') downloadPlanPdf(this.app, { planId: e.target.closest('tr').dataset.id });
             if (act === 'editpart') this._editPart(e.target.closest('[data-pid]'));
             if (act === 'cost') PlanCostDialog.open(this.app, { planId: e.target.closest('tr').dataset.id });
             if (act === 'open') this._open(e.target.closest('tr').dataset.id, Number(e.target.closest('tr').querySelector('select')?.value || 0));
@@ -453,7 +616,7 @@ class PlanOpenDialog {
                 return `<tr data-id="${this._esc(p.planId)}" style="border-top:1px solid #ddd"><td>${this._esc(p.planId)}</td>
                     <td>${p.sheet ? p.sheet.width + '×' + p.sheet.length : ''}</td><td>${p.stats?.nested ?? p.instanceCount}</td><td>${n}</td>
                     <td>${p.stats?.utilization ?? ''}%</td><td>${this._esc((p.updatedAt || '').slice(0, 16).replace('T', ' '))}</td>
-                    <td>${n > 1 ? `<select>${Array.from({ length: n }, (_, i) => `<option value="${i}">Blech ${i + 1}</option>`).join('')}</select> ` : ''}<button data-act="parts">Teile</button> <button data-act="cost">Kalkulation</button> <button data-act="open">Öffnen</button></td></tr>`;
+                    <td>${n > 1 ? `<select>${Array.from({ length: n }, (_, i) => `<option value="${i}">Blech ${i + 1}</option>`).join('')}</select> ` : ''}<button data-act="parts">Teile</button> <button data-act="pdf">PDF</button> <button data-act="cost">Kalkulation</button> <button data-act="open">Öffnen</button></td></tr>`;
             }).join('') : '<tr><td colspan="7" style="padding:8px;color:#888">Keine Pläne gefunden</td></tr>';
         } catch (e) { this._toast(`Planliste nicht ladbar: ${e.message}`, 'error'); }
     }

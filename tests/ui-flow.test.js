@@ -24,7 +24,7 @@ test('Durchgang: Teileimport → Autonest → Plan speichern → Kalkulation →
     h.w.CeraJetEngine = CeraJetEngine;
     await quiet(async () => {
         h.load('dxf-parser.js', ['DXFParser']);
-        h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog']);
+        h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer', 'ZoomPane']);
         h.load('nesting.js', ['NestingEngine']);
         h.load('cost-plan.js', ['PlanCost']);
         h.load('cost-dialog.js', ['PlanCostDialog']);
@@ -125,7 +125,7 @@ test('In-Place-Edit: Plan → Teile → Bearbeiten → Textmarke → Aktualisier
         await quiet(async () => {
             h.w.CeraJetEngine = CeraJetEngine;
             h.load('dxf-parser.js', ['DXFParser']);
-            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog']);
+            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer', 'ZoomPane']);
             h.load('plan-update.js', ['PlanUpdate']);
             h.load('part-editor.js', ['PartEditor', 'PartUpdateDialog', 'PartLibraryDialog']);
             h.load('nesting.js', ['NestingEngine']);
@@ -222,7 +222,7 @@ test('Teileimport „Vom Server…": Mehrfachauswahl über Ordner, Alle im Ordne
             h.w.CeraJetEngine = CeraJetEngine;
             await seedIfEmpty(h.stores);
             h.load('dxf-parser.js', ['DXFParser']);
-            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog']);
+            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer', 'ZoomPane']);
             h.load('dxf-browser.js', ['DXFBrowser']);
         });
         // Server-DXF-Mock: Root mit 2 Dateien + Ordner "Heide" mit 2 Dateien (eine mit Umlaut-Layer, ISO-8859-1)
@@ -288,7 +288,7 @@ test('Große Vorschau: Teilebibliothek-Klick öffnet Viewer, Zoom ±/Rad/Einpass
             h.w.CeraJetEngine = CeraJetEngine;
             await seedIfEmpty(h.stores);
             h.load('dxf-parser.js', ['DXFParser']);
-            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer']);
+            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer', 'ZoomPane']);
             h.load('plan-update.js', ['PlanUpdate']);
             h.load('part-editor.js', ['PartEditor', 'PartUpdateDialog', 'PartLibraryDialog']);
         });
@@ -355,7 +355,7 @@ test('Mehrfachimport: viele Dateien in Paketen speichern; Abbruch mitten drin ma
         await quiet(async () => {
             h.w.CeraJetEngine = CeraJetEngine; await seedIfEmpty(h.stores);
             h.load('dxf-parser.js', ['DXFParser']);
-            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer']);
+            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer', 'ZoomPane']);
         });
         const $ = s => h.doc.querySelector(s);
         const imp = new h.w.PartImportDialog(h.app);
@@ -385,4 +385,130 @@ test('Mehrfachimport: viele Dateien in Paketen speichern; Abbruch mitten drin ma
         assert.match(h.toasts.at(-1)[0], /16 von 16/);
         imp.close();
     } finally { h.close(); }
+});
+
+// Web-Worker-Attrappe: führt js/nesting-worker.js (mit nesting.js) in einem eigenen vm-Kontext aus
+function makeFakeWorker(fs, vm, path) {
+    const root = path.join(__dirname, '..', 'js');
+    const instances = [];
+    class FakeWorker {
+        constructor(url) {
+            this.url = url; this.dead = false; instances.push(this);
+            const self = { location: { search: '' }, postMessage: m => setTimeout(() => { if (!this.dead && this.onmessage) this.onmessage({ data: m }); }, 0) };
+            this.ctx = vm.createContext({ self, performance, console: { log() {}, warn() {}, debug() {}, error() {} }, Date, Math, importScripts: name => {
+                vm.runInContext(fs.readFileSync(path.join(root, name.split('?')[0]), 'utf8'), this.ctx);
+            } });
+            vm.runInContext(fs.readFileSync(path.join(root, 'nesting-worker.js'), 'utf8'), this.ctx);
+        }
+        postMessage(data) { setTimeout(() => { if (!this.dead) this.ctx.self.onmessage({ data }); }, 0); }
+        terminate() { this.dead = true; }
+    }
+    return { FakeWorker, instances };
+}
+
+test('Autonest im Worker: Fortschritt, Ergebnis, Zoom in der Vorschau, Große Ansicht, Abbrechen', async () => {
+    const fs = require('fs'), vm = require('vm'), path = require('path');
+    const h = await start();
+    try {
+        await quiet(async () => {
+            h.w.CeraJetEngine = CeraJetEngine; await seedIfEmpty(h.stores);
+            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer', 'ZoomPane']);
+            h.load('nesting.js', ['NestingEngine']);
+            h.load('cost-plan.js', ['PlanCost']);
+            h.load('cost-dialog.js', ['PlanCostDialog']);
+            h.load('nesting-plan.js', ['NestingPlan', 'AutoNestDialog', 'PlanOpenDialog']);
+        });
+        const { FakeWorker, instances } = makeFakeWorker(fs, vm, path);
+        h.w.Worker = FakeWorker;
+        const $ = s => h.doc.querySelector(s);
+        const an0 = await quiet(() => h.w.PartGeometry.analyze([
+            { points: [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 80 }, { x: 0, y: 80 }], isClosed: true, layer: 'T' },
+            { points: [{ x: 50, y: 30 }, { x: 70, y: 30 }, { x: 70, y: 50 }, { x: 50, y: 50 }], isClosed: true, layer: 'L' }]));
+        await h.stores.parts.put(JSON.parse(JSON.stringify(h.w.PartGeometry.toRecord(an0, { partId: 'P-W', fileName: 'w.dxf', name: 'WORKERTEIL', orderId: 'O-W', customer: 'X', qty: 120,
+            techRef: { machineId: null, materialId: 21, thickness: 10 } }))));
+
+        const an = new h.w.AutoNestDialog(h.app);
+        an.open();
+        await h.waitFor(() => $('#an-hits [data-pid]'));
+        await an._addPart('P-W');
+        an.rows[0].qty = 120;
+        $('#an-w').value = '1500'; $('#an-l').value = '1000';
+
+        // Lauf 1: durchläuft im Worker, Fortschritt kommt an, Ergebnis + Vorschau mit Zoom
+        click($('[data-act="run"]'));
+        assert.strictEqual($('#an-run').disabled, true, 'Start gesperrt während der Berechnung');
+        assert.strictEqual($('#an-cancel').style.display, '', 'Abbrechen sichtbar');
+        await h.waitFor(() => an.result);
+        assert.strictEqual(instances.length, 1);
+        assert.strictEqual(instances[0].dead, true, 'Worker beendet');
+        assert.strictEqual($('#an-run').disabled, false);
+        assert.strictEqual($('#an-cancel').style.display, 'none');
+        const s = an.result.plan.stats;
+        assert.strictEqual(s.nested, 120);
+        assert.match($('#an-status').textContent, /120\/120 Teile/);
+        assert.strictEqual($('#an-progress').value, 120, 'Fortschrittsbalken am Ende voll');
+
+        const vb = () => $('#an-preview svg').getAttribute('viewBox').split(' ').map(Number);
+        const fit = vb();
+        assert.strictEqual(h.doc.querySelectorAll('#an-preview svg path').length, 120 * 2, '120 Teile + 120 Löcher');
+        click($('[data-act="zin"]'));
+        assert.ok(vb()[2] < fit[2]);
+        assert.match($('#an-zoom').textContent, /140 %/);
+        $('#an-preview').dispatchEvent(new h.w.WheelEvent('wheel', { deltaY: -300, bubbles: true, cancelable: true }));
+        assert.ok(vb()[2] < fit[2] / 1.4);
+        click($('[data-act="fit"]'));
+        assert.deepStrictEqual(vb(), fit);
+        // Große Ansicht
+        click($('[data-act="big"]'));
+        await h.waitFor(() => $('.part-viewer-overlay #pv-svg path'));
+        assert.match($('.part-viewer-overlay').textContent, /Schachtelplan — Blech 1\/1/);
+        assert.match($('.part-viewer-overlay').textContent, /WORKERTEIL\s*× 120/);
+        click($('.part-viewer-overlay [data-act="close"]'));
+
+        // Lauf 2: sofort abbrechen → kein Ergebnis-Update, Worker beendet, erneut startbar
+        const before = an.result;
+        click($('[data-act="run"]'));
+        click($('[data-act="cancel"]'));
+        await h.waitFor(() => /Abgebrochen/.test($('#an-status').textContent));
+        assert.strictEqual(instances.at(-1).dead, true);
+        assert.strictEqual($('#an-run').disabled, false);
+        await h.sleep(50);
+        assert.strictEqual(an.result, before, 'Ergebnis unverändert');
+        // Lauf 3 funktioniert wieder
+        click($('[data-act="run"]'));
+        await h.waitFor(() => an.result !== before);
+        // Plan als PDF: Anfrage mit Plan inline + Planname, Download wird ausgelöst
+        $('#an-name').value = 'mein plan';
+        let pdfReq = null; const created = [];
+        h.w.URL.createObjectURL = b => { created.push(b); return 'blob:test'; }; h.w.URL.revokeObjectURL = () => {};
+        h.w.__fetchHook = (u, o) => { if (String(u).includes('/api/reports/plan-pdf')) { pdfReq = JSON.parse(o.body); return Promise.resolve(new Response(new Uint8Array([37, 80, 68, 70]), { status: 200, headers: { 'Content-Type': 'application/pdf' } })); } return null; };
+        click($('[data-act="pdf"]'));
+        await h.waitFor(() => created.length === 1);
+        assert.strictEqual(pdfReq.plan.planId, 'MEIN_PLAN');
+        assert.strictEqual(pdfReq.plan.instances.length, 120);
+        h.w.__fetchHook = null;
+
+        // Schließen während der Berechnung bricht ab
+        click($('[data-act="run"]'));
+        an.close();
+        assert.strictEqual(instances.at(-1).dead, true);
+    } finally { h.close(); }
+});
+
+test('Worker-Skript: Fortschritt + Ergebnis, Fehler werden gemeldet', async () => {
+    const fs = require('fs'), vm = require('vm'), path = require('path');
+    const { FakeWorker } = makeFakeWorker(fs, vm, path);
+    const msgs = [];
+    const w = new FakeWorker('js/nesting-worker.js'); w.onmessage = e => msgs.push(e.data);
+    const sq = (x) => ({ points: [{ x: 0, y: 0 }, { x: 50 + x, y: 0 }, { x: 50 + x, y: 50 }, { x: 0, y: 50 }], isClosed: true });
+    w.postMessage({ items: Array.from({ length: 30 }, (_, i) => sq(i % 3)), cfg: { sheetWidth: 500, sheetHeight: 300, sheetMargin: 5, spacing: 3, maxSheets: 5 } });
+    await new Promise(r => { const t = setInterval(() => { if (msgs.some(m => m.type === 'done' || m.type === 'error')) { clearInterval(t); r(); } }, 10); });
+    const done = msgs.find(m => m.type === 'done');
+    assert.ok(done && done.res.placements.length === 30);
+    assert.ok(msgs.some(m => m.type === 'progress' && m.done === m.total), 'letzte Fortschrittsmeldung vorhanden');
+    // Fehlerfall: ungültige Items
+    const w2 = new FakeWorker('x'); const m2 = []; w2.onmessage = e => m2.push(e.data);
+    w2.postMessage({ items: null, cfg: {} });
+    await new Promise(r => setTimeout(r, 50));
+    assert.strictEqual(m2.at(-1).type, 'error');
 });

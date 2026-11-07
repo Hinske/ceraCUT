@@ -9,7 +9,8 @@
  *   - Rotationsoptimierung (0°, 90°, 180°, 270° oder benutzerdefiniert)
  *
  * Last Modified: 2026-11-07
- * Build: 20261107-nestplan
+ * Build: 20261107-nestperf
+ * V1.4: Perf — Polygon-Vereinfachung (simplifyTol), Kanten-Raster je platziertem Teil (_polysClash), Suchhinweis je Teiletyp/Variante, Variante-passt-nicht-mehr-Merker, Raumindex + vorübersetzte Polygone, Blech-voll-Merker je Teiletyp (typeKey), gemeinsame Rotationsvarianten, numerisches Dedupe, cfg.onProgress(done,total,sheets)
  * V1.3: Feat — cfg.order ('large-first'|'small-first'|'input'), Kontur-Felder priority und rotationSteps (Override je Teil), Node-Export
  * V1.2: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
@@ -19,7 +20,7 @@
 const NestingEngine = (() => {
     'use strict';
 
-    const VERSION = 'V1.3';
+    const VERSION = 'V1.4';
     const LOG_PREFIX = `[Nesting ${VERSION}]`;
     const EPSILON = 1e-8;
     const MAX_GRID_CELLS = 6000;   // Obergrenze Raster-Kandidaten je Platzierungsversuch
@@ -36,7 +37,8 @@ const NestingEngine = (() => {
         rotationSteps: [0, 90, 180, 270],  // Grad
         gravity: 'bottom-left', // 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right'
         maxSheets: 100,         // Maximale Anzahl Bleche
-        mergeToleranceNFP: 0.1  // Toleranz für NFP-Vereinfachung
+        mergeToleranceNFP: 0.1, // Toleranz für NFP-Vereinfachung
+        simplifyTol: 0.1        // mm: Polygon-Vereinfachung für die Platzierung (0 = aus); Abstand wird um 4×tol erhöht (garantiert den echten Mindestabstand)
     };
 
     // ═══════════════════════════════════════════════════════════════════
@@ -384,7 +386,7 @@ const NestingEngine = (() => {
      * @param {number} spacing - Abstand zwischen Teilen
      * @returns {{x, y}|null} Beste Position oder null wenn kein Platz
      */
-    function _findBLFPosition(partPoints, sheet, placedParts, gravity, spacing) {
+    function _findBLFPosition(partPoints, sheet, placedParts, gravity, spacing, grid, hint) {
         const partBBox = _boundingBox(partPoints);
         const bounds = _placementBounds(sheet, partBBox);
 
@@ -406,9 +408,18 @@ const NestingEngine = (() => {
             stepX *= f; stepY *= f;
         }
 
+        // V1.4: Hinweis = Position der letzten Platzierung desselben Teils (gleiche Variante) auf diesem Blech.
+        // Alles "vor" dieser Zeile war damals belegt und ist es heute erst recht → nicht erneut absuchen.
+        let genBounds = bounds;
+        if (hint) {
+            if (gravity === 'top-left' || gravity === 'top-right') genBounds = { ...bounds, maxY: Math.min(bounds.maxY, hint.y + partH + EPSILON) };
+            else genBounds = { ...bounds, minY: Math.max(bounds.minY, hint.y - partH - EPSILON) };   // eine Teilehöhe Spielraum: Lücken neben neu platzierten Nachbarn (sonst ~1 Blech mehr bei 2000 Teilen)
+            if (genBounds.minY > genBounds.maxY) return null;
+        }
+
         // Kandidatenpositionen generieren
         const candidates = _generateCandidatePositions(
-            bounds, placedParts, partBBox, stepX, stepY, gravity, spacing
+            genBounds, placedParts, partBBox, stepX, stepY, gravity, spacing
         );
 
         // Gravitations-Sortierung
@@ -416,6 +427,7 @@ const NestingEngine = (() => {
 
         // Beste kollisionsfreie Position finden
         for (const candidate of candidates) {
+            if (hint && (genBounds.minY - EPSILON > candidate.y || candidate.y > genBounds.maxY + EPSILON)) continue;   // Kandidaten neben Nachbarn außerhalb der Suchzeile
             const testBBox = {
                 minX: partBBox.minX + candidate.x,
                 minY: partBBox.minY + candidate.y,
@@ -432,7 +444,7 @@ const NestingEngine = (() => {
             }
 
             // Kollision mit platzierten Teilen prüfen
-            if (!_collidesWithPlaced(testBBox, partPoints, candidate, placedParts, spacing)) {
+            if (!_collidesWithPlaced(testBBox, partPoints, candidate, placedParts, spacing, grid)) {
                 return candidate;
             }
         }
@@ -492,7 +504,7 @@ const NestingEngine = (() => {
         const result = [];
         const seen = new Set();
         for (const c of candidates) {
-            const key = `${Math.round(c.x / tolerance)},${Math.round(c.y / tolerance)}`;
+            const key = Math.round(c.x / tolerance) * 1048576 + Math.round(c.y / tolerance);   // numerisch: keine String-Allokation je Kandidat
             if (!seen.has(key)) {
                 seen.add(key);
                 result.push(c);
@@ -523,23 +535,162 @@ const NestingEngine = (() => {
         }
     }
 
+
+    // ═══════════════════════════════════════════════════════════════════
+    // V1.4 Performance: Raumindex + vorübersetzte Polygone
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** Gleichmäßiges Raster über den platzierten BBoxen: Kollisionsprüfung nur gegen Nachbarn statt gegen alle. */
+    function _makeGrid(cell) {
+        const map = new Map();
+        let stamp = 0;
+        const key = (cx, cy) => (cx + 4096) * 8192 + (cy + 4096);
+        return {
+            add(entry) {
+                const b = entry.bbox;
+                for (let cx = Math.floor(b.minX / cell); cx <= Math.floor(b.maxX / cell); cx++) {
+                    for (let cy = Math.floor(b.minY / cell); cy <= Math.floor(b.maxY / cell); cy++) {
+                        const k = key(cx, cy);
+                        const l = map.get(k);
+                        if (l) l.push(entry); else map.set(k, [entry]);
+                    }
+                }
+            },
+            /** Kandidaten, deren Zellen die um `gap` erweiterte BBox berühren (ohne Duplikate). */
+            query(b, gap) {
+                const out = [];
+                stamp++;
+                for (let cx = Math.floor((b.minX - gap) / cell); cx <= Math.floor((b.maxX + gap) / cell); cx++) {
+                    for (let cy = Math.floor((b.minY - gap) / cell); cy <= Math.floor((b.maxY + gap) / cell); cy++) {
+                        const l = map.get(key(cx, cy));
+                        if (!l) continue;
+                        for (const e of l) if (e._q !== stamp) { e._q = stamp; out.push(e); }
+                    }
+                }
+                return out;
+            }
+        };
+    }
+
+    function _translate(points, pos) {
+        const out = new Array(points.length);
+        for (let i = 0; i < points.length; i++) out[i] = { x: points[i].x + pos.x, y: points[i].y + pos.y };
+        return out;
+    }
+
+    /** Überlappung zweier bereits verschobener Polygone; die BBoxen beschneiden die Prüfungen. */
+    function _polysOverlapAbs(A, bboxA, B, bboxB) {
+        for (const p of A) {
+            if (p.x > bboxB.minX && p.x < bboxB.maxX && p.y > bboxB.minY && p.y < bboxB.maxY && _pointInPolygon(p, B)) return true;
+        }
+        for (const p of B) {
+            if (p.x > bboxA.minX && p.x < bboxA.maxX && p.y > bboxA.minY && p.y < bboxA.maxY && _pointInPolygon(p, A)) return true;
+        }
+        // Kantenschnitt nur im gemeinsamen Bereich beider BBoxen
+        const rx0 = Math.max(bboxA.minX, bboxB.minX), rx1 = Math.min(bboxA.maxX, bboxB.maxX);
+        const ry0 = Math.max(bboxA.minY, bboxB.minY), ry1 = Math.min(bboxA.maxY, bboxB.maxY);
+        if (rx0 > rx1 || ry0 > ry1) return false;
+        const inRegion = (a, b) => !(Math.max(a.x, b.x) < rx0 || Math.min(a.x, b.x) > rx1 || Math.max(a.y, b.y) < ry0 || Math.min(a.y, b.y) > ry1);
+        const nA = A.length, nB = B.length;
+        for (let i = 0; i < nA; i++) {
+            const a1 = A[i], a2 = A[(i + 1) % nA];
+            if (!inRegion(a1, a2)) continue;
+            for (let j = 0; j < nB; j++) {
+                const b1 = B[j], b2 = B[(j + 1) % nB];
+                if (inRegion(b1, b2) && _segmentsIntersect(a1, a2, b1, b2)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** Mindestabstand zwischen verschobenen Polygonen: nur Punkte nahe der anderen BBox werden gegen deren Kanten geprüft. */
+    function _polysCloserAbs(A, bboxA, B, bboxB, minDist) {
+        for (const [P, Q, bq] of [[A, B, bboxB], [B, A, bboxA]]) {
+            const x0 = bq.minX - minDist, x1 = bq.maxX + minDist, y0 = bq.minY - minDist, y1 = bq.maxY + minDist;
+            const n = Q.length;
+            for (const p of P) {
+                if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
+                for (let j = 0; j < n; j++) {
+                    if (_distPointSeg(p, Q[j], Q[(j + 1) % n]) < minDist) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+
+    /** Raster über die Kanten eines Polygons: Abstands-/Schnittprüfung nur gegen Kanten in der Nähe (statt alle n·m Paare). */
+    function _makeSegGrid(pts, bbox, cell) {
+        const n = pts.length;
+        const nx = Math.max(1, Math.ceil((bbox.maxX - bbox.minX) / cell) + 1);
+        const ny = Math.max(1, Math.ceil((bbox.maxY - bbox.minY) / cell) + 1);
+        const cells = new Array(nx * ny);
+        for (let i = 0; i < n; i++) {
+            const a = pts[i], b = pts[(i + 1) % n];
+            const cx0 = Math.max(0, Math.floor((Math.min(a.x, b.x) - bbox.minX) / cell)), cx1 = Math.min(nx - 1, Math.floor((Math.max(a.x, b.x) - bbox.minX) / cell));
+            const cy0 = Math.max(0, Math.floor((Math.min(a.y, b.y) - bbox.minY) / cell)), cy1 = Math.min(ny - 1, Math.floor((Math.max(a.y, b.y) - bbox.minY) / cell));
+            for (let cx = cx0; cx <= cx1; cx++) for (let cy = cy0; cy <= cy1; cy++) {
+                const k = cx * ny + cy;
+                (cells[k] || (cells[k] = [])).push(i);
+            }
+        }
+        return { cell, nx, ny, minX: bbox.minX, minY: bbox.minY, cells, seen: new Int32Array(n), stamp: 0 };
+    }
+
+    /**
+     * Prüft, ob Polygon A (verschoben) mit dem platzierten Polygon B kollidiert: Kantenschnitt, Abstand < minDist
+     * oder vollständige Umschließung. Gleiches Ergebnis wie _polysOverlapAbs + _polysCloserAbs, aber O(n·lokal).
+     */
+    function _polysClash(A, bboxA, placed, minDist) {
+        const B = placed.abs, bboxB = placed.bbox, g = placed.sg;
+        const nA = A.length, nB = B.length;
+        for (let i = 0; i < nA; i++) {
+            const a1 = A[i], a2 = A[(i + 1) % nA];
+            const x0 = Math.min(a1.x, a2.x) - minDist, x1 = Math.max(a1.x, a2.x) + minDist;
+            const y0 = Math.min(a1.y, a2.y) - minDist, y1 = Math.max(a1.y, a2.y) + minDist;
+            if (x1 < bboxB.minX || x0 > bboxB.maxX || y1 < bboxB.minY || y0 > bboxB.maxY) continue;
+            const cx0 = Math.max(0, Math.floor((x0 - g.minX) / g.cell)), cx1 = Math.min(g.nx - 1, Math.floor((x1 - g.minX) / g.cell));
+            const cy0 = Math.max(0, Math.floor((y0 - g.minY) / g.cell)), cy1 = Math.min(g.ny - 1, Math.floor((y1 - g.minY) / g.cell));
+            g.stamp++;
+            for (let cx = cx0; cx <= cx1; cx++) for (let cy = cy0; cy <= cy1; cy++) {
+                const list = g.cells[cx * g.ny + cy];
+                if (!list) continue;
+                for (const j of list) {
+                    if (g.seen[j] === g.stamp) continue;
+                    g.seen[j] = g.stamp;
+                    const b1 = B[j], b2 = B[(j + 1) % nB];
+                    if (_segmentsIntersect(a1, a2, b1, b2)) return true;
+                    if (_distPointSeg(a1, b1, b2) < minDist || _distPointSeg(a2, b1, b2) < minDist ||
+                        _distPointSeg(b1, a1, a2) < minDist || _distPointSeg(b2, a1, a2) < minDist) return true;
+                }
+            }
+        }
+        // Keine Kante berührt: bleibt nur vollständige Umschließung
+        if (A[0].x > bboxB.minX && A[0].x < bboxB.maxX && A[0].y > bboxB.minY && A[0].y < bboxB.maxY && _pointInPolygon(A[0], B)) return true;
+        if (B[0].x > bboxA.minX && B[0].x < bboxA.maxX && B[0].y > bboxA.minY && B[0].y < bboxA.maxY && _pointInPolygon(B[0], A)) return true;
+        return false;
+    }
+
     /**
      * Prüft Kollision eines Teils (an Kandidatenposition) mit allen platzierten Teilen.
      * Verwendet erst BBox-Check (schnell), dann Polygon-Check (genau).
      */
-    function _collidesWithPlaced(testBBox, partPoints, position, placedParts, spacing) {
-        for (const placed of placedParts) {
+    function _collidesWithPlaced(testBBox, partPoints, position, placedParts, spacing, grid) {
+        const list = grid ? grid.query(testBBox, spacing) : placedParts;
+        let A = null;                                     // Teil an Kandidatenposition, einmal je Kandidat verschoben
+        for (const placed of list) {
             // Schneller BBox-Check mit Spacing
-            if (_bboxOverlap(testBBox, placed.bbox, spacing)) {
-                // Genauerer Check: Polygon-Überlappung
-                if (_polygonsOverlap(partPoints, position, placed.points, placed.position)) {
-                    return true;
-                }
-                // Mindestabstand gegen die ECHTE Kontur (BBox allein lässt ~0 mm Steg zu)
-                if (spacing > 0 && _polygonsCloserThan(partPoints, position, placed.points, placed.position, spacing)) {
-                    return true;
-                }
+            if (!_bboxOverlap(testBBox, placed.bbox, spacing)) continue;
+            if (!A) A = _translate(partPoints, position);
+            if (spacing > 0 && placed.sg) {
+                if (_polysClash(A, testBBox, placed, spacing)) return true;
+                continue;
             }
+            const B = placed.abs || _translate(placed.points, placed.position);
+            // Genauerer Check: Polygon-Überlappung
+            if (_polysOverlapAbs(A, testBBox, B, placed.bbox)) return true;
+            // Mindestabstand gegen die ECHTE Kontur (BBox allein lässt ~0 mm Steg zu)
+            if (spacing > 0 && _polysCloserAbs(A, testBBox, B, placed.bbox, spacing)) return true;
         }
         return false;
     }
@@ -727,106 +878,85 @@ const NestingEngine = (() => {
         // Platzierung
         const placements = [];
         const unplaced = [];
-        const sheets = [{ index: 0, placedParts: [], usedArea: 0 }];
+        const gridCell = Math.max(40, Math.max(cfg.sheetWidth, cfg.sheetHeight) / 40);
+        const newSheet = (index) => ({ index, placedParts: [], usedArea: 0, grid: _makeGrid(gridCell) });
+        const sheets = [newSheet(0)];
+        const variantsByType = new Map();      // typeKey → Rotationsvarianten (identische Teile teilen sie)
+        const fullFor = new Set();             // `${typeKey}|${blech}`: Teil dieses Typs passt dort nicht mehr (Blech nur voller geworden)
 
+        const collSpacing = cfg.spacing + (cfg.simplifyTol > 0 ? 4 * cfg.simplifyTol : 0);   // Sicherheitszuschlag für die vereinfachten Polygone
+        const place = (part, variant, position, si) => {
+            const bbox = _boundingBox(variant.points);
+            const placedBBox = {
+                minX: bbox.minX + position.x, minY: bbox.minY + position.y,
+                maxX: bbox.maxX + position.x, maxY: bbox.maxY + position.y
+            };
+            placements.push({
+                contourIndex: part.originalIndex, sheetIndex: si,
+                position: { x: position.x, y: position.y }, rotation: variant.rotation, bbox: placedBBox
+            });
+            const abs = _translate(variant.points, position);
+            const entry = { points: variant.points, position, bbox: placedBBox, abs };
+            if (collSpacing > 0) {
+                const dim = Math.max(placedBBox.maxX - placedBBox.minX, placedBBox.maxY - placedBBox.minY);
+                entry.sg = _makeSegGrid(abs, placedBBox, Math.max(2 * collSpacing, dim / 40, 1));
+            }
+            sheets[si].placedParts.push(entry);
+            sheets[si].grid.add(entry);
+            sheets[si].usedArea += _polygonArea(variant.points);
+        };
+
+        const variantFailed = new Set();       // `${typeKey}|${blech}|${variante}`: Variante passt dort nicht mehr
+        const variantHint = new Map();         // dito → {x, y} der letzten Platzierung
+        const tryOn = (part, variants, si) => {
+            for (let vi = 0; vi < variants.length; vi++) {
+                const key = part.typeKey + '|' + si + '|' + vi;
+                if (variantFailed.has(key)) continue;
+                const variant = variants[vi];
+                const position = _findBLFPosition(variant.points, sheetConfig, sheets[si].placedParts, cfg.gravity, collSpacing,
+                    sheets[si].grid, variantHint.get(key));
+                if (position) {
+                    variantHint.set(key, { x: position.x, y: position.y });
+                    place(part, variant, position, si);
+                    return true;
+                }
+                variantFailed.add(key);
+            }
+            return false;
+        };
+
+        let processed = 0;
         for (const partIdx of sortedIndices) {
             const part = preparedParts[partIdx];
             let placed = false;
 
-            // Rotationsvarianten durchprobieren
-            const rotationVariants = _getRotationVariants(part, part.rotationSteps || cfg.rotationSteps);
+            // Rotationsvarianten (je Teiletyp einmal)
+            let rotationVariants = variantsByType.get(part.typeKey);
+            if (!rotationVariants) {
+                rotationVariants = _getRotationVariants(part, part.rotationSteps || cfg.rotationSteps);
+                variantsByType.set(part.typeKey, rotationVariants);
+            }
 
-            // Auf existierenden Blechen versuchen
+            // Auf existierenden Blechen versuchen (Bleche, auf denen dieser Typ schon scheiterte, überspringen)
             for (let si = 0; si < sheets.length && !placed; si++) {
-                for (const variant of rotationVariants) {
-                    const position = _findBLFPosition(
-                        variant.points,
-                        sheetConfig,
-                        sheets[si].placedParts,
-                        cfg.gravity,
-                        cfg.spacing
-                    );
-
-                    if (position) {
-                        const bbox = _boundingBox(variant.points);
-                        const placedBBox = {
-                            minX: bbox.minX + position.x,
-                            minY: bbox.minY + position.y,
-                            maxX: bbox.maxX + position.x,
-                            maxY: bbox.maxY + position.y
-                        };
-
-                        const placement = {
-                            contourIndex: part.originalIndex,
-                            sheetIndex: si,
-                            position: { x: position.x, y: position.y },
-                            rotation: variant.rotation,
-                            bbox: placedBBox
-                        };
-
-                        placements.push(placement);
-                        sheets[si].placedParts.push({
-                            points: variant.points,
-                            position: position,
-                            bbox: placedBBox
-                        });
-                        sheets[si].usedArea += _polygonArea(variant.points);
-
-                        placed = true;
-                        break;
-                    }
-                }
+                const memo = part.typeKey + '|' + si;
+                if (fullFor.has(memo)) continue;
+                if (tryOn(part, rotationVariants, si)) placed = true; else fullFor.add(memo);
             }
 
             // Neues Blech versuchen
             if (!placed && sheets.length < cfg.maxSheets) {
                 const newSheetIdx = sheets.length;
-                sheets.push({ index: newSheetIdx, placedParts: [], usedArea: 0 });
-
-                for (const variant of rotationVariants) {
-                    const position = _findBLFPosition(
-                        variant.points,
-                        sheetConfig,
-                        [],
-                        cfg.gravity,
-                        cfg.spacing
-                    );
-
-                    if (position) {
-                        const bbox = _boundingBox(variant.points);
-                        const placedBBox = {
-                            minX: bbox.minX + position.x,
-                            minY: bbox.minY + position.y,
-                            maxX: bbox.maxX + position.x,
-                            maxY: bbox.maxY + position.y
-                        };
-
-                        const placement = {
-                            contourIndex: part.originalIndex,
-                            sheetIndex: newSheetIdx,
-                            position: { x: position.x, y: position.y },
-                            rotation: variant.rotation,
-                            bbox: placedBBox
-                        };
-
-                        placements.push(placement);
-                        sheets[newSheetIdx].placedParts.push({
-                            points: variant.points,
-                            position: position,
-                            bbox: placedBBox
-                        });
-                        sheets[newSheetIdx].usedArea += _polygonArea(variant.points);
-
-                        placed = true;
-                        break;
-                    }
-                }
+                sheets.push(newSheet(newSheetIdx));
+                if (tryOn(part, rotationVariants, newSheetIdx)) placed = true; else fullFor.add(part.typeKey + '|' + newSheetIdx);
             }
 
             if (!placed) {
                 console.warn(`${LOG_PREFIX} Kontur ${part.originalIndex} (${part.name}) konnte nicht platziert werden`);
                 unplaced.push(part.originalIndex);
             }
+            processed++;
+            if (cfg.onProgress && (processed % 5 === 0 || processed === sortedIndices.length)) cfg.onProgress(processed, sortedIndices.length, sheets.length);
         }
 
         // Leere Bleche am Ende entfernen
@@ -867,9 +997,61 @@ const NestingEngine = (() => {
     }
 
     /**
+     * Polygon für die Platzierung vereinfachen (Douglas-Peucker, geschlossener Ring): Kunstmotive haben tausende Punkte,
+     * die Kollisionsprüfung ist aber O(n·m). Die vier Extrempunkte (min/max X/Y) bleiben erhalten → BBox identisch,
+     * damit Position/Drehung exakt auf die Originalkontur übertragbar sind. Abweichung ≤ tol je Punkt.
+     */
+    function _simplifyRing(points, tol) {
+        const n = points.length;
+        if (!(tol > 0) || n < 12) return points;
+        let iMinX = 0, iMaxX = 0, iMinY = 0, iMaxY = 0;
+        for (let i = 1; i < n; i++) {
+            if (points[i].x < points[iMinX].x) iMinX = i;
+            if (points[i].x > points[iMaxX].x) iMaxX = i;
+            if (points[i].y < points[iMinY].y) iMinY = i;
+            if (points[i].y > points[iMaxY].y) iMaxY = i;
+        }
+        const anchors = [...new Set([iMinX, iMaxX, iMinY, iMaxY])].sort((a, b) => a - b);
+        const keep = new Uint8Array(n);
+        for (const a of anchors) keep[a] = 1;
+        // Je Kette zwischen aufeinanderfolgenden Ankern (zyklisch) Douglas-Peucker
+        for (let k = 0; k < anchors.length; k++) {
+            const from = anchors[k];
+            const to = anchors[(k + 1) % anchors.length];
+            const stack = [[from, to]];
+            while (stack.length) {
+                const [a, b] = stack.pop();
+                const len = ((b - a) % n + n) % n;
+                if (len < 2) continue;
+                let worst = -1, wd = tol;
+                for (let step = 1; step < len; step++) {
+                    const idx = (a + step) % n;
+                    const d = _distPointSeg(points[idx], points[a], points[b]);
+                    if (d > wd) { wd = d; worst = idx; }
+                }
+                if (worst >= 0) { keep[worst] = 1; stack.push([a, worst], [worst, b]); }
+            }
+        }
+        const out = [];
+        for (let i = 0; i < n; i++) if (keep[i]) out.push(points[i]);
+        return out.length >= 3 ? out : points;
+    }
+
+    /** Teiletyp-Schlüssel aus Form + Drehwinkeln (0,01 mm gerundet), wenn der Aufrufer keinen typeKey mitgibt. */
+    function _signature(points, rotationSteps) {
+        let h = 5381;
+        for (const p of points) {
+            h = (Math.imul(h, 33) ^ Math.round(p.x * 100)) | 0;
+            h = (Math.imul(h, 33) ^ Math.round(p.y * 100)) | 0;
+        }
+        return `${points.length}:${h}:${rotationSteps ? rotationSteps.join(',') : '-'}`;
+    }
+
+    /**
      * Konturen für die Platzierung vorbereiten
      */
     function _prepareParts(contours, cfg) {
+        const simplifyCache = new Map();
         return contours.map((contour, index) => {
             const points = contour?.points || [];
             if (points.length === 0) {
@@ -880,11 +1062,15 @@ const NestingEngine = (() => {
                     width: 0,
                     height: 0,
                     area: 0,
+                    typeKey: `leer-${index}`,
                     name: contour?.name || `Contour_${index}`
                 };
             }
 
-            const norm = _normalizePart(points);
+            const typeKey = contour?.typeKey != null ? String(contour.typeKey) : _signature(points, contour?.rotationSteps);
+            let nestPts = simplifyCache.get(typeKey);
+            if (!nestPts) { nestPts = _simplifyRing(points, cfg.simplifyTol); simplifyCache.set(typeKey, nestPts); }
+            const norm = _normalizePart(nestPts);
 
             return {
                 originalIndex: index,
@@ -895,6 +1081,7 @@ const NestingEngine = (() => {
                 area: _polygonArea(norm.points),
                 isClosed: contour?.isClosed ?? true,
                 name: contour?.name || `Contour_${index}`,
+                typeKey,
                 priority: Number(contour?.priority) || 0,                       // V1.3: höher = zuerst
                 rotationSteps: Array.isArray(contour?.rotationSteps) && contour.rotationSteps.length
                     ? contour.rotationSteps : null                                // V1.3: Override je Teil

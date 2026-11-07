@@ -199,3 +199,25 @@ test('Plan: update-parts (single/all, andere Pläne, Fehler)', async () => {
     assert.strictEqual((await s.call('GET', '/api/plans/PL1/update-parts')).status, 405);
     s.close();
 });
+
+test('Reports: Schachtelplan-PDF (gespeichert/inline), eine Seite je Blech + Teileliste', async () => {
+    const s = await setup();
+    const sq = (id, w, h) => ({ ...part(id), geometry: { contours: [{ id: 'c1', role: 'disc', closed: true, points: [[0, 0], [w, 0], [w, h], [0, h]] }],
+        bbox: { w, l: h }, cutLength: 0.3, piercings: 1, netArea: w * h / 1e6, rectArea: w * h / 1e6 } });
+    await s.call('POST', '/api/parts', sq('P-1', 100, 50));
+    const plan = { planId: 'PDFPLAN', materialId: null, thickness: 10, sheet: { width: 1000, length: 500 }, stats: { sheets: 2, nested: 3, requested: 3, utilization: 40 },
+        config: { partToPart: 3, partToEdge: 5 }, demand: { 'P-1': { qty: 3 } },
+        instances: [0, 1].map(n => ({ instId: `i${n}`, partId: 'P-1', revision: 1, tx: 10 + n * 150, ty: 10, rot: 0, sheetIndex: 0 })).concat([{ instId: 'i2', partId: 'P-1', revision: 1, tx: 10, ty: 10, rot: 90, sheetIndex: 1 }]) };
+    await s.call('POST', '/api/plans', plan);
+    const pdfOf = async body => { const r = await fetch(`http://127.0.0.1:${s.port}/api/reports/plan-pdf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        return { status: r.status, type: r.headers.get('content-type'), disp: r.headers.get('content-disposition'), buf: Buffer.from(await r.arrayBuffer()) }; };
+    const a = await pdfOf({ planId: 'PDFPLAN' });
+    assert.strictEqual(a.status, 200); assert.strictEqual(a.type, 'application/pdf');
+    assert.match(a.disp, /Schachtelplan_PDFPLAN\.pdf/);
+    assert.strictEqual(a.buf.subarray(0, 5).toString(), '%PDF-');
+    assert.strictEqual((a.buf.toString('latin1').match(/\/Type \/Page\b(?!s)/g) || []).length, 3, '2 Bleche + Teileliste');
+    assert.strictEqual((await pdfOf({ plan })).status, 200, 'auch ungespeichert (Plan ohne Material)');
+    assert.strictEqual((await pdfOf({ planId: 'NOPE' })).status, 404);
+    assert.strictEqual((await pdfOf({})).status, 400);
+    s.close();
+});
