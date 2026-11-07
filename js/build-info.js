@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'b0d2c56',
+        hash: 'a33ce3b',
         date: '2026-11-07',
-        message: 'Fix: Kerf-Aenderung wirkt auch auf offene Konturen, Fugenband offen (V7.18)'
+        message: 'feat: Kostenkalkulation fuer Plaene + PDF-Bericht (cost-plan, cost-dialog, repor'
     },
 
     modules: {
@@ -72,11 +72,14 @@ const CERACUT_BUILD = {
         'session-store':      { version: '1.1', build: '20261104-reviewfix' },
         'auth-helper':        { version: '1.1', build: '20261104-reviewfix' },
         'store':              { version: '1.0', build: '20261107-store' },
-        'data-api':           { version: '1.0', build: '20261107-dataapi' },
+        'data-api':           { version: '1.1', build: '20261107-reportpdf' },
         'seed':               { version: '1.0', build: '20261107-seed' },
         'part-library':       { version: '1.0', build: '20261107-partimport' },
-        'nesting-plan':       { version: '1.1', build: '20261107-planopen' },
-        'nc-tools':           { version: '1.0', build: '20261107-nctools' }
+        'nesting-plan':       { version: '1.2', build: '20261107-costdialog' },
+        'nc-tools':           { version: '1.0', build: '20261107-nctools' },
+        'cost-plan':          { version: '1.0', build: '20261107-plancost' },
+        'cost-dialog':        { version: '1.0', build: '20261107-costdialog' },
+        'report-pdf':         { version: '1.0', build: '20261107-reportpdf' }
     },
 
     changes: [

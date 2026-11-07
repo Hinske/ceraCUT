@@ -4013,10 +4013,10 @@
                 const sheetW = ref ? Math.abs(ref.points.reduce((max, p) => Math.max(max, p.x), -Infinity) - ref.points.reduce((min, p) => Math.min(min, p.x), Infinity)) : 3000;
                 const sheetH = ref ? Math.abs(ref.points.reduce((max, p) => Math.max(max, p.y), -Infinity) - ref.points.reduce((min, p) => Math.min(min, p.y), Infinity)) : 2000;
                 const parts = app.contours.filter(c => !c.isReference);
-                const result = NestingEngine.nest(parts, { width: sheetW, height: sheetH, margin: gap, gap, rotations });
+                const result = NestingEngine.nest(parts, { sheetWidth: sheetW, sheetHeight: sheetH, sheetMargin: gap, spacing: gap, rotationSteps: rotations });
                 const resultEl = document.getElementById('nesting-result');
                 if (result && resultEl) {
-                    resultEl.textContent = `${result.placements?.length || 0} Teile, ${(result.utilization || 0).toFixed(1)}% Nutzung`;
+                    resultEl.textContent = `${result.placements?.length || 0} Teile, ${(result.totalUtilization || 0).toFixed(1)}% Nutzung`;
                     if (result.placements) NestingEngine.applyPlacements(parts, result.placements);
                     app.renderer?.render();
                 }
@@ -4158,9 +4158,10 @@
                     sheetWidth: 3000,
                     sheetHeight: 2000
                 });
-                document.getElementById('cost-time').textContent = `Zeit: ${CostCalculator.formatTime(result.totalTime || 0)}`;
-                document.getElementById('cost-total').textContent = `Kosten: ${CostCalculator.formatCurrency(result.totalCost || 0)}`;
-                document.getElementById('cost-material').textContent = `Material: ${(result.utilization || 0).toFixed(1)}%`;
+                // Ergebnis-Struktur: time.total (s), summary.totalCost (€), material.utilization (%)
+                document.getElementById('cost-time').textContent = `Zeit: ${CostCalculator.formatTime(result.time?.total || 0)}`;
+                document.getElementById('cost-total').textContent = `Kosten: ${CostCalculator.formatCurrency(result.summary?.totalCost || 0)}`;
+                document.getElementById('cost-material').textContent = `Material: ${(result.material?.utilization || 0).toFixed(1)}%`;
             });
 
             // Maschinenpark

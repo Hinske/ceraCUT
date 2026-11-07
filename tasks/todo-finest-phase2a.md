@@ -23,4 +23,4 @@
 - [ ] Autonest im Web-Worker (UI friert bei sehr großen Mengen kurz ein)
 - [ ] Plan-Speichern-Dialog laut FINest (Fälligkeit, Kommentar, Menge, NC-Flag)
 - [ ] Blechbibliothek-UI + Anbindung (siehe oben)
-- [ ] Bestehender Button „Nesting“ (btn-nesting in `index.html`) übergibt falsche Config-Keys (`width/height/margin/gap` statt `sheetWidth/sheetHeight/sheetMargin/spacing`) und liest `result.utilization` (heißt `totalUtilization`) → Abstand/Blech wirkungslos; mit Autonest zusammenführen oder fixen
+- [x] Bestehender Button „Nesting“ (btn-nesting): falsche Config-Keys und `result.utilization` korrigiert (Phase 5, 2026-11-07); mit Autonest zusammenführen bleibt offen
