@@ -322,10 +322,10 @@ const CeraCutPipeline = {
 
         // V2.9: Referenz-Erkennung - NUR bei Rechteck!
         // V3.8: Referenz-Erkennung optional deaktivierbar
+        // Keine automatische Referenz-Erkennung mehr (importierte Konturen werden nie von selbst Referenz).
+        // Nur Fliesenumrisse (Layer Fliese) bleiben Referenz, alles andere nur manuell.
         if (!options.skipReference) {
-            this._detectReference(sorted, hasTiles);
-        } else {
-            console.log('[Pipeline V3.7] Referenz-Erkennung übersprungen (skipReference)');
+            for (const c of sorted) c.isReference = this.isTileOutline(c);
         }
         
         console.log(`[Pipeline V3.7] Topology: ${discCount} discs, ${holeCount} holes`);

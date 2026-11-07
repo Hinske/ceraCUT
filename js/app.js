@@ -3372,10 +3372,6 @@ class CeraCutApp {
             case 2:
                 if (this.renderer) this.renderer.currentMode = 'referenz';
                 this.updateContourPanel();
-                const hasRef = this.contours.some(c => c.isReference);
-                if (!hasRef && this.contours.length > 0) {
-                    this.autoDetectReference();
-                }
                 break;
             case 3:
                 if (this.renderer) this.renderer.currentMode = 'nullpunkt';
@@ -3874,8 +3870,7 @@ class CeraCutApp {
         try { tileSheet = this._groupPartsForExport(true).length > 0; } catch (e) { /* ignore */ }
         const keepRefs = this.contours.some(c => c.isReference || isTileLayer(c)) || tileSheet;
         try {
-            if (keepRefs) this.setOriginToReferenceUL();
-            else this.autoDetectReference();
+            this.setOriginToReferenceUL();   // keine Auto-Referenz mehr: nur Nullpunkt
             this.undoManager?.clear();
         } catch (e) {
             console.warn('[App V6.64] Auto-Setup fehlgeschlagen', e);
@@ -4090,9 +4085,6 @@ class CeraCutApp {
             this.updateStepUI();
         });
         
-        document.getElementById('btn-auto-reference')?.addEventListener('click', () => {
-            this.autoDetectReference();
-        });
     }
     
     /**
@@ -4177,79 +4169,6 @@ class CeraCutApp {
         this.showToast(`🔗 ${removed.length} Linien zu ${added.length} geschlossener Kontur verbunden`, 'success');
     }
 
-    autoDetectReference() {
-        const mode = document.getElementById('reference-contour-select')?.value || 'auto';
-        
-        // Snapshot VOR Änderung: alle bisherigen Referenz-Konturen merken
-        const oldRefs = this.contours.filter(c => c.isReference);
-        
-        this.contours.forEach(c => { c.isReference = false; });
-        
-        let referenceContour = null;
-        // V6.83: Fliese aus Einzellinien -> offene Konturen zu geschlossener Kontur verketten
-        this._joinOpenContoursIntoClosed();
-        const closedContours = this.contours.filter(c => c.isClosed === true);
-        
-        if (closedContours.length === 0) {
-            // Undo für das Zurücksetzen, falls vorher Referenzen existierten
-            if (oldRefs.length > 0) {
-                const app = this;
-                const cmd = new FunctionCommand(
-                    'Referenz zurückgesetzt (keine geschlossenen Konturen)',
-                    () => { app.contours.forEach(c => { c.isReference = false; }); app._recalcTopologyAfterReferenceChange(); },
-                    () => { oldRefs.forEach(c => { c.isReference = true; }); app.setOriginToReferenceUL(); app._recalcTopologyAfterReferenceChange(); }
-                );
-                this.undoManager.pushExecuted(cmd);
-                this.undoManager.redoStack.length = 0;
-                this.undoManager._notifyStateChange();
-                this.updateStepUI();
-            }
-            this.showToast('Keine geschlossenen Konturen für Referenz gefunden', 'warning');
-            return;
-        }
-        
-        if (mode === 'fliese') {
-            referenceContour = closedContours.find(c => 
-                c.layer && c.layer.toLowerCase().includes('fliese')
-            );
-        }
-        
-        if (!referenceContour && mode !== 'manual') {
-            let maxArea = 0;
-            closedContours.forEach(c => {
-                const area = typeof c.getArea === 'function' ? 
-                    Math.abs(c.getArea()) : this.computeArea(c.points);
-                if (area > maxArea) {
-                    maxArea = area;
-                    referenceContour = c;
-                }
-            });
-        }
-        
-        if (referenceContour) {
-            referenceContour.isReference = true;
-            this.setOriginToReferenceUL();
-            
-            // Undo-Command: neue Referenz vs. alte Referenzen
-            const newRef = referenceContour;
-            const app = this;
-            const cmd = new FunctionCommand(
-                `Auto-Referenz: ${referenceContour.layer || 'größte Fläche'}`,
-                () => { app.contours.forEach(c => { c.isReference = false; }); newRef.isReference = true; app.setOriginToReferenceUL(); app._recalcTopologyAfterReferenceChange(); },
-                () => { app.contours.forEach(c => { c.isReference = false; }); oldRefs.forEach(c => { c.isReference = true; }); if (oldRefs.length > 0) app.setOriginToReferenceUL(); app._recalcTopologyAfterReferenceChange(); }
-            );
-            this.undoManager.pushExecuted(cmd);
-            this.undoManager.redoStack.length = 0;
-            this.undoManager._notifyStateChange();
-
-            const info = referenceContour.layer || 'größte geschlossene Fläche';
-            this.showToast(`Referenz: ${info} (STRG+Z = Rückgängig)`, 'success');
-            this._recalcTopologyAfterReferenceChange();
-        } else {
-            this.showToast('Keine passende Referenz gefunden', 'warning');
-        }
-    }
-    
     computeArea(points) {
         if (!points || points.length < 3) return 0;
         let area = 0;
