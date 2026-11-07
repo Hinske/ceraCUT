@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-11-07
-> **Version:** V7.19
-> **Build:** 20261107-kerfside
+> **Version:** V7.20
+> **Build:** 20261107-dirarrows
 
 ---
 
@@ -212,7 +212,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **CAMContour** | `cam-contour.js` | **V5.31** | Lead-In/Out, Overcut, Multi-Contour-Collision, Lead-Routing (Corner-Penalty, Flat-Segment-Bonus, Dog-Leg), Slit, Kerf-Flip, Arc-Metadaten, clone(), leadManualOverride, Flat-Preferred autoPlace, Hatch-Entity (cuttingMode='none', isHatchContour), materialGroup, intarsiaRole |
 | **Lead Profiles** | `lead-profiles.js` | **V1.1** | 8 Built-in Profile (inkl. Intarsien), Benutzerdefiniert (localStorage), Batch-Engine (disc/hole/smallHole/slit) |
 | **CeraJet Engine** | `cerajet-engine.js` | — | Technologie-Engine (Piercing, Speed-Ramping) |
-| **Renderer** | `canvas-renderer.js` | **V3.65** | Canvas-Rendering, Hit-Testing (Kante+Fläche), Arc-Leads, DPR-Fix, Grip-Editing, Window-Selection-Rect, Lead-Differenzierung, Trackpad-Navigation, Disc-Füllung (nur CAM-Modi), Intarsien-Overlay (Multi-Material), Entry-Pfeil, Hatch-Entity-Rendering, Hatch-Live-Preview, Locked-Layer-Guard, Cycle-Selection (findAllContoursAtPoint) |
+| **Renderer** | `canvas-renderer.js` | **V3.66** | Canvas-Rendering, Hit-Testing (Kante+Fläche), Arc-Leads, DPR-Fix, Grip-Editing, Window-Selection-Rect, Lead-Differenzierung, Trackpad-Navigation, Disc-Füllung (nur CAM-Modi), Intarsien-Overlay (Multi-Material), Entry-Pfeil, Hatch-Entity-Rendering, Hatch-Live-Preview, Locked-Layer-Guard, Cycle-Selection (findAllContoursAtPoint) |
 | **Postprozessor** | `sinumerik-postprocessor.js` | **V2.9** | Sinumerik 840D MPF, 3-in-1, G41/G42, Piercing-Types, Multi-Head, Machine-Profile, Safety-Guards, Hatch-Filter |
 | **UndoManager** | `undo-manager.js` | **V1.4** | Command Pattern, Undo/Redo, Clipboard, WizardStepUndo |
 | **Arc-Fitting** | `arc-fitting.js` | **V3.4** | Polylinie → G02/G03 Bogen (fur PP-Ausgabe) |
@@ -262,7 +262,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Seed** | `lib/seed.js` | **V1.0** | Erststart-Befuellung materials/technologies aus CeraJetEngine (nie ueberschreibend) |
 | **Data-API** | `lib/data-api.js` | **V1.0** | REST: /api/parts,plans,sheets,orders,materials,technologies, /api/technology/resolve; If-Match, Filter, Admin-only fuer Preise/Technologie |
 | **Store** | `lib/store.js` | **V1.0** | JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftraege, Technologie): atomar, Versions-Sperre (If-Match), ID-Validierung |
-| **Build-Info** | `build-info.js` | **V7.19** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V7.20** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.14 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -297,9 +297,9 @@ ceraCUT/
 │   └── auth.js                        ← Cookie/Body-Parsing-Helper V1.0
 ├── data/                               ← users.json (gitignored — Passwort-Hashes)
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V7.19
+│   ├── build-info.js                  ← Versions-Banner V7.20
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
-│   ├── app.js                         ← Hauptanwendung V7.19 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
+│   ├── app.js                         ← Hauptanwendung V7.20 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.20 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.14
 │   ├── geometry-ops.js                ← GeometryOps V2.7 (Intersection, Arabeske, splitAndOverlap)
@@ -307,7 +307,7 @@ ceraCUT/
 │   ├── cam-contour.js                 ← Kontur-Klasse V5.31 (Flat-Preferred autoPlace)
 │   ├── lead-profiles.js               ← Lead-Profile V1.1 (8 Built-in inkl. Intarsien, Batch-Engine)
 │   ├── cerajet-engine.js              ← Technologie-Engine
-│   ├── canvas-renderer.js             ← Canvas Rendering V3.65 (Flächen-Hit, Disc-Fill Fix, Cycle-Selection)
+│   ├── canvas-renderer.js             ← Canvas Rendering V3.66 (Flächen-Hit, Disc-Fill Fix, Cycle-Selection)
 │   ├── arc-fitting.js                 ← Arc Fitting V3.4
 │   ├── undo-manager.js               ← Undo/Redo + Clipboard V1.4 (WizardStepUndo)
 │   ├── sinumerik-postprocessor.js     ← Sinumerik PP V2.9 (Safety-Guards, Hatch-Filter)
@@ -541,7 +541,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   geometry: V2.14 (20261104-reviewfix)
   pipeline: V3.12 (20261106-tileref)
   cam-contour: V5.31 (20261107-occorner)
-  canvas-renderer: V3.65 (20261107-kerfside)
+  canvas-renderer: V3.66 (20261107-dirarrows)
   undo-manager: V1.4 (20261104-reviewfix)
   sinumerik-pp: V2.9 (20261106-tileref)
   command-line: V1.6 (20261104-reviewfix)

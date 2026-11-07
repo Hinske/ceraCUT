@@ -1,5 +1,7 @@
 # Lead-System Verbesserung — Industriestandard CAM UX
 
+> **⚠ Überholt (Stand 2026-11-07):** Das Lead-System wurde in AP1 (Waricam-Angleichung) neu aufgebaut — Leads sind Geometrie-Segmente (`lead-geometry.js`), `cam-contour.js` baut darüber (V5.31). Offene Punkte hier gelten nur, soweit sie nach `tasks/ap1-lead-kern-design.md` / `todo-waricam.md` noch relevant sind; nicht mehr einzeln abarbeiten, ohne sie zuerst gegen den Code zu prüfen.
+
 > **Erstellt:** 2026-03-15
 > **Ziel:** Lead-Verwaltung und -Darstellung auf Industriestandard bringen (ProNest, SigmaNEST, IGEMS Niveau)
 > **Betroffene Module:** cam-contour.js, canvas-renderer.js, properties-panel.js, app.js, constants.js, index.html

@@ -1,5 +1,6 @@
 /**
  * CeraCUT V3.52 - Canvas Renderer
+ * V3.66: Feat — Richtungspfeile klein und rot, max. 4 je Kontur; rote Kerf-Bahn-Dreiecke entfernt (doppelt).
  * V3.64: Fix — Schnittfugenband auch bei offenen Konturen (mittig auf dem Pfad, Breite = Kerf).
  * V3.65: Fix — Fugenband offener Konturen bei Kerf-Seite Links/Rechts neben der Kontur (G41/G42), sonst mittig.
  * V3.62: Feat — AP3 Classic-Theme (Palette #666 ohne Raster, Default), isDark auch fuer classic.
@@ -58,8 +59,8 @@
  * V3.5: Ghost-Preview + Window-Selection Rendering
  * V3.53: Feat — drawTileOrigins: Fliesen-Umriss + Nullpunkt-Fadenkreuz je Fliese
  * V3.4: Drawing-Overlay + SnapManager-Rendering
- * Last Modified: 2026-11-06 MEZ
- * Build: 20261106-cadlock
+ * Last Modified: 2026-11-07 MEZ
+ * Build: 20261107-dirarrows
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -859,36 +860,7 @@ class CanvasRenderer {
         ctx.fill('evenodd');
         ctx.restore();
         }
-        // Pfeile + L/R-Marker auf der Kerf-Bahn
-        const pts = kerfPoints, n = pts.length;
-        let total = 0;
-        for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n]; total += Math.hypot(b.x - a.x, b.y - a.y); }
-        if (total <= 0) return;
-        const step = Math.max(total / 4, 40 / this.scale);
-        const sz = 6 / this.scale;
-        let acc = step / 2, run = 0;
-        ctx.save();
-        ctx.globalAlpha = 0.9;
-        ctx.fillStyle = col;
-        for (let i = 0; i < n; i++) {
-            const a = pts[i], b = pts[(i + 1) % n];
-            const len = Math.hypot(b.x - a.x, b.y - a.y);
-            if (len < 1e-9) continue;
-            while (acc <= run + len) {
-                const t = (acc - run) / len;
-                const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
-                const dx = (b.x - a.x) / len, dy = (b.y - a.y) / len;
-                ctx.beginPath();
-                ctx.moveTo(x + dx * sz, y + dy * sz);
-                ctx.lineTo(x - dx * sz - dy * sz * 0.6, y - dy * sz + dx * sz * 0.6);
-                ctx.lineTo(x - dx * sz + dy * sz * 0.6, y - dy * sz - dx * sz * 0.6);
-                ctx.closePath();
-                ctx.fill();
-                acc += step;
-            }
-            run += len;
-        }
-        ctx.restore();
+        // V3.66: Richtungspfeile der Kerf-Bahn entfallen (identisch mit den Richtungspfeilen der Kontur)
     }
 
     getKerfColor(contour) {
@@ -1549,7 +1521,7 @@ class CanvasRenderer {
                      y: points[lo-1].y + (points[lo].y - points[lo-1].y) * t };
         };
 
-        const n = Math.max(1, Math.min(16, Math.round(screenLen / 140)));
+        const n = Math.max(1, Math.min(4, Math.round(screenLen / 60)));   // V3.66: max. 4 je Kontur
         const win = 7 * px;
         for (let k = 0; k < n; k++) {
             const d = total * (k + 0.5) / n;
@@ -1561,7 +1533,7 @@ class CanvasRenderer {
 
     _drawDirectionChevron(ctx, x, y, angle) {
         const px = 1 / this.scale;
-        const L = 16 * px, W = 7 * px;                   // Laenge / halbe Breite in Pixeln
+        const L = 9 * px, W = 4 * px;                   // Laenge / halbe Breite in Pixeln
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(angle);
@@ -1573,9 +1545,9 @@ class CanvasRenderer {
         ctx.closePath();
         ctx.lineJoin = 'round';
         ctx.strokeStyle = 'rgba(0,0,0,0.85)';            // Halo
-        ctx.lineWidth = 3.5 * px;
+        ctx.lineWidth = 2 * px;
         ctx.stroke();
-        ctx.fillStyle = '#ffe94d';                       // leuchtendes Gelb, hebt sich von Layerfarben ab
+        ctx.fillStyle = '#ff3b30';                       // V3.66: klein, rot
         ctx.fill();
         ctx.restore();
     }

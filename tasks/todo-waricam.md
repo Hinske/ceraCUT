@@ -1,6 +1,7 @@
 # Offene Punkte — CeraCUT an Waricam angleichen
 
-> Stand: 2026-11-06 · Plan/Verlauf: `waricam-angleichung.md` · Lead-Kern: `ap1-lead-kern-design.md`
+> Stand: 2026-11-07 (abgeglichen; seitdem Schwerpunkt FINest, siehe `todo-finest-phase*.md`) · Plan/Verlauf: `waricam-angleichung.md` · Lead-Kern: `ap1-lead-kern-design.md`
+> Seit 2026-11-06 zusätzlich erledigt: Lead-Menü Einfach-Ansicht/Experte, Ausfahr-Typ/-Radius, Überschnitt an Ecken gesperrt, Kerf-Seite/Fugenband offene Konturen (V7.19).
 > Erledigt: AP1 Lead-Kern, AP2 Bogenwinkel/Ecken-Lead (kein Katalog), AP3 Classic-Theme, AP4 Workflow (Auto-Setup, Setup-Tab entfaellt).
 
 ## Praxis-Validierung (wichtigster naechster Schritt)
@@ -17,7 +18,7 @@
 
 ## Lead / G-Code (aus AP1)
 - [ ] Entity-erhaltender G-Code: Kontur entsteht aus tesselliertem DXF + Arc-Fitting (gerade Kanten teils als Riesenbogen, z. B. R134; Konturstart rastet auf Tessellierungspunkt). Waricam gibt exakte G01/G03 aus den DXF-Elementen aus.
-- [ ] Warnsymbol am Lead: Hovertext mit Grund (gekuerzt/rotiert/Fallback) fehlt noch.
+- [x] Warnsymbol am Lead: Hovertext mit Grund (canvas-renderer V3.63, 2026-11-07).
 - [ ] Vorschau-Galerie der Fahnenformen (nur Bedienkomfort, aus den vorhandenen Parametern) — nur bei Bedarf.
 - [ ] Haken/Schleife/"unter" bewusst nicht umgesetzt (nicht benoetigt).
 

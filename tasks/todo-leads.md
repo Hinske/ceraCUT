@@ -1,5 +1,7 @@
 # Lead-In/Out Überarbeitung — Audit-Ergebnisse & Fix-Plan
 
+> **⚠ Überholt (Stand 2026-11-07):** Das Lead-System wurde in AP1 (Waricam-Angleichung) neu aufgebaut — Leads sind Geometrie-Segmente (`lead-geometry.js`), `cam-contour.js` baut darüber (V5.31). Offene Punkte hier gelten nur, soweit sie nach `tasks/ap1-lead-kern-design.md` / `todo-waricam.md` noch relevant sind; nicht mehr einzeln abarbeiten, ohne sie zuerst gegen den Code zu prüfen.
+
 > **Datum:** 2026-06-24
 > **Status:** Audit abgeschlossen (3 parallele Agenten), Fixes werden jetzt umgesetzt
 > **Auslöser:** User-Feedback "Sektion Leads muss überarbeitet werden, hier ist einiges im argen"

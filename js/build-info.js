@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.19',
-    build: '20261107-kerfside',
+    version: '7.20',
+    build: '20261107-dirarrows',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '07202da',
+        hash: '17e8aa3',
         date: '2026-11-07',
-        message: 'fix: Nesting-Ueberlagerungen — mehrere Aussenkonturen je DXF als eigene Teile, R'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
+        message: 'feat: Richtungspfeile klein und rot, max. 4 je Kontur (canvas-renderer V3.66)'
     },
 
     modules: {
@@ -25,7 +25,7 @@ const CERACUT_BUILD = {
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.12', build: '20261106-tileref' },
         'cam-contour':        { version: '5.31', build: '20261107-occorner' },
-        'canvas-renderer':    { version: '3.65', build: '20261107-kerfside' },
+        'canvas-renderer':    { version: '3.66', build: '20261107-dirarrows' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.9', build: '20261106-tileref' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
@@ -87,6 +87,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.20: Feat — Richtungspfeile klein und rot, max. 4 je Kontur; doppelte rote Kerf-Bahn-Pfeile entfernt (canvas-renderer V3.66).',
         'V7.19: Fix — Fugenband offener Konturen sitzt bei Kerf-Seite Links/Rechts neben der Kontur (canvas-renderer V3.65).',
         'V7.18: Fix — Schnittfuge bei offenen Konturen: Band wird gezeichnet (canvas-renderer V3.64) und Kerf-Aenderung (applyKerfWidth, app) wirkt jetzt auch auf offene Konturen (vorher nur geschlossene).',
         'V7.17: Feat — Lead-Menue fuer Einsteiger (app V6.70): Einfach-Ansicht mit Groesse Klein/Mittel/Gross, Klartext-Zusammenfassung des Anschnitts, verstaendliche Begriffe (Voreinstellung, Form, Laenge, Ueberschnitt, Auto fuer alle); alle Feinfelder (Winkel, Ausfahrt, Radius, Innen, Ecken, Piercing) unter Experte.',
