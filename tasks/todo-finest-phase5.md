@@ -9,9 +9,11 @@
 - [x] `lib/report-pdf.js`: Kostenübersicht, technische Daten, Zeit/Gewicht, Aufschlüsselung, Plan-Zeichnung, Teileübersicht
 - [x] Alter Kalkulations-Button (Ribbon Export) las falsche Felder (`result.totalTime/totalCost/utilization`) → korrigiert
 
+- [x] Technologie-Manager (technology-db V1.0, Ribbon Extras → Datenbank): Baum Material/Dicke, Reiter inkl. Kosten, Vorschau berechneter Vorschübe, Neu/Duplizieren/Löschen, Admin-only; Server validiert Technologie/Material (400)
+- [x] UI-Tests mit jsdom (`tests/helpers/ui-harness.js`): Technologie-Manager, Durchgang Teileimport → Autonest → Plan → Kalkulation → Plan öffnen, NC-Editor — deckt DOM-Verhalten ab, nicht das Aussehen (kein Browser-Screenshot)
+
 ## Offen
 - [ ] **Kalibrierung** mit echten Zahlen (Maschinenstundensatz, Abrasiv-/Düsenpreise, Strom/Wasser, Materialpreise) im Technologie-Datensatz (`cost`) bzw. Material (`pricePerKg`) — bis dahin Richtwerte (siehe Hinweis im Dialog/PDF)
 - [ ] Eilganglänge ist geschätzt (nächster Nachbar über Teil-Mittelpunkte), nicht aus Schneidreihenfolge/NC
-- [ ] Technologie-Manager-Oberfläche (Kosten/Material pflegen) — bisher nur über API
 - [ ] Werkstattbericht (Phase 3) als serverseitiges PDF
 - [ ] `npm install` auf dem Produktionsserver (neue Abhängigkeit pdfkit)

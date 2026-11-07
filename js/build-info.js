@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '5ce7415',
+        hash: '5bfaa82',
         date: '2026-11-07',
-        message: 'Fix: Fugenband offener Konturen neben der Kontur (V7.19)'
+        message: 'feat: Technologie-Manager (technology-db V1.0) + Server-Validierung, jsdom-UI-Te'
     },
 
     modules: {
@@ -72,14 +72,15 @@ const CERACUT_BUILD = {
         'session-store':      { version: '1.1', build: '20261104-reviewfix' },
         'auth-helper':        { version: '1.1', build: '20261104-reviewfix' },
         'store':              { version: '1.0', build: '20261107-store' },
-        'data-api':           { version: '1.1', build: '20261107-reportpdf' },
-        'seed':               { version: '1.0', build: '20261107-seed' },
+        'data-api':           { version: '1.2', build: '20261107-techdb' },
+        'seed':               { version: '1.1', build: '20261107-techdb' },
         'part-library':       { version: '1.0', build: '20261107-partimport' },
         'nesting-plan':       { version: '1.2', build: '20261107-costdialog' },
-        'nc-tools':           { version: '1.0', build: '20261107-nctools' },
+        'nc-tools':           { version: '1.1', build: '20261107-techdb' },
         'cost-plan':          { version: '1.0', build: '20261107-plancost' },
         'cost-dialog':        { version: '1.0', build: '20261107-costdialog' },
-        'report-pdf':         { version: '1.0', build: '20261107-reportpdf' }
+        'report-pdf':         { version: '1.0', build: '20261107-reportpdf' },
+        'technology-db':      { version: '1.0', build: '20261107-techdb' }
     },
 
     changes: [

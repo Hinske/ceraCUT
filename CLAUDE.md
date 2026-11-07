@@ -255,6 +255,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Plan Cost** | `cost-plan.js` | **V1.0** | Plan-Kalkulation (Fertigung/Material/Verbrauch/Zusatz, Teilepreise); Browser + Node; Richtwerte werden gemeldet |
 | **Cost Dialog** | `cost-dialog.js` | **V1.0** | Kostenkalkulation-Dialog (Autonest, Planliste), PDF-Export |
 | **Report PDF** | `lib/report-pdf.js` | **V1.0** | pdfkit-Bericht Nesting-Kalkulation (Server; `npm install` noetig) |
+| **Technology DB** | `technology-db.js` | **V1.0** | TechDB (Standardwerte, Validierung; auch Server) + Technologie-Manager-Dialog (Ribbon Extras): Material/Dicke-Baum, Reiter Allgemein/Lead/Mikroverbindungen/Schnitt/Nesting/Sonstiges/Kosten; Schreiben nur Admin |
 | **Seed** | `lib/seed.js` | **V1.0** | Erststart-Befuellung materials/technologies aus CeraJetEngine (nie ueberschreibend) |
 | **Data-API** | `lib/data-api.js` | **V1.0** | REST: /api/parts,plans,sheets,orders,materials,technologies, /api/technology/resolve; If-Match, Filter, Admin-only fuer Preise/Technologie |
 | **Store** | `lib/store.js` | **V1.0** | JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftraege, Technologie): atomar, Versions-Sperre (If-Match), ID-Validierung |

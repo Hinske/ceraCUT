@@ -13,7 +13,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-nctools
+ * Build: 20261107-techdb
+ * V1.1: Fix — NCEditor: Prüf-Timer nach Schließen (TypeError), Guards bei geschlossenem Editor
  *
  * (c) Cerasell GmbH
  */
@@ -366,11 +367,12 @@ class NCEditor {
 
     close() {
         if (this._isDirty() && !this.saved && !confirm('Ungespeicherte Änderungen verwerfen?')) return;
+        clearTimeout(this._t);
         this.overlay?.remove(); this.overlay = null;
     }
 
     _isDirty() { return this.overlay && this.code !== this.original; }
-    _dirty() { this.overlay.querySelector('#nce-dirty').textContent = this._isDirty() ? ' *' : ''; }
+    _dirty() { if (!this.overlay) return; this.overlay.querySelector('#nce-dirty').textContent = this._isDirty() ? ' *' : ''; }
 
     _gutter() {
         const n = this.code.split('\n').length;
@@ -388,6 +390,7 @@ class NCEditor {
     }
 
     _cursor() {
+        if (!this.overlay) return;
         const ta = this.overlay.querySelector('#nce-text');
         const line = ta.value.slice(0, ta.selectionStart).split('\n').length;
         this.overlay.querySelector('#nce-lineno').textContent = line;
@@ -401,6 +404,7 @@ class NCEditor {
     }
 
     _check() {
+        if (!this.overlay) return;
         this.result = NCCheck.parse(this.code);
         const r = this.result;
         this.overlay.querySelector('#nce-summary').textContent = `${r.errors} Fehler · ${r.warnings} Warnungen`;
@@ -430,7 +434,8 @@ class NCEditor {
             setTimeout(() => URL.revokeObjectURL(a.href), 1000);
             this._toast(`${this.filename} heruntergeladen (Server-CNC-Ordner nicht erreichbar)`, 'warning');
         }
-        this.original = code; this.saved = true; this._dirty();
+        this.original = code; this.saved = true;
+        if (this.overlay) this._dirty();
         this.opts.onSaved?.(this, code);
     }
 }
