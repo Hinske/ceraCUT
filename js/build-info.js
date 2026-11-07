@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.37',
-    build: '20261107-dusch9',
+    version: '7.38',
+    build: '20261107-dusch10',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'd3071c1',
+        hash: 'e0bb99f',
         date: '2026-11-07',
-        message: 'feat: Duschboard V0.5 - Projekte und Kunden-PDF mit waehlbaren Varianten und Angaben'
+        message: 'fix: Duschboard-DXF - Layer korrekt: Fliesen = ganze Fliese, Schnitt = Zuschnitte'
     },
 
     modules: {
@@ -67,7 +67,7 @@ const CERACUT_BUILD = {
         'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
-        'shower-board-generator': { version: '0.5', build: '20261107-dusch9' },
+        'shower-board-generator': { version: '0.5.1', build: '20261107-dusch10' },
         'shower-board-dialog': { version: '0.5', build: '20261107-dusch9' },
         'shower-api': { version: '0.1', build: '20261107-showerapi' },
         'shower-pdf': { version: '0.1', build: '20261107-showerpdf' },

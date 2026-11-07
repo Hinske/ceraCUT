@@ -72,10 +72,35 @@ test('Eingabefehler', () => {
     assert.strictEqual(G.compute({ ...base, ablauf: { w: 0, h: 10 } }).ok, false);
 });
 
-test('DXF: geschlossene LWPOLYLINE je Teil auf Layer Fliesen', () => {
-    const r = G.compute(base);
-    assert.strictEqual((r.dxf.match(/LWPOLYLINE/g) || []).length, r.count);
-    assert.ok(r.dxf.includes('Fliesen'));
+test('DXF: Layer Fliesen = ganze Fliese (Umriss), Layer Schnitt = Zuschnitte; Kochhan-Struktur bei einer Platte', () => {
+    const r = G.compute(base);   // keins: eine Platte, 4 Gehrungsteile (wie Kochhan_Duschboard_1000x1000.dxf)
+    const n = l => (r.dxf.match(new RegExp(`LWPOLYLINE\\r\\n8\\r\\n${l}\\r\\n`, 'g')) || []).length;
+    assert.strictEqual(n('Fliesen'), 1); assert.strictEqual(n('Schnitt'), 4);
+    assert.ok(/2\r\nFliesen\r\n70\r\n0\r\n62\r\n160/.test(r.dxf) && /2\r\nSchnitt\r\n70\r\n0\r\n62\r\n10/.test(r.dxf), 'Layer-Tabelle mit Farben');
+    assert.deepStrictEqual(r.tiles[0].map(q => [q.x, q.y]), [[0, 0], [1000, 0], [1000, 1000], [0, 1000]]);
+});
+
+test('DXF: jeder Zuschnitt liegt in seinem Fliesenumriss, Umriss = ganze Fliese, ganze Fliesen ohne Schnitt-Kontur', () => {
+    for (const inp of [
+        { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 597, kurz: 597 } },
+        { breite: 1400, tiefe: 900, ablauf: { w: 150, h: 100, cx: 500, cy: 400 }, fliese: { lang: 600, kurz: 300 }, muster: 'verband', anker: 'lu' },
+        { breite: 3000, tiefe: 2400, ablauf: { w: 200, h: 200 }, fliese: { lang: 597, kurz: 597 } },
+        { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 600, kurz: 300 }, muster: 'fischgraet' },
+        { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 597, kurz: 597 }, drehung: 45 }
+    ]) {
+        const r = G.compute(inp), p = r.p;
+        assert.ok(r.ok);
+        const n = l => (r.dxf.match(new RegExp(`LWPOLYLINE\\r\\n8\\r\\n${l}\\r\\n`, 'g')) || []).length;
+        assert.strictEqual(n('Fliesen'), r.tilesUsed, 'ein Umriss je benutzter Fliese');
+        assert.strictEqual(n('Schnitt'), r.count - r.full, 'Schnitt nur fuer geschnittene Teile');
+        for (const pc of r.pieces) {
+            const T = r.tiles[pc.tile], tb = G._internals.bboxOf(T), pb = G._internals.bboxOf(pc.poly);
+            assert.ok(pb.x0 >= tb.x0 - 1e-6 && pb.x1 <= tb.x1 + 1e-6 && pb.y0 >= tb.y0 - 1e-6 && pb.y1 <= tb.y1 + 1e-6, `Teil liegt nicht in seiner Fliese (${JSON.stringify(inp.muster || 'kreuz')})`);
+            const a = Math.abs(G._internals.area(T)), want = p.tx * p.ty;
+            if (inp.muster !== 'verband') assert.ok(Math.abs(a - want) < 0.5, `Fliesenumriss ${a} statt ${want}`);
+            if (pc.full) assert.ok(Math.abs(Math.abs(G._internals.area(pc.poly)) - want) < 0.5 * want / 1000 + 0.5);
+        }
+    }
 });
 
 test('Dialog: Vorschau-SVG und Stueckliste liefern Bemassung (Smoke)', () => {

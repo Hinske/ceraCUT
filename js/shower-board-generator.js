@@ -1,5 +1,5 @@
 /**
- * CeraCUT Duschboard-Generator V0.4 (Kern, ohne Dialog)
+ * CeraCUT Duschboard-Generator V0.5.1 (Kern, ohne Dialog)
  * Erzeugt die Zuschnitt-Teile eines Duschboards (Fliesen mit Gehrung zum Ablauf) aus Maßen, Ablauf und Fugenbild.
  *
  * Regeln (aus Kochhan_Duschboard_1000x1000.dxf, Ablauf 140x140 mittig):
@@ -7,11 +7,14 @@
  *   - Gehrung: Diagonale von der Ablaufecke zur naechsten Boardecke; Teile werden um Fuge/2 senkrecht zur Diagonale
  *     zurueckgesetzt (1000x1000: Kante bei y = 568.6 statt 570 -> 1.4/sqrt2 = 1 mm = Fuge/2)
  *   - Fugenbild = Fugenmitten xLines/yLines (editierbar); Teile sind um Fuge/2 an jeder Fugenlinie zurueckgesetzt
- *   - Layer "Fliesen" = Teile (geschlossene Polylinien), Nesting auf Rohplatten ist NICHT Teil dieses Moduls
+ *   - Layer "Fliesen" = ganze Fliese als Umriss (Referenz, nie Schneidkontur), Layer "Schnitt" = Zuschnitt-Konturen;
+ *     ganze Fliesen haben nur den Umriss. Nesting auf Rohplatten ist NICHT Teil dieses Moduls
  *
  * Phase 2a: nur rechteckiger Punktablauf. Rinne (2d), runder/aussermittiger Sonderfall-Check (2e) folgen.
  * Rein (kein DOM) — laeuft in Node (tests/shower-board.test.js).
  *
+ * V0.5.1: DXF-Layer korrekt: 'Fliesen' = ganze Fliese als Umriss (Referenz, ceracut-pipeline.isTileOutline), 'Schnitt' = Zuschnitt-Konturen;
+ *         ganze Fliesen ohne Schnitt-Kontur (wie Kochhan_Duschboard_1000x1000.dxf); result.tiles = Fliesenumrisse
  * V0.4: Standardfliese 597x597; Rasterlage 'auto' (Standard): vergleicht Rasterlagen (buendig, mittig, an Ablaufkante, versetzt) und waehlt die mit den meisten ganzen Fliesen,
  *       wenigsten Schnitten und ohne schmale Reste; Statistik ganze/geschnittene Teile
  * V0.3.2: Passpruefung Teil -> Fliese mit Drehung (laengste Kante/Diagonalen), Bedarf = kleinste umschliessende Box, Randabstand zur Fliesenkante; Fugen-Loeschen entfernt
@@ -23,16 +26,17 @@
  * V0.1: Erstversion (Raster, Sektoren, Clipping, DXF)
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch8
+ * Build: 20261107-dusch10
  */
 
 const ShowerBoardGenerator = (() => {
     'use strict';
 
-    const VERSION = '0.4';
-    const LOG = '[Duschboard V0.4]';
-    const LAYER_FLIESE = 'Fliesen';
-    const LAYER_COLOR = 160;
+    const VERSION = '0.5.1';
+    const LOG = '[Duschboard V0.5.1]';
+    const LAYER_FLIESE = 'Fliesen';    // Fliesenumriss = Referenz (ganze Fliese), nie Schneidkontur
+    const LAYER_SCHNITT = 'Schnitt';   // Zuschnitt-Konturen = werden geschnitten
+    const LAYER_COLORS = { [LAYER_FLIESE]: 160, [LAYER_SCHNITT]: 10 };   // wie Zuschnitt-Generator / Kochhan-Dateien
     const EPS = 1e-6;
 
     const DEFAULTS = {
@@ -298,19 +302,32 @@ const ShowerBoardGenerator = (() => {
         return out;
     }
 
-    /** Fliesen (Zellen um Fuge/2 verkleinert) aus dem Fugen-Layout */
+    /**
+     * Fliesen (Zellen um Fuge/2 verkleinert) aus dem Fugen-Layout.
+     * Rueckgabe-Array = Zuschnittzellen (Randzellen offen bis +-BIG); .phys = Umriss der ganzen Fliese je Zelle
+     * (Randzellen: ganze Fliese ab der Rasterkante; zu schmale Zellen (Fuge von Hand verschoben): Fliese ab unterer/linker Kante).
+     */
     function tilesFromLayout(p, L) {
         const rows = L.strips === 'rows', { P, S } = fieldLens(p, L);
+        const tP = rows ? p.ty : p.tx, tS = rows ? p.tx : p.ty;
         const BIG = 4 * (p.W + p.H) + 2000, h = p.fuge / 2;
-        const bp = [-BIG, ...L.lines.slice().sort((a, b) => a - b), P + BIG], out = [];
+        const bp = [-BIG, ...L.lines.slice().sort((a, b) => a - b), P + BIG], out = [], phys = [];
+        const full = (lo, hi, t, openLo, openHi) => {
+            if (openLo && !openHi) return [hi - t, hi];
+            if (openHi) return [lo, lo + t];
+            return hi - lo < t - 1e-6 ? [lo, lo + t] : [lo, hi];
+        };
         for (let k = 0; k < bp.length - 1; k++) {
             const bs = [-BIG, ...(L.sub[k] || []).slice().sort((a, b) => a - b), S + BIG];
             for (let i = 0; i < bs.length - 1; i++) {
                 const a0 = bs[i] + h, a1 = bs[i + 1] - h, c0 = bp[k] + h, c1 = bp[k + 1] - h;
                 if (a1 - a0 < 1e-6 || c1 - c0 < 1e-6) continue;
                 out.push(rows ? rectCCW(a0, c0, a1, c1) : rectCCW(c0, a0, c1, a1));
+                const [fa0, fa1] = full(a0, a1, tS, bs[i] === -BIG, bs[i + 1] === S + BIG), [fc0, fc1] = full(c0, c1, tP, bp[k] === -BIG, bp[k + 1] === P + BIG);
+                phys.push(rows ? rectCCW(fa0, fc0, fa1, fc1) : rectCCW(fc0, fa0, fc1, fa1));
             }
         }
+        out.phys = phys;
         return out;
     }
 
@@ -510,23 +527,31 @@ const ShowerBoardGenerator = (() => {
     }
 
     // ── DXF (AC1015, geschlossene LWPOLYLINE wie in den Kochhan-Dateien) ─────
-    function buildDXF(pieces) {
+    /**
+     * DXF: Layer "Fliesen" = ganze Fliese als Umriss (Referenz, je benutzter Fliese), Layer "Schnitt" = Zuschnitt-Konturen.
+     * Ganze, ungeschnittene Fliesen bekommen nur den Fliesenumriss (nichts zu schneiden).
+     * @param {{pieces:object[], tiles:object[][]}} r  tiles[pc.tile] = Umriss der ganzen Fliese
+     */
+    function buildDXF(r) {
         const f = v => (+v.toFixed(4)).toString();
         const z = ['0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1015', '0', 'ENDSEC',
-            '0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LAYER', '70', '1',
-            '0', 'LAYER', '2', LAYER_FLIESE, '70', '0', '62', String(LAYER_COLOR), '6', 'CONTINUOUS',
-            '0', 'ENDTAB', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES'];
-        for (const pc of pieces) {
-            z.push('0', 'LWPOLYLINE', '8', LAYER_FLIESE, '90', String(pc.poly.length), '70', '1');
-            for (const q of pc.poly) z.push('10', f(q.x), '20', f(q.y));
+            '0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LAYER', '70', String(Object.keys(LAYER_COLORS).length)];
+        for (const [name, color] of Object.entries(LAYER_COLORS)) z.push('0', 'LAYER', '2', name, '70', '0', '62', String(color), '6', 'CONTINUOUS');
+        z.push('0', 'ENDTAB', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES');
+        const poly = (layer, pts) => {
+            z.push('0', 'LWPOLYLINE', '8', layer, '90', String(pts.length), '70', '1');
+            for (const q of pts) z.push('10', f(q.x), '20', f(q.y));
+        };
+        const byTile = new Map();
+        for (const pc of r.pieces) { if (!byTile.has(pc.tile)) byTile.set(pc.tile, []); byTile.get(pc.tile).push(pc); }
+        for (const [ti, list] of [...byTile.entries()].sort((a, b) => a[0] - b[0])) {
+            poly(LAYER_FLIESE, r.tiles[ti]);
+            for (const pc of list) if (!pc.full) poly(LAYER_SCHNITT, pc.poly);
         }
         z.push('0', 'ENDSEC', '0', 'EOF');
         return z.join('\r\n') + '\r\n';
     }
 
-    /**
-     * Hauptfunktion. grid optional (manuell editiertes Fugenbild: { xLines, yLines }); sonst Automatik.
-     */
     // ── Automatische Rasterlage (moeglichst wenige geschnittene Fliesen) ────
     const isFull = (pc, p) => Math.abs(area(pc.poly)) >= p.tx * p.ty * 0.9995;
 
@@ -613,11 +638,14 @@ const ShowerBoardGenerator = (() => {
         }
         const pieces = clipPieces(p, tiles);
         if (pieces.length > p.maxTeile) return { ok: false, error: `Mehr als ${p.maxTeile} Teile — Fliesenformat prüfen.` };
+        // Fliesenumrisse (Layer Fliesen): Rasterfliesen = ganze Fliese; ohne Raster = das ganze Fliesenfeld als eine Platte (wie Kochhan 1000x1000)
+        const tileOutlines = p.muster === 'keins' ? [rectPoly(0, 0, p.W, p.H)] : (tiles.phys || tiles);
+        for (const pc of pieces) { pc.full = isFull(pc, p); if (p.muster === 'keins') pc.tile = 0; }
         const fileName = `Duschboard_${Math.round(input.breite)}x${Math.round(input.tiefe)}_Ablauf${Math.round(input.ablauf.w)}x${Math.round(input.ablauf.h)}.dxf`;
         const chains = layout ? chainsOf(layout) : null;
         const grid = chains && chains.xLines && chains.yLines ? chains : null;
         const st = tileStats(p, pieces);
-        return { ok: true, p, layout, chains, grid, editable: !!layout, pieces, warnings: validate(p, pieces), count: pieces.length, full: st.full, cutTiles: st.cutTiles, tilesUsed: st.tilesUsed, autoInfo, fileName, dxf: buildDXF(pieces) };
+        return { ok: true, p, layout, chains, grid, editable: !!layout, pieces, warnings: validate(p, pieces), count: pieces.length, full: st.full, cutTiles: st.cutTiles, tilesUsed: st.tilesUsed, autoInfo, tiles: tileOutlines, fileName, dxf: buildDXF({ pieces, tiles: tileOutlines }) };
     }
 
     // ── Teilenummern (Dialog + PDF) ─────────────────────────────────────────
