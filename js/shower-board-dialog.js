@@ -1,11 +1,12 @@
 /**
- * CeraCUT Duschboard-Dialog V0.3.2: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
+ * CeraCUT Duschboard-Dialog V0.3.3: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
  * Kern: shower-board-generator.js (ShowerBoardGenerator). Befehl DUSCH, Ribbon CAD -> Zuschnitte -> Duschboard.
  *
  * Bemaßung (zur Kontrolle): Gesamtmaß (Fliesenfeld, bei Außenmaß zusätzlich Außenmaß), Ablaufmaße und -lage,
  * Teilebreiten/-höhen je Fugenspalte/-zeile, Gehrungswinkel, Maße je Teil (bbox) + Nummern, Stückliste.
  * Phase 2b: Vorschau nur lesend; Fugenbild von Hand editieren folgt in 2c.
  *
+ * V0.3.3: Fugenliste nur auf Wunsch (Checkbox, Standard aus)
  * V0.3.2: Passpruefung Teil -> Fliese (Drehung, laengste Kante): rote Markierung, Teilemass = kleinste Box, Nummern in der Statuszeile; Fuge-loeschen entfernt
  * V0.3 (Phase 2c): Fugenbild bearbeiten — Fugen ziehen/setzen in der Zeichnung, Fugenlisten (numerisch), Rueckgaengig/Wiederholen
  *       (Strg+Z / Strg+Y), Zuruecksetzen; gilt fuer Kreuzfuge/Verband/Zufall ohne Drehung
@@ -14,7 +15,7 @@
  * V0.1: Erstversion
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch6
+ * Build: 20261107-dusch7
  */
 
 const ShowerBoardDialog = (() => {
@@ -255,8 +256,9 @@ const ShowerBoardDialog = (() => {
                         ${sec('Ablauf (rechteckig)')}
                         ${row2(fld('ds-aw', 'Breite [mm]', '140'), fld('ds-ah', 'Tiefe [mm]', '140'))}
                         ${row2(fld('ds-cx', 'Mitte X (leer = mittig)', ''), fld('ds-cy', 'Mitte Y (leer = mittig)', ''))}
-                        ${sec('Fugen (Fugenmitten, mm)')}
-                        <div id="ds-lists" style="font-size:12px;"></div>
+                        ${sec('Fugen')}
+                        ${chk('ds-showlist', 'Fugenliste anzeigen (Fugenmitten numerisch bearbeiten)')}
+                        <div id="ds-lists" style="font-size:12px;display:none;"></div>
                         ${sec('Anzeige')}
                         ${fld('ds-fr', 'Passprüfung: Randabstand zur Fliesenkante [mm]', '0')}
                         ${fld('ds-min', 'Warnung bei Teil schmaler als [mm]', '30')}
@@ -277,7 +279,7 @@ const ShowerBoardDialog = (() => {
         let last = null, view = null, fitted = true, sizeKey = '';
         // Fugenbild-Bearbeitung
         let override = null, mode = 'view', hover = null, selStrip = 0, hist = [], redoStack = [], editDrag = null;
-        const KEEP_OVERRIDE = new Set(['ds-fuge', 'ds-rf', 'ds-min', 'ds-fr', 'ds-dims', 'ds-aw', 'ds-ah', 'ds-cx', 'ds-cy']);
+        const KEEP_OVERRIDE = new Set(['ds-showlist', 'ds-fuge', 'ds-rf', 'ds-min', 'ds-fr', 'ds-dims', 'ds-aw', 'ds-ah', 'ds-cx', 'ds-cy']);
 
         const vis = (id, on) => { $(id).style.display = on ? '' : 'none'; };
         function syncControls() {
@@ -413,6 +415,8 @@ const ShowerBoardDialog = (() => {
         // Fugenlisten (numerisch)
         function renderLists() {
             const box = $('ds-lists');
+            box.style.display = $('ds-showlist').checked ? '' : 'none';
+            if (!$('ds-showlist').checked) return;   // Liste nur auf Wunsch (kann sehr lang werden)
             if (!canEdit()) { box.innerHTML = '<div style="color:#778">Für dieses Muster (Fischgrät, Korbgeflecht, gedrehtes Raster, kein Raster) gibt es keine einzelnen Fugen zum Bearbeiten — Änderungen über die Parameter.</div>'; return; }
             const L = last.layout, rows = L.strips === 'rows', sub = L.sub[Math.min(selStrip, L.sub.length - 1)] || [];
             const list = (title, arr, kind) => {
