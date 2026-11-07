@@ -1,5 +1,6 @@
 /**
  * CeraCUT V6.50 - Main Application
+ * V6.70: Feat — Lead-Menue Einfach-Ansicht: Groesse Klein/Mittel/Gross, Klartext-Zusammenfassung, Begriffe (Form/Laenge/Ueberschnitt), Feineinstellungen unter Experte.
  * V6.69: Feat — Ribbon: eigener Ausfahr-Typ und -Radius (lead-out-type/-radius, leer = wie Anfahrt).
  * V6.68: Feat — Ribbon: eigener Ausfahrwinkel (lead-out-angle), Schalter Ueberschnitt an Ecken (overcut-at-corners); Ausfahrlaenge/Winkel nicht mehr unter Erweitert.
  * V6.67: Refactor — Setup-Tab entfaellt: Referenz + Nullpunkt (Checkbox "Auto beim Import") wandern in den Tab Datei, Technologie (Material/Dicke/Druck) als ③ Technologie in Bearbeitung
@@ -5030,6 +5031,7 @@ class CeraCutApp {
         // V6.95: Fliesen erkennen (Bearbeitung-Tab)
         this._bindCutOrderUI();   // V6.60
         this._bindTileUI();   // V6.59: Fliesen-Reihenfolge (Presets, Anklicken, Drag&Drop)
+        this._bindLeadSimpleUI();   // V6.70: Einfach-Ansicht (Groesse, Klartext-Zusammenfassung)
         const advBtn = document.getElementById('btn-lead-adv-toggle');
         if (advPanel && advBtn) {
             try { if (localStorage.getItem('ceracut_lead_adv') === '1') advPanel.classList.add('lead-adv-open'); } catch (e) { /* ignore */ }
@@ -5185,6 +5187,50 @@ class CeraCutApp {
         console.log(`[App V6.0] Profil angewendet: ${profile.name}`);
     }
 
+    /** V6.70: Einfach-Ansicht der Leads — Groessen-Schnellwahl + verstaendliche Zusammenfassung */
+    _bindLeadSimpleUI() {
+        const SIZES = {
+            s: { 'lead-in-length': 2, 'lead-in-radius': 1, 'lead-out-length': 2, 'overcut-length': 0.5 },
+            m: { 'lead-in-length': 4, 'lead-in-radius': 2, 'lead-out-length': 4, 'overcut-length': 1 },
+            l: { 'lead-in-length': 8, 'lead-in-radius': 4, 'lead-out-length': 8, 'overcut-length': 1.5 }
+        };
+        const $ = id => document.getElementById(id);
+        const sel = $('lead-size');
+        const NAMES = { arc: 'Bogen', linear: 'gerade', tangent: 'tangential' };
+        const updateSummary = () => {
+            const el = $('lead-summary');
+            if (!el) return;
+            const num = id => parseFloat($(id)?.value);
+            const oc = num('overcut-length');
+            const type = NAMES[$('lead-type')?.value] || '';
+            let t = `Anschnitt: ${type}, ${isNaN(num('lead-in-length')) ? '?' : num('lead-in-length')} mm`;
+            t += oc > 0 ? ` · Überschnitt ${oc} mm` : (oc < 0 ? ` · Schnitt endet ${-oc} mm früher` : ' · ohne Überschnitt');
+            t += ' · an Ecken wird automatisch gerade angefahren';
+            el.textContent = t;
+            // Größen-Auswahl passend zurückstellen
+            if (sel) {
+                const cur = Object.entries(SIZES).find(([, v]) => Object.entries(v).every(([id, val]) => num(id) === val));
+                if (sel.value !== (cur ? cur[0] : '')) sel.value = cur ? cur[0] : '';
+            }
+        };
+        sel?.addEventListener('change', () => {
+            const preset = SIZES[sel.value];
+            if (!preset) return;
+            for (const [id, val] of Object.entries(preset)) {
+                const el = $(id);
+                if (el) { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }
+            }
+            updateSummary();
+        });
+        ['lead-type', 'lead-in-length', 'lead-in-radius', 'lead-out-length', 'overcut-length'].forEach(id => {
+            $(id)?.addEventListener('input', updateSummary);
+            $(id)?.addEventListener('change', updateSummary);
+        });
+        document.getElementById('lead-profile-select')?.addEventListener('change', () => setTimeout(updateSummary, 50));
+        updateSummary();
+        this._updateLeadSummary = updateSummary;
+    }
+
     _setLeadUIValues(section, type) {
         if (!section) return;
         if (type === 'ext') {
@@ -5218,6 +5264,7 @@ class CeraCutApp {
             if (prefCorners) prefCorners.checked = section.preferCorners;
             const dynLead = document.getElementById('dynamic-lead-ext');
             if (dynLead) dynLead.checked = section.leadInDynamic;
+            this._updateLeadSummary?.();
         } else {
             const fields = {
                 'int-lead-type': section.leadInType,

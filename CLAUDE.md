@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-11-07
-> **Version:** V7.16
-> **Build:** 20261107-leadmenu
+> **Version:** V7.17
+> **Build:** 20261107-leadsimple
 
 ---
 
@@ -205,7 +205,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 
 | Modul | Datei | Version | Verantwortung |
 |-------|-------|---------|---------------|
-| **App** | `app.js` | **V6.69** | Wizard, Kontextmenu, Export-Modal, Undo (Granular per Kontur), ToolManager, Click-Routing, Window-Selection, DynamicInput, Print, FSAPI-Save, ProjectManager, CAM-Kontextmenu, Lead-Profiles, Intarsien V2.0, Layer-Visibility→Pipeline, Validation Engine, Multi-Material Export, Hatch-Entity, Undo/Redo-Button-Click, Snap-Modi-Statusbar, Cycle-Selection |
+| **App** | `app.js` | **V6.70** | Wizard, Kontextmenu, Export-Modal, Undo (Granular per Kontur), ToolManager, Click-Routing, Window-Selection, DynamicInput, Print, FSAPI-Save, ProjectManager, CAM-Kontextmenu, Lead-Profiles, Intarsien V2.0, Layer-Visibility→Pipeline, Validation Engine, Multi-Material Export, Hatch-Entity, Undo/Redo-Button-Click, Snap-Modi-Statusbar, Cycle-Selection |
 | **Geometry** | `geometry.js` | **V2.14** | Vektoren, SplineUtils (De Boor), MicroHealing (5-Stage), Shoelace, interiorPoint |
 | **GeometryOps** | `geometry-ops.js` | **V2.7** | Intersection, Segment-Modell, Arabeske, circumscribedCircle, splitAndOverlap, Boundary (DCEL Planar Graph), filletPolyline/chamferPolyline |
 | **DXF-Parser** | `dxf-parser.js` | **V3.20** | DXF → Entities, SPLINE-Tessellation, Deque-Chaining, Layer-aware, TEXT/MTEXT, TEXT-Glyphs, Center/Radius-Passthrough, R12-Layer-Table, HATCH-Skip |
@@ -254,7 +254,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Seed** | `lib/seed.js` | **V1.0** | Erststart-Befuellung materials/technologies aus CeraJetEngine (nie ueberschreibend) |
 | **Data-API** | `lib/data-api.js` | **V1.0** | REST: /api/parts,plans,sheets,orders,materials,technologies, /api/technology/resolve; If-Match, Filter, Admin-only fuer Preise/Technologie |
 | **Store** | `lib/store.js` | **V1.0** | JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftraege, Technologie): atomar, Versions-Sperre (If-Match), ID-Validierung |
-| **Build-Info** | `build-info.js` | **V7.16** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V7.17** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.14 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -289,9 +289,9 @@ ceraCUT/
 │   └── auth.js                        ← Cookie/Body-Parsing-Helper V1.0
 ├── data/                               ← users.json (gitignored — Passwort-Hashes)
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V7.16
+│   ├── build-info.js                  ← Versions-Banner V7.17
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
-│   ├── app.js                         ← Hauptanwendung V7.16 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
+│   ├── app.js                         ← Hauptanwendung V7.17 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.20 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.14
 │   ├── geometry-ops.js                ← GeometryOps V2.7 (Intersection, Arabeske, splitAndOverlap)
@@ -545,7 +545,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   text-tool: V1.3 (20261104-reviewfix)
   dxf-writer: V1.16 (20261104-reviewfix)
   lead-profiles: V1.5 (20261106-arcangle)
-  app: V6.69 (20261107-leadmenu)
+  app: V6.70 (20261107-leadsimple)
   document-manager: V1.6 (20261106-fliesenrect)
   project-manager: V1.2 (20261104-pushexecuted)
   properties-panel: V1.7 (20261107-leadmenu)

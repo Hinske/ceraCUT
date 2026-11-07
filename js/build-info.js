@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.16',
-    build: '20261107-leadmenu',
+    version: '7.17',
+    build: '20261107-leadsimple',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'e395f15',
+        hash: 'c5958af',
         date: '2026-11-07',
-        message: 'feat: Plan oeffnen (neuer Tab als DXF) + Im Editor oeffnen (nesting-plan V1.1)'
+        message: 'feat: Lead-Menue fuer Einsteiger - Einfach-Ansicht (Groesse, Klartext-Zusammenfassung), Feinfelder unter Experte (app V6.70)'
     },
 
     modules: {
@@ -42,7 +42,7 @@ const CERACUT_BUILD = {
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.5', build: '20261106-arcangle' },
         'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
-        'app':                { version: '6.69', build: '20261107-leadmenu' },
+        'app':                { version: '6.70', build: '20261107-leadsimple' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.7', build: '20261107-leadmenu' },
@@ -79,6 +79,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.17: Feat — Lead-Menue fuer Einsteiger (app V6.70): Einfach-Ansicht mit Groesse Klein/Mittel/Gross, Klartext-Zusammenfassung des Anschnitts, verstaendliche Begriffe (Voreinstellung, Form, Laenge, Ueberschnitt, Auto fuer alle); alle Feinfelder (Winkel, Ausfahrt, Radius, Innen, Ecken, Piercing) unter Experte.',
         'V7.16: Feat — Lead-Menue: eigener Ausfahr-Typ und -Radius (leer = wie Anfahrt), Hover-Hinweis am Lead-Warnsymbol mit Grund, Properties-Panel: OC an Ecke + Sperr-Hinweis (app V6.69, canvas-renderer V3.63, properties-panel V1.7). Nachbarabstand (collision-margin) und Innen-Ueberschnitt (int-overcut-length) existierten bereits.',
         'V7.15: Refactor — Setup-Tab entfaellt (Referenz/Nullpunkt laufen beim Import automatisch): Referenz + Nullpunkt im Tab Datei (fuer manuelle Korrektur), Technologie (Material/Dicke/Druck/Duese) als Gruppe ③ Technologie im Tab Bearbeitung (app V6.67, styles.css).',
         'V7.15: Feat — Ueberschnitt an Ecken automatisch gesperrt (cam-contour V5.31: isStartAtCorner/isOvercutBlocked, Schwelle 14 Grad, Option overcutAtCorners zum Erlauben); Ribbon: Ausfahrlaenge und Ueberschnitt nicht mehr hinter Erweitert, neuer eigener Ausfahrwinkel, Schalter Ecke (app V6.68).',
