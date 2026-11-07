@@ -56,7 +56,7 @@ test('Invarianten: Teile konvex, ueberlappungsfrei, Flaeche passt (mit Raster, n
 });
 
 test('Raster: Fugenmitten ab Ablaufkante, Fuge zwischen Teilen exakt Fugenbreite', () => {
-    const r = G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { x: 300, y: 300 } });
+    const r = G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { x: 300, y: 300 }, anker: 'ablauf' });
     assert.ok(r.grid.xLines.some(v => near(v, 650 + 70 + 300 + 1)), 'Fugenmitte = Ablaufkante + Fliese + Fuge/2');
     assert.ok(r.grid.xLines.some(v => near(v, 650 - 70 - 300 - 1)), 'und gespiegelt links');
 });
@@ -80,7 +80,7 @@ test('DXF: geschlossene LWPOLYLINE je Teil auf Layer Fliesen', () => {
 
 test('Dialog: Vorschau-SVG und Stueckliste liefern Bemassung (Smoke)', () => {
     const D = require('../js/shower-board-dialog.js');
-    const r = G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { x: 300, y: 300 } });
+    const r = G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { x: 300, y: 300 }, anker: 'ablauf' });
     const svg = D._internals.previewSVG(r, true);
     assert.ok(svg.startsWith('<svg') && svg.includes('Fliesenfeld 1300'));
     assert.strictEqual((svg.match(/<polygon/g) || []).length, r.count);
@@ -306,4 +306,40 @@ test('Dialog: Statuszeile nennt nicht passende Teile mit Nummer und Mass', () =>
     assert.ok(/passen nicht auf die Fliese 300×150: Nr\. \d+/.test(html), html);
     assert.ok(D._internals.previewSVG(r1, true).includes('rgba(255,60,60,0.45)'));
     delete global.ShowerBoardGenerator;
+});
+
+// ── Automatische Rasterlage (V0.4) ───────────────────────────────────────────
+test('Auto-Raster: Standardfliese 597x597, Automatik erfuellt die Invarianten und braucht nie mehr Fliesen als feste Anker', () => {
+    assert.deepStrictEqual(G.DEFAULTS.fliese, { lang: 597, kurz: 597 });
+    assert.strictEqual(G.DEFAULTS.anker, 'auto');
+    for (const [b, t, dw, dh] of [[1300, 1000, 140, 140], [900, 900, 124, 124], [1200, 900, 140, 140], [1670, 875, 150, 150], [1400, 1200, 300, 100], [2000, 1500, 140, 140]]) {
+        const base = { breite: b, tiefe: t, ablauf: { w: dw, h: dh }, fliese: { lang: 597, kurz: 597 } };
+        const a = G.compute(base);
+        checkInvariants(a, `auto ${b}x${t}`);
+        assert.ok(a.autoInfo && a.tilesUsed > 0 && a.tilesUsed === a.full + a.cutTiles);
+        assert.ok(!a.warnings.some(w => w.type === 'fit'), `${b}x${t}: Teil passt nicht auf Fliese`);
+        const narrowAuto = a.warnings.filter(w => w.type === 'narrow').length;
+        for (const anker of ['ablauf', 'lu', 'ru', 'mitte', 'fuge']) {
+            const o = G.compute({ ...base, anker });
+            const narrowO = o.warnings.filter(w => w.type === 'narrow').length;
+            if (narrowO <= narrowAuto) assert.ok(a.tilesUsed - a.full * 0.2 <= o.tilesUsed + 0.01 || a.full >= o.full, `${b}x${t}: Auto schlechter als ${anker} (${a.tilesUsed}F/${a.full}g vs ${o.tilesUsed}F/${o.full}g)`);
+            assert.ok(narrowAuto <= narrowO || a.tilesUsed <= o.tilesUsed, `${b}x${t}: Auto hat mehr schmale Reste als ${anker}`);
+        }
+    }
+});
+
+test('Auto-Raster: grosses Board erhaelt ganze Fliesen und hat weniger schmale Reste als eine feste Ecklage', () => {
+    const base = { breite: 3000, tiefe: 2400, ablauf: { w: 200, h: 200 }, fliese: { lang: 597, kurz: 597 } };
+    const a = G.compute(base), l = G.compute({ ...base, anker: 'lu' });
+    assert.ok(a.full >= 4, `ganze Fliesen: ${a.full}`);
+    assert.ok(a.warnings.length < l.warnings.length, 'Automatik vermeidet die schmalen Reste, die die Ecke-links-unten-Lage hat');
+    assert.ok(a.tilesUsed <= l.tilesUsed);
+});
+
+test('Auto-Raster: mit editiertem Layout laeuft keine Suche (Lage bleibt wie uebergeben)', () => {
+    const base = { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 597, kurz: 597 } };
+    const a = G.compute(base);
+    const b = G.compute(base, a.layout);
+    assert.strictEqual(b.autoInfo, null);
+    assert.deepStrictEqual(pieceKeys(b.pieces), pieceKeys(a.pieces));
 });

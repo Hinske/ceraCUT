@@ -7,6 +7,7 @@
  * Phase 2b: Vorschau nur lesend; Fugenbild von Hand editieren folgt in 2c.
  *
  * V0.3.3: Fugenliste nur auf Wunsch (Checkbox, Standard aus)
+ * V0.4: Standardfliese 597x597, Raster 'Automatisch' (Standard), Statuszeile mit Fliesenbedarf (ganz/geschnitten) und gewaehlter Rasterlage
  * V0.3.2: Passpruefung Teil -> Fliese (Drehung, laengste Kante): rote Markierung, Teilemass = kleinste Box, Nummern in der Statuszeile; Fuge-loeschen entfernt
  * V0.3 (Phase 2c): Fugenbild bearbeiten — Fugen ziehen/setzen in der Zeichnung, Fugenlisten (numerisch), Rueckgaengig/Wiederholen
  *       (Strg+Z / Strg+Y), Zuruecksetzen; gilt fuer Kreuzfuge/Verband/Zufall ohne Drehung
@@ -15,7 +16,7 @@
  * V0.1: Erstversion
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch7
+ * Build: 20261107-dusch8
  */
 
 const ShowerBoardDialog = (() => {
@@ -177,6 +178,8 @@ const ShowerBoardDialog = (() => {
         if (r.grid) t += ` · ${r.grid.xLines.length + 1} Spalten × ${r.grid.yLines.length + 1} Zeilen`;
         else if (r.layout) t += r.layout.strips === 'rows' ? ` · ${r.layout.lines.length + 1} Reihen` : ` · ${r.layout.lines.length + 1} Spalten`;
         t += `</span>`;
+        t += ` &nbsp;<b style="color:#9fd0ff">${r.tilesUsed} Fliesen</b><span style="color:#9aa"> (${r.full} ganz, ${r.cutTiles} geschnitten)</span>`;
+        if (r.autoInfo) t += ` &nbsp;<span style="color:#7c8" title="Automatisch gewählte Rasterlage">Raster: ${esc(r.autoInfo)}</span>`;
         if (edited) t += ` &nbsp;<span style="color:#ffd24a">✎ Fugenbild angepasst</span>`;
         const fit = r.warnings.filter(w => w.type === 'fit'), narrow = r.warnings.filter(w => w.type === 'narrow');
         if (fit.length) {
@@ -196,7 +199,7 @@ const ShowerBoardDialog = (() => {
         ['fischgraet', 'Fischgrät (90°)'], ['korb', 'Korbgeflecht (Parkett-Block)'], ['keins', 'Kein Raster (nur Gehrung)']
     ];
     const ANKER = [
-        ['ablauf', 'Ab Ablaufkante (nur Kreuzfuge)'], ['lu', 'Ecke links unten'], ['ru', 'Ecke rechts unten'], ['lo', 'Ecke links oben'], ['ro', 'Ecke rechts oben'],
+        ['auto', 'Automatisch (wenig Schnitte, ganze Fliesen)'], ['ablauf', 'Ab Ablaufkante, Mittelband geteilt (nur Kreuzfuge)'], ['lu', 'Ecke links unten'], ['ru', 'Ecke rechts unten'], ['lo', 'Ecke links oben'], ['ro', 'Ecke rechts oben'],
         ['mitte', 'Fliese mittig auf Ablauf'], ['fuge', 'Fugenkreuz auf Ablaufmitte']
     ];
 
@@ -218,7 +221,7 @@ const ShowerBoardDialog = (() => {
             <div style="background:#1e1e1e;border:1px solid #555;border-radius:8px;width:99vw;height:97vh;display:flex;flex-direction:column;padding:10px 14px;box-sizing:border-box;color:#ddd;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:'Segoe UI',sans-serif;">
                 <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
                     <h3 style="margin:0;font-size:15px;color:#00aaff;white-space:nowrap;">Duschboard erzeugen</h3>
-                    <div id="ds-status" style="flex:1;font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;"></div>
+                    <div id="ds-status" style="flex:1;min-width:0;font-size:12.5px;line-height:1.35;max-height:2.7em;overflow:hidden;"></div>
                     <span id="ds-modes" style="display:flex;gap:4px;align-items:center;">
                         <button id="ds-m-view" data-mode="view" style="${BTN}" title="Ansicht: Ziehen = Verschieben">✋ Ansicht</button>
                         <button id="ds-m-move" data-mode="move" style="${BTN}" title="Fuge anfassen und ziehen">↔ Fuge ziehen</button>
@@ -238,7 +241,7 @@ const ShowerBoardDialog = (() => {
                         ${sel('ds-art', 'Maßangabe bezieht sich auf', [['fliesenfeld', 'Fliesenfeld (reine Fliesenfläche)'], ['aussen', 'Außenmaß (inkl. Randfuge)']])}
                         ${row2(fld('ds-b', 'Breite X [mm]', '1300'), fld('ds-t', 'Tiefe Y [mm]', '1000'))}
                         ${sec('Fliese und Fuge')}
-                        ${row2(fld('ds-fl', 'Lange Seite [mm]', '600'), fld('ds-fk', 'Kurze Seite [mm]', '300'))}
+                        ${row2(fld('ds-fl', 'Lange Seite [mm]', '597'), fld('ds-fk', 'Kurze Seite [mm]', '597'))}
                         ${sel('ds-ausr', 'Lange Seite verläuft', [['horizontal', 'horizontal (entlang X)'], ['vertikal', 'vertikal (entlang Y)']])}
                         ${row2(fld('ds-fuge', 'Fuge [mm]', '2'), fld('ds-rf', 'Randfuge [mm]', '2'))}
                         ${sec('Verlegeraster')}

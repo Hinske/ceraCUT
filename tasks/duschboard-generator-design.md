@@ -114,3 +114,7 @@ Kein Sperren/Teil-Neuberechnen: das editierte Layout gilt komplett bis zum Zurü
 ## 12. Passprüfung Teil → Fliese (V0.3.2)
 
 Jedes Teil wird geprüft, ob es in beliebiger Drehung in die vorhandene Fliese (lang × kurz, abzüglich Randabstand) passt: es gibt einen Winkel, bei dem die umschließende Box ≤ Fliesenmaß ist (beide Lagen). Damit zählt die längste Kante bei Gehrungs-/Diagonalschnitten (ein 660×10-Streifen passt, ein 670×10 nicht). Angezeigt wird das Teilemaß als kleinste Box (lang × kurz); Teile, die nicht passen, sind rot, die Statuszeile nennt Nummer und Bedarf. „Fuge löschen“ wurde entfernt (kein Anwendungsfall); Fugen lassen sich ziehen und setzen.
+
+## 13. Automatische Rasterlage (V0.4)
+
+Standardfliese 597×597. Anker „Automatisch“ (Standard): Der Generator probiert Rasterlagen je Achse (bündig links/rechts bzw. unten/oben, Fliese mittig, Fuge mittig, Fliesenkante an der Ablaufkante, Fliese/Fuge auf Ablaufmitte, 11 Zwischenversätze) per Koordinatenabstieg und bewertet: ganze Fliesen +100, je angeschnittene Fliese −20, schmale Reste (< Warnschwelle) −250, fast schmale (< 2× Schwelle) −40, je Teil −1. Gewählt wird die beste Lage; die Statuszeile zeigt „N Fliesen (x ganz, y geschnitten)“ und die gewählte Lage. Mit editiertem Fugenbild läuft keine Suche. Die Gehrung schneidet bei den üblichen Boardmaßen alle Fliesen (Sektoren schmaler als die Fliese), ganze Fliesen gibt es erst bei größeren Boards; die Automatik minimiert dann die Zahl der benötigten Fliesen und der schmalen Reste.

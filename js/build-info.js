@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.35',
-    build: '20261107-dusch7',
+    version: '7.36',
+    build: '20261107-dusch8',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '7e0056b',
+        hash: 'c038cd6',
         date: '2026-11-07',
-        message: 'feat: Duschboard-Dialog - Fugenliste nur auf Wunsch (Checkbox, Standard aus)'
+        message: 'feat: Duschboard - Standardfliese 597x597, automatische Rasterlage, Fliesenbedarf'
     },
 
     modules: {
@@ -67,8 +67,8 @@ const CERACUT_BUILD = {
         'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
-        'shower-board-generator': { version: '0.3.2', build: '20261107-dusch6' },
-        'shower-board-dialog': { version: '0.3.3', build: '20261107-dusch7' },
+        'shower-board-generator': { version: '0.4', build: '20261107-dusch8' },
+        'shower-board-dialog': { version: '0.4', build: '20261107-dusch8' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },

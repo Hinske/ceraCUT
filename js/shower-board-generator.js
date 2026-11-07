@@ -1,5 +1,5 @@
 /**
- * CeraCUT Duschboard-Generator V0.3 (Kern, ohne Dialog)
+ * CeraCUT Duschboard-Generator V0.4 (Kern, ohne Dialog)
  * Erzeugt die Zuschnitt-Teile eines Duschboards (Fliesen mit Gehrung zum Ablauf) aus Maßen, Ablauf und Fugenbild.
  *
  * Regeln (aus Kochhan_Duschboard_1000x1000.dxf, Ablauf 140x140 mittig):
@@ -12,6 +12,8 @@
  * Phase 2a: nur rechteckiger Punktablauf. Rinne (2d), runder/aussermittiger Sonderfall-Check (2e) folgen.
  * Rein (kein DOM) — laeuft in Node (tests/shower-board.test.js).
  *
+ * V0.4: Standardfliese 597x597; Rasterlage 'auto' (Standard): vergleicht Rasterlagen (buendig, mittig, an Ablaufkante, versetzt) und waehlt die mit den meisten ganzen Fliesen,
+ *       wenigsten Schnitten und ohne schmale Reste; Statistik ganze/geschnittene Teile
  * V0.3.2: Passpruefung Teil -> Fliese mit Drehung (laengste Kante/Diagonalen), Bedarf = kleinste umschliessende Box, Randabstand zur Fliesenkante; Fugen-Loeschen entfernt
  * V0.3.1: Raster 'ab Ablaufkante': Mittelband ueber dem Ablauf wird in Zellen <= Fliese geteilt (vorher Teile > Fliesenlaenge); Warnung 'Teil groesser als Fliese'
  * V0.3: Fugen-Layout (Reihen/Spalten + Fugenlisten je Reihe) fuer Kreuzfuge/Verband/Zufall ohne Drehung; Bearbeitungsfunktionen
@@ -21,14 +23,14 @@
  * V0.1: Erstversion (Raster, Sektoren, Clipping, DXF)
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch6
+ * Build: 20261107-dusch8
  */
 
 const ShowerBoardGenerator = (() => {
     'use strict';
 
-    const VERSION = '0.3.2';
-    const LOG = '[Duschboard V0.3.2]';
+    const VERSION = '0.4';
+    const LOG = '[Duschboard V0.4]';
     const LAYER_FLIESE = 'Fliesen';
     const LAYER_COLOR = 160;
     const EPS = 1e-6;
@@ -38,7 +40,7 @@ const ShowerBoardGenerator = (() => {
         teileAbstand: 2,         // Luecke zwischen Teilen im DXF (Phase 2a: = Fuge, siehe Design 9.2)
         randfuge: 2,             // Fuge zur Wand je Seite (nur bei masseArt 'aussen')
         masseArt: 'fliesenfeld', // 'fliesenfeld' | 'aussen'
-        fliese: { lang: 600, kurz: 300 },
+        fliese: { lang: 597, kurz: 597 },
         ausrichtung: 'horizontal', // lange Fliesenseite entlang X ('horizontal') oder Y ('vertikal')
         muster: 'kreuz',         // 'kreuz' | 'verband' | 'zufall' | 'fischgraet' | 'korb' | 'keins'
         versatz: 0.5,            // Verband: Versatz als Anteil der Fliesenlaenge (0.5 = Halbverband, 1/3, 1/4, frei)
@@ -48,7 +50,7 @@ const ShowerBoardGenerator = (() => {
         gegenlaeufig: false,     // Versatzrichtung umkehren bzw. Fischgraet spiegeln
         seed: 1,                 // Zufallsverband
         drehung: 0,              // Drehwinkel des Musters in Grad (45 = diagonal)
-        anker: 'ablauf',         // 'ablauf' (nur Kreuzfuge) | 'lu' | 'ru' | 'lo' | 'ro' | 'mitte' (Fliese mittig auf Ablauf) | 'fuge' (Fugenkreuz auf Ablauf)
+        anker: 'auto',           // 'auto' (Rasterlage mit moeglichst vielen ganzen Fliesen) | 'ablauf' (nur Kreuzfuge) | 'lu' | 'ru' | 'lo' | 'ro' | 'mitte' (Fliese mittig auf Ablauf) | 'fuge' (Fugenkreuz auf Ablauf)
         minTeil: 30,             // Warnung: Teil schmaler als (mm)
         fliesenRand: 0,          // Randabstand zur Fliesenkante fuer die Passpruefung (mm je Seite)
         maxTeile: 6000
@@ -156,6 +158,7 @@ const ShowerBoardGenerator = (() => {
         const { W, H, drain: d, fuge } = p, h = fuge / 2;
         const C = { x: (d.x0 + d.x1) / 2, y: (d.y0 + d.y1) / 2 };
         switch (p.anker) {
+            case 'phase': return { x: p.phaseX, y: p.phaseY };   // von der Automatik gewaehlte Rasterlage
             case 'ru': return { x: W + h, y: -h };
             case 'lo': return { x: -h, y: H + h };
             case 'ro': return { x: W + h, y: H + h };
@@ -524,12 +527,81 @@ const ShowerBoardGenerator = (() => {
     /**
      * Hauptfunktion. grid optional (manuell editiertes Fugenbild: { xLines, yLines }); sonst Automatik.
      */
+    // ── Automatische Rasterlage (moeglichst wenige geschnittene Fliesen) ────
+    const isFull = (pc, p) => Math.abs(area(pc.poly)) >= p.tx * p.ty * 0.9995;
+
+    function piecesFor(p, override) {
+        if (isGridPattern(p)) return { pieces: clipPieces(p, tilesFromLayout(p, override || buildLayout(p))) };
+        const r = tilesFromPattern(p);
+        return r.error ? { error: r.error } : { pieces: clipPieces(p, r.tiles) };
+    }
+
+    /** Fliesenbedarf: benoetigte Fliesen (Zellen mit mind. einem Teil), davon ganz erhalten */
+    function tileStats(p, pieces) {
+        const used = new Set(pieces.map(pc => pc.tile)), full = pieces.filter(pc => isFull(pc, p)).length;
+        return { tilesUsed: used.size, full, cutTiles: used.size - full };
+    }
+
+    /** Bewertung einer Rasterlage: ganze Fliesen zaehlen, jede angeschnittene Fliese, schmale Reste und viele Teile kosten */
+    function scorePieces(p, pieces) {
+        const st = tileStats(p, pieces);
+        let narrow = 0, slim = 0;
+        for (const pc of pieces) {
+            if (isFull(pc, p)) continue;
+            const w = minWidth(pc.poly);
+            if (w < p.minTeil) narrow++; else if (w < 2 * p.minTeil) slim++;
+        }
+        return { ...st, score: st.full * 100 - st.cutTiles * 20 - narrow * 250 - slim * 40 - pieces.length };
+    }
+
+    function phaseCandidates(L, lo, hi, t, fuge, W, axis) {
+        const px = t + fuge, h = fuge / 2, C = (lo + hi) / 2, lowName = axis === 'x' ? 'links' : 'unten', highName = axis === 'x' ? 'rechts' : 'oben';
+        const c = [
+            { v: -h, n: `${lowName} bündig` }, { v: L + h, n: `${highName} bündig` },
+            { v: L / 2 - px / 2, n: 'Fliese mittig' }, { v: L / 2, n: 'Fuge mittig' },
+            { v: lo + h, n: `Kante an Ablauf (${lowName})` }, { v: hi - h, n: `Kante an Ablauf (${highName})` },
+            { v: C - px / 2, n: 'Fliese auf Ablaufmitte' }, { v: C, n: 'Fuge auf Ablaufmitte' }
+        ];
+        const K = 12;
+        for (let k = 1; k < K; k++) c.push({ v: -h + k * px / K, n: `versetzt ${(k * px / K).toFixed(0)} mm` });
+        return c;
+    }
+
+    function searchPhase(p) {
+        const { W, H, drain: d } = p, px = p.tx + p.fuge, py = p.ty + p.fuge;
+        const cx = phaseCandidates(W, d.x0, d.x1, p.tx, p.fuge, W, 'x'), cy = phaseCandidates(H, d.y0, d.y1, p.ty, p.fuge, H, 'y');
+        const cache = new Map();
+        const ev = (a, b) => {
+            const key = a + '|' + b;
+            if (!cache.has(key)) {
+                const q = { ...p, anker: 'phase', phaseX: cx[a].v, phaseY: cy[b].v };
+                const r = piecesFor(q);
+                cache.set(key, r.error ? null : scorePieces(q, r.pieces));
+            }
+            return cache.get(key);
+        };
+        let bx = 0, by = 0, best = ev(0, 0);
+        const better = (s1, s0) => s1 && (!s0 || s1.score > s0.score);
+        for (let pass = 0; pass < 3; pass++) {
+            let moved = false;
+            for (let a = 0; a < cx.length; a++) { const r = ev(a, by); if (better(r, best)) { best = r; bx = a; moved = true; } }
+            for (let b = 0; b < cy.length; b++) { const r = ev(bx, b); if (better(r, best)) { best = r; by = b; moved = true; } }
+            if (!moved) break;
+        }
+        return { x: cx[bx].v, y: cy[by].v, info: `${cx[bx].n} · ${cy[by].n}`, stats: best };
+    }
+
     /** override: Fugen-Layout (editiert) oder altes {xLines,yLines}; wird nur verwendet, wenn das Muster layout-faehig ist */
     function compute(input, override) {
         const n = normalize(input);
         if (!n.ok) return n;
-        const p = n.p;
+        let p = n.p, autoInfo = null;
         if (p.W * p.H / ((p.tx + p.fuge) * (p.ty + p.fuge)) > p.maxTeile) return { ok: false, error: `Mehr als ${p.maxTeile} Fliesen — Fliesenformat prüfen.` };
+        if (p.anker === 'auto') {
+            const small = p.W * p.H / ((p.tx + p.fuge) * (p.ty + p.fuge)) > 250 || p.muster === 'keins';
+            if (override && isGridPattern(p) || small) p = { ...p, anker: 'lu' };
+            else { const b = searchPhase(p); p = { ...p, anker: 'phase', phaseX: b.x, phaseY: b.y }; autoInfo = b.info; }
+        }
         let layout = null, tiles;
         if (isGridPattern(p)) {
             layout = override ? (override.strips ? override : layoutFromGrid(override)) : buildLayout(p);
@@ -544,7 +616,8 @@ const ShowerBoardGenerator = (() => {
         const fileName = `Duschboard_${Math.round(input.breite)}x${Math.round(input.tiefe)}_Ablauf${Math.round(input.ablauf.w)}x${Math.round(input.ablauf.h)}.dxf`;
         const chains = layout ? chainsOf(layout) : null;
         const grid = chains && chains.xLines && chains.yLines ? chains : null;
-        return { ok: true, p, layout, chains, grid, editable: !!layout, pieces, warnings: validate(p, pieces), count: pieces.length, fileName, dxf: buildDXF(pieces) };
+        const st = tileStats(p, pieces);
+        return { ok: true, p, layout, chains, grid, editable: !!layout, pieces, warnings: validate(p, pieces), count: pieces.length, full: st.full, cutTiles: st.cutTiles, tilesUsed: st.tilesUsed, autoInfo, fileName, dxf: buildDXF(pieces) };
     }
 
     return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, moveLine, moveSub, addLine, addSub, fitInfo, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, fitInfo, bboxOf, tilesFromPattern, hash01 } };
