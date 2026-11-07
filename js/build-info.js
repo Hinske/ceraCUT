@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'c5958af',
+        hash: '75c9995',
         date: '2026-11-07',
-        message: 'feat: Lead-Menue fuer Einsteiger - Einfach-Ansicht (Groesse, Klartext-Zusammenfassung), Feinfelder unter Experte (app V6.70)'
+        message: 'feat: NC erstellen — NC-Editor mit Pruefung, Werkstattbericht (nc-tools V1.0)'
     },
 
     modules: {
@@ -75,7 +75,8 @@ const CERACUT_BUILD = {
         'data-api':           { version: '1.0', build: '20261107-dataapi' },
         'seed':               { version: '1.0', build: '20261107-seed' },
         'part-library':       { version: '1.0', build: '20261107-partimport' },
-        'nesting-plan':       { version: '1.1', build: '20261107-planopen' }
+        'nesting-plan':       { version: '1.1', build: '20261107-planopen' },
+        'nc-tools':           { version: '1.0', build: '20261107-nctools' }
     },
 
     changes: [

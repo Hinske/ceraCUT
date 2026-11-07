@@ -251,6 +251,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Auth-Helper** | `lib/auth.js` | **V1.0** | Cookie-Parsing, Session-Cookie-Helper, JSON-Body-Parsing |
 | **Part Library** | `part-library.js` | **V1.0** | Teileimport-Dialog (Ribbon Datei), PartGeometry (DXF-Konturen -> Teile-Datensatz), API-Client |
 | **Nesting Plan** | `nesting-plan.js` | **V1.1** | Autonest aus Teilebibliothek (Bedarf -> Plan), Dialog im Tab Nesting; Blech vorerst manuell, sheetId spaeter aus Blechbibliothek (tasks/todo-finest-phase2a.md) |
+| **NC Tools** | `nc-tools.js` | **V1.0** | NC erstellen (Ribbon Export): NCCheck (Sinumerik-Parser/Pruefung), NC-Editor, Werkstattbericht (Druck/PDF), nur Einzelplan (Fliesenbogen -> CNC Export) |
 | **Seed** | `lib/seed.js` | **V1.0** | Erststart-Befuellung materials/technologies aus CeraJetEngine (nie ueberschreibend) |
 | **Data-API** | `lib/data-api.js` | **V1.0** | REST: /api/parts,plans,sheets,orders,materials,technologies, /api/technology/resolve; If-Match, Filter, Admin-only fuer Preise/Technologie |
 | **Store** | `lib/store.js` | **V1.0** | JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftraege, Technologie): atomar, Versions-Sperre (If-Match), ID-Validierung |
