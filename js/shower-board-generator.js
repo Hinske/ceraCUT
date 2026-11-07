@@ -1,5 +1,5 @@
 /**
- * CeraCUT Duschboard-Generator V0.5.1 (Kern, ohne Dialog)
+ * CeraCUT Duschboard-Generator V0.6 (Kern, ohne Dialog)
  * Erzeugt die Zuschnitt-Teile eines Duschboards (Fliesen mit Gehrung zum Ablauf) aus Maßen, Ablauf und Fugenbild.
  *
  * Regeln (aus Kochhan_Duschboard_1000x1000.dxf, Ablauf 140x140 mittig):
@@ -13,6 +13,8 @@
  * Phase 2a: nur rechteckiger Punktablauf. Rinne (2d), runder/aussermittiger Sonderfall-Check (2e) folgen.
  * Rein (kein DOM) — laeuft in Node (tests/shower-board.test.js).
  *
+ * V0.6: PDF-Varianten nach RASTERLAGE (Ecken, Boardmitte, Ablauf, Automatik; liegend/hochkant) bei gleichem Verlegemuster; Verlegemuster-Varianten optional;
+ *       neue Anker 'bmitte' (Fliese mittig im Board) und 'bfuge' (Fugenkreuz in Boardmitte)
  * V0.5.1: DXF-Layer korrekt: 'Fliesen' = ganze Fliese als Umriss (Referenz, ceracut-pipeline.isTileOutline), 'Schnitt' = Zuschnitt-Konturen;
  *         ganze Fliesen ohne Schnitt-Kontur (wie Kochhan_Duschboard_1000x1000.dxf); result.tiles = Fliesenumrisse
  * V0.4: Standardfliese 597x597; Rasterlage 'auto' (Standard): vergleicht Rasterlagen (buendig, mittig, an Ablaufkante, versetzt) und waehlt die mit den meisten ganzen Fliesen,
@@ -26,14 +28,14 @@
  * V0.1: Erstversion (Raster, Sektoren, Clipping, DXF)
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch10
+ * Build: 20261107-dusch11
  */
 
 const ShowerBoardGenerator = (() => {
     'use strict';
 
-    const VERSION = '0.5.1';
-    const LOG = '[Duschboard V0.5.1]';
+    const VERSION = '0.6';
+    const LOG = '[Duschboard V0.6]';
     const LAYER_FLIESE = 'Fliesen';    // Fliesenumriss = Referenz (ganze Fliese), nie Schneidkontur
     const LAYER_SCHNITT = 'Schnitt';   // Zuschnitt-Konturen = werden geschnitten
     const LAYER_COLORS = { [LAYER_FLIESE]: 160, [LAYER_SCHNITT]: 10 };   // wie Zuschnitt-Generator / Kochhan-Dateien
@@ -54,7 +56,7 @@ const ShowerBoardGenerator = (() => {
         gegenlaeufig: false,     // Versatzrichtung umkehren bzw. Fischgraet spiegeln
         seed: 1,                 // Zufallsverband
         drehung: 0,              // Drehwinkel des Musters in Grad (45 = diagonal)
-        anker: 'auto',           // 'auto' (Rasterlage mit moeglichst vielen ganzen Fliesen) | 'ablauf' (nur Kreuzfuge) | 'lu' | 'ru' | 'lo' | 'ro' | 'mitte' (Fliese mittig auf Ablauf) | 'fuge' (Fugenkreuz auf Ablauf)
+        anker: 'auto',           // 'auto' (Rasterlage mit moeglichst vielen ganzen Fliesen) | 'ablauf' (nur Kreuzfuge) | 'lu' | 'ru' | 'lo' | 'ro' | 'mitte' (Fliese mittig auf Ablauf) | 'fuge' (Fugenkreuz auf Ablauf) | 'bmitte' (Fliese mittig im Board) | 'bfuge' (Fugenkreuz in Boardmitte)
         minTeil: 30,             // Warnung: Teil schmaler als (mm)
         fliesenRand: 0,          // Randabstand zur Fliesenkante fuer die Passpruefung (mm je Seite)
         maxTeile: 6000
@@ -162,6 +164,8 @@ const ShowerBoardGenerator = (() => {
         const { W, H, drain: d, fuge } = p, h = fuge / 2;
         const C = { x: (d.x0 + d.x1) / 2, y: (d.y0 + d.y1) / 2 };
         switch (p.anker) {
+            case 'bmitte': return { x: W / 2 - cw / 2, y: H / 2 - ch / 2 };   // Fliese mittig im Board
+            case 'bfuge': return { x: W / 2, y: H / 2 };                      // Fugenkreuz in Boardmitte
             case 'phase': return { x: p.phaseX, y: p.phaseY };   // von der Automatik gewaehlte Rasterlage
             case 'ru': return { x: W + h, y: -h };
             case 'lo': return { x: -h, y: H + h };
@@ -670,11 +674,40 @@ const ShowerBoardGenerator = (() => {
     }
 
     // ── Verlegevarianten (Katalog fuer PDF/Kundenauswahl) ───────────────────
-    /** Varianten-Definitionen ohne Berechnung: [{id,label,group,overrides}] — Rasterlage immer 'auto' */
-    function variantDefs(input) {
+    /**
+     * Varianten-Definitionen ohne Berechnung: [{id,label,group,overrides}]
+     *   mode 'raster' (Standard): Verlegemuster bleibt wie eingegeben, es variiert die RASTERLAGE (wo das Raster beginnt:
+     *        Ecken, Boardmitte, Ablauf, Automatik) und bei Rechteckfliesen die Lage der Fliese (liegend/hochkant)
+     *   mode 'muster': andere Verlegemuster (Kreuzfuge, Verbaende, Fischgraet, Korbgeflecht) mit Rasterlage 'auto'
+     */
+    function variantDefs(input, opts = {}) {
         const n = normalize(input);
         if (!n.ok) return [];
-        const sq = Math.abs(n.p.fliese.lang - n.p.fliese.kurz) < 1;
+        return opts.mode === 'muster' ? patternDefs(n.p) : rasterDefs(n.p);
+    }
+
+    function rasterDefs(p) {
+        if (p.muster === 'keins') return [];
+        const sq = Math.abs(p.fliese.lang - p.fliese.kurz) < 1;
+        const shifted = p.muster === 'verband' || p.muster === 'zufall';
+        const anchors = [
+            ['auto', 'Automatisch (wenig Schnitte)'],
+            ['lu', 'Raster ab Ecke links unten'], ['ru', 'Raster ab Ecke rechts unten'], ['lo', 'Raster ab Ecke links oben'], ['ro', 'Raster ab Ecke rechts oben'],
+            ['bmitte', 'Fliese mittig im Board'], ['bfuge', 'Fugenkreuz in Boardmitte'],
+            ['mitte', 'Fliese mittig auf dem Ablauf'], ['fuge', 'Fugenkreuz auf dem Ablauf']
+        ];
+        if (p.muster === 'kreuz' && Math.abs(p.drehung % 360) < 1e-9) anchors.push(['ablauf', 'Ab Ablaufkante, Mittelband geteilt']);
+        const orients = sq
+            ? [{ sfx: '', lbl: '', group: 'Rasterlagen', ov: {} }]
+            : [{ sfx: '', lbl: ' (Fliese liegend)', group: 'Fliese liegend', ov: { ausrichtung: 'horizontal', ...(shifted ? { verbandAchse: 'reihen' } : {}) } },
+               { sfx: '-hoch', lbl: ' (Fliese hochkant)', group: 'Fliese hochkant', ov: { ausrichtung: 'vertikal', ...(shifted ? { verbandAchse: 'spalten' } : {}) } }];
+        const defs = [];
+        for (const o of orients) for (const [a, label] of anchors) defs.push({ id: `r-${a}${o.sfx}`, label: label + o.lbl, group: o.group, overrides: { ...o.ov, anker: a } });
+        return defs;
+    }
+
+    function patternDefs(p) {
+        const sq = Math.abs(p.fliese.lang - p.fliese.kurz) < 1;
         const defs = [];
         const add = (id, label, group, overrides) => defs.push({ id, label, group, overrides: { ...overrides, anker: 'auto', drehung: overrides.drehung || 0 } });
         if (sq) add('kreuz', 'Kreuzfuge', 'Kreuzfuge', { muster: 'kreuz' });
@@ -705,10 +738,10 @@ const ShowerBoardGenerator = (() => {
         return defs;
     }
 
-    /** Katalog mit Berechnung: nur Varianten, die funktionieren und sich sichtbar unterscheiden. stats je Variante. */
+    /** Katalog mit Berechnung (opts.mode wie variantDefs, opts.pieces = Polygone fuer Vorschaubilder): nur Varianten, die funktionieren und sich sichtbar unterscheiden. stats je Variante. */
     function variantCatalog(input, opts = {}) {
         const seen = new Set(), out = [];
-        for (const d of variantDefs(input)) {
+        for (const d of variantDefs(input, opts)) {
             const r = compute({ ...input, ...d.overrides });
             if (!r.ok) continue;
             const key = r.pieces.map(pc => pc.poly.map(q => `${Math.round(q.x * 10)},${Math.round(q.y * 10)}`).sort().join('|')).sort().join('#');

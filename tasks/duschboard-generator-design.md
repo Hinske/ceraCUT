@@ -131,3 +131,7 @@ Die Pipeline (`ceracut-pipeline.isTileOutline`, `app._groupPartsForExport`) beha
 - Layer **Fliesen** (ACI 160): je benutzter Fliese der Umriss der **ganzen** Fliese (Rasterfliesen: tx×ty; Randzellen: ganze Fliese ab der Rasterkante, auch über die Boardkante hinaus; ohne Raster („Kein Raster“): das ganze Fliesenfeld als eine Platte).
 - Layer **Schnitt** (ACI 10): die Zuschnitte (geschlossene Polylinien mit Gehrung und Fugenversatz) — nur für **geschnittene** Teile; ganze Fliesen haben nur den Umriss, nichts zu schneiden.
 Jeder Zuschnitt liegt im Umriss seiner Fliese (Test). Gedrehte Raster (45°, Fischgrät diagonal) haben schräge Umrisse; die Fliesengruppierung für den Einzelteil-Export erkennt nur achsparallele Rechtecke.
+
+## 16. PDF-Varianten nach Rasterlage (V0.6)
+
+Im Kunden-PDF ist das **Raster** das Auswahlkriterium, nicht das Verlegemuster: Das Verlegemuster bleibt wie im Dialog, die Varianten sind die Rasterlagen — Automatisch (wenig Schnitte), Ecke links/rechts unten/oben, Fliese bzw. Fugenkreuz in Boardmitte, Fliese bzw. Fugenkreuz auf dem Ablauf, bei der Kreuzfuge zusätzlich „ab Ablaufkante“ — jeweils bei Rechteckfliesen als „Fliese liegend“ und „hochkant“. Gleiche Ergebnisse werden zusammengefasst. Andere Verlegemuster gibt es nur auf Wunsch (Haken „Zusätzlich andere Verlegemuster anbieten“). Neue Anker `bmitte`/`bfuge` auch im Dialog.

@@ -1,5 +1,5 @@
 /**
- * CeraCUT Duschboard-Dialog V0.5: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
+ * CeraCUT Duschboard-Dialog V0.6: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
  * Kern: shower-board-generator.js (ShowerBoardGenerator). Befehl DUSCH, Ribbon CAD -> Zuschnitte -> Duschboard.
  *
  * Bemaßung (zur Kontrolle): Gesamtmaß (Fliesenfeld, bei Außenmaß zusätzlich Außenmaß), Ablaufmaße und -lage,
@@ -7,6 +7,7 @@
  * Phase 2b: Vorschau nur lesend; Fugenbild von Hand editieren folgt in 2c.
  *
  * V0.3.3: Fugenliste nur auf Wunsch (Checkbox, Standard aus)
+ * V0.6: PDF-Varianten nach Rasterlage (Verlegemuster bleibt), andere Muster optional; Anker 'Fliese mittig im Board' / 'Fugenkreuz in Boardmitte'
  * V0.5: Projekte (Server /api/shower/projects: Oeffnen/Speichern/Kopie/Loeschen, Standard-Duschboards als Vorlage) + Kunden-PDF-Dialog (Varianten + Angaben waehlen, /api/shower/pdf)
  * V0.4: Standardfliese 597x597, Raster 'Automatisch' (Standard), Statuszeile mit Fliesenbedarf (ganz/geschnitten) und gewaehlter Rasterlage
  * V0.3.2: Passpruefung Teil -> Fliese (Drehung, laengste Kante): rote Markierung, Teilemass = kleinste Box, Nummern in der Statuszeile; Fuge-loeschen entfernt
@@ -17,7 +18,7 @@
  * V0.1: Erstversion
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch9
+ * Build: 20261107-dusch11
  */
 
 const ShowerBoardDialog = (() => {
@@ -179,7 +180,7 @@ const ShowerBoardDialog = (() => {
     ];
     const ANKER = [
         ['auto', 'Automatisch (wenig Schnitte, ganze Fliesen)'], ['ablauf', 'Ab Ablaufkante, Mittelband geteilt (nur Kreuzfuge)'], ['lu', 'Ecke links unten'], ['ru', 'Ecke rechts unten'], ['lo', 'Ecke links oben'], ['ro', 'Ecke rechts oben'],
-        ['mitte', 'Fliese mittig auf Ablauf'], ['fuge', 'Fugenkreuz auf Ablaufmitte']
+        ['mitte', 'Fliese mittig auf Ablauf'], ['fuge', 'Fugenkreuz auf Ablaufmitte'], ['bmitte', 'Fliese mittig im Board'], ['bfuge', 'Fugenkreuz in Boardmitte']
     ];
 
     function openDialog(options = {}) {
@@ -647,11 +648,12 @@ const ShowerBoardDialog = (() => {
             const cb = (id, label, on, hint = '') => `<label style="display:block;font-size:12.5px;margin:3px 0;"><input type="checkbox" id="pf-${id}" ${on ? 'checked' : ''}> ${label}${hint ? ` <span style="color:#778">${hint}</span>` : ''}</label>`;
             const opt = (id, label, opts, val) => `<label style="${LABEL_CSS}">${label}</label><select id="pf-${id}" style="${FIELD_CSS}">${opts.map(([v, t]) => `<option value="${v}" ${String(v) === String(val) ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
             box.innerHTML = `<div style="background:#252526;border:1px solid #555;border-radius:8px;width:min(1000px,96%);height:min(86%,760px);display:flex;flex-direction:column;padding:14px 16px;">
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;"><b style="color:#00aaff;font-size:14px;">Kunden-PDF: Verlegevarianten</b><span style="color:#778;font-size:12px;flex:1;">Wählen Sie, welche Varianten und Angaben der Kunde sieht.</span></div>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;"><b style="color:#00aaff;font-size:14px;">Kunden-PDF: Verlegevarianten</b><span style="color:#778;font-size:12px;flex:1;">Die Varianten unterscheiden sich im Raster (wo es beginnt, Fliese liegend/hochkant). Das Verlegemuster bleibt wie im Dialog gewählt.</span></div>
                 <div style="flex:1;min-height:0;display:flex;gap:18px;">
                     <div style="flex:1 1 55%;min-width:0;display:flex;flex-direction:column;">
-                        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:12.5px;"><b>Varianten</b><span id="pf-count" style="color:#9aa;flex:1;"></span><button id="pf-all" style="${BTN}padding:1px 8px;">Alle</button><button id="pf-none" style="${BTN}padding:1px 8px;">Keine</button></div>
+                        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:12.5px;"><b>Raster-Varianten</b><span id="pf-count" style="color:#9aa;flex:1;"></span><button id="pf-all" style="${BTN}padding:1px 8px;">Alle</button><button id="pf-none" style="${BTN}padding:1px 8px;">Keine</button></div>
                         <div id="pf-vars" style="overflow:auto;flex:1;border:1px solid #333;border-radius:4px;padding:6px;font-size:12.5px;color:#9aa;">Berechne Varianten …</div>
+                        <label style="font-size:12.5px;margin-top:6px;"><input type="checkbox" id="pf-muster"> Zusätzlich andere Verlegemuster anbieten (Kreuzfuge, Verbände, Fischgrät, diagonal …)</label>
                     </div>
                     <div style="flex:0 0 300px;overflow:auto;padding-right:4px;">
                         <b style="font-size:12.5px;">Angaben für den Kunden</b>
@@ -678,19 +680,22 @@ const ShowerBoardDialog = (() => {
             B('pf-all').addEventListener('click', () => { box.querySelectorAll('.pf-var').forEach(e => { e.checked = true; }); count(); });
             B('pf-none').addEventListener('click', () => { box.querySelectorAll('.pf-var').forEach(e => { e.checked = false; }); count(); });
             setTimeout(() => {
-                let cat = [];
-                try { cat = GEN.variantCatalog(params, { pieces: true }); } catch (e) { B('pf-vars').textContent = 'Varianten nicht berechenbar: ' + e.message; return; }
+                let catR = [], catM = [];
+                try { catR = GEN.variantCatalog(params, { pieces: true, mode: 'raster' }); catM = GEN.variantCatalog(params, { pieces: true, mode: 'muster' }); }
+                catch (e) { B('pf-vars').textContent = 'Varianten nicht berechenbar: ' + e.message; return; }
                 if (!last?.ok) { B('pf-vars').innerHTML = `<span style="color:#ff6b6b">Eingaben korrigieren: ${esc(last?.error || '')}</span>`; return; }
                 const row = (id, label, st, th, on) => `<label style="display:flex;gap:10px;align-items:center;padding:4px 2px;border-bottom:1px solid #2c2c2c;cursor:pointer;color:#ddd;"><input type="checkbox" class="pf-var" value="${esc(id)}" ${on ? 'checked' : ''}>${th}<span style="flex:1;"><b>${esc(label)}</b><br><span style="color:#9aa;font-size:12px;">${st}</span></span></label>`;
                 const stTxt = s => `${s.tilesUsed} Fliesen · ${s.count} Teile${s.full ? ` · ${s.full} ganz` : ''}${s.narrow ? ` · <span style="color:#f0b429">${s.narrow} schmal</span>` : ''}${s.noFit ? ` · <span style="color:#ff6b6b">${s.noFit} passt nicht</span>` : ''}`;
                 const curThumb = { W: last.p.W, H: last.p.H, drain: last.p.drain, polys: last.pieces.map(pc => pc.poly) };
-                let html = row('current', 'Aktuelle Auswahl (wie im Dialog' + (override ? ', Fugenbild angepasst' : '') + ')', stTxt({ tilesUsed: last.tilesUsed, count: last.count, full: last.full, narrow: last.warnings.filter(w => w.type === 'narrow').length, noFit: last.warnings.filter(w => w.type === 'fit').length }), thumb(curThumb), prefs.variantIds.includes('current'));
-                let group = '';
-                for (const v of cat) {
-                    if (v.group !== group) { group = v.group; html += `<div style="margin:8px 0 2px;color:#00aaff;font-size:12px;">${esc(group)}</div>`; }
-                    html += row(v.id, v.label, stTxt(v.stats), thumb(v), prefs.variantIds.includes(v.id));
-                }
-                B('pf-vars').innerHTML = html; B('pf-vars').style.color = '';
+                const list = (cat, withHeads) => { let h = '', group = ''; for (const v of cat) { if (withHeads && v.group !== group) { group = v.group; h += `<div style="margin:8px 0 2px;color:#00aaff;font-size:12px;">${esc(group)}</div>`; } h += row(v.id, v.label, stTxt(v.stats), thumb(v), prefs.variantIds.includes(v.id)); } return h; };
+                const curLabel = 'Aktuelle Auswahl (wie im Dialog' + (override ? ', Fugenbild angepasst' : '') + ')';
+                B('pf-vars').innerHTML = row('current', curLabel, stTxt({ tilesUsed: last.tilesUsed, count: last.count, full: last.full, narrow: last.warnings.filter(w => w.type === 'narrow').length, noFit: last.warnings.filter(w => w.type === 'fit').length }), thumb(curThumb), prefs.variantIds.includes('current'))
+                    + list(catR, true) + `<div id="pf-mgrp" style="display:none;"><div style="margin:12px 0 2px;padding-top:6px;border-top:1px solid #444;color:#00aaff;font-size:12px;">Andere Verlegemuster (Rasterlage automatisch)</div>${list(catM, true)}</div>`;
+                B('pf-vars').style.color = '';
+                const showM = () => { B('pf-mgrp').style.display = B('pf-muster').checked ? '' : 'none'; };
+                if (catM.some(v => prefs.variantIds.includes(v.id))) B('pf-muster').checked = true;
+                showM();
+                B('pf-muster').addEventListener('change', () => { showM(); if (!B('pf-muster').checked) B('pf-mgrp').querySelectorAll('.pf-var').forEach(e => { e.checked = false; }); count(); });
                 box.querySelectorAll('.pf-var').forEach(e => e.addEventListener('change', count)); count();
             }, 30);
             B('pf-go').addEventListener('click', async () => {

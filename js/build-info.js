@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.38',
-    build: '20261107-dusch10',
+    version: '7.39',
+    build: '20261107-dusch11',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'e0bb99f',
+        hash: '4473989',
         date: '2026-11-07',
-        message: 'fix: Duschboard-DXF - Layer korrekt: Fliesen = ganze Fliese, Schnitt = Zuschnitte'
+        message: 'feat: Duschboard-PDF - Varianten nach Rasterlage statt Verlegemuster'
     },
 
     modules: {
@@ -67,10 +67,10 @@ const CERACUT_BUILD = {
         'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
-        'shower-board-generator': { version: '0.5.1', build: '20261107-dusch10' },
-        'shower-board-dialog': { version: '0.5', build: '20261107-dusch9' },
+        'shower-board-generator': { version: '0.6', build: '20261107-dusch11' },
+        'shower-board-dialog': { version: '0.6', build: '20261107-dusch11' },
         'shower-api': { version: '0.1', build: '20261107-showerapi' },
-        'shower-pdf': { version: '0.1', build: '20261107-showerpdf' },
+        'shower-pdf': { version: '0.2', build: '20261107-dusch11' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },

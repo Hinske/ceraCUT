@@ -117,10 +117,30 @@ test('PDF: interne Angaben nur auf Wunsch (Teilenummern/Hinweise erscheinen nich
     assert.ok(intern > plain, 'mit internen Angaben mehr Inhalt');
 });
 
-test('Variantenkatalog: stabile IDs, quadratische Fliese ohne Fischgraet, rechteckige mit', () => {
-    const sq = G.variantCatalog(input).map(v => v.id), re = G.variantCatalog({ ...input, fliese: { lang: 600, kurz: 300 } }).map(v => v.id);
+test('Variantenkatalog Raster (Standard): Verlegemuster bleibt, es variiert die Rasterlage; liegend/hochkant nur bei Rechteckfliesen', () => {
+    const sq = G.variantCatalog(input), re = G.variantCatalog({ ...input, fliese: { lang: 600, kurz: 300 }, muster: 'verband', versatz: 0.5 });
+    assert.ok(sq.length >= 5 && sq.every(v => v.id.startsWith('r-')) && sq.some(v => v.id === 'r-auto') && sq.some(v => v.id === 'r-bmitte'));
+    assert.ok(sq.every(v => !/hochkant/.test(v.label)), 'quadratische Fliese: keine liegend/hochkant-Varianten');
+    assert.ok(re.some(v => v.group === 'Fliese liegend') && re.some(v => v.group === 'Fliese hochkant'));
+    // Muster der Varianten = Muster der Eingabe
+    for (const v of G.variantDefs({ ...input, muster: 'verband', versatz: 1 / 3 })) assert.ok(!('muster' in v.overrides), 'Raster-Variante aendert das Verlegemuster nicht');
+    assert.ok(sq.every(v => v.stats.count > 0 && v.stats.tilesUsed > 0));
+    assert.ok(!G.variantDefs({ ...input, muster: 'kreuz', drehung: 45 }).some(d => d.id === 'r-ablauf'), 'Ablaufkante nur bei Kreuzfuge ohne Drehung');
+    assert.deepStrictEqual(G.variantDefs({ ...input, muster: 'keins' }), []);
+    assert.deepStrictEqual(G.variantDefs({ ...input, breite: -1 }), []);
+});
+
+test('Variantenkatalog Verlegemuster (optional): stabile IDs, quadratische Fliese ohne Fischgraet, rechteckige mit', () => {
+    const sq = G.variantCatalog(input, { mode: 'muster' }).map(v => v.id), re = G.variantCatalog({ ...input, fliese: { lang: 600, kurz: 300 } }, { mode: 'muster' }).map(v => v.id);
     assert.ok(sq.includes('kreuz') && sq.includes('verband50-reihen') && !sq.includes('fischgraet'));
     assert.ok(re.includes('fischgraet') && re.includes('kreuz-hoch') && re.includes('verband33-hoch'));
-    assert.ok(G.variantCatalog(input).every(v => v.stats.count > 0 && v.stats.tilesUsed > 0));
-    assert.deepStrictEqual(G.variantDefs({ ...input, breite: -1 }), []);
+});
+
+test('PDF: Raster-Varianten werden aufgeloest (r-bmitte) und unterscheiden sich in der Rasterlage', async () => {
+    const R = require('../lib/shower-pdf.js');
+    const v = R.resolveVariants(input, undefined, ['r-lu', 'r-bmitte', 'kreuz', 'gibts-nicht']);
+    assert.deepStrictEqual(v.map(x => x.id), ['r-lu', 'r-bmitte', 'kreuz']);
+    assert.notDeepStrictEqual(v[0].result.pieces.length, v[1].result.pieces.length);
+    const buf = await showerPdf({ input, variantIds: ['r-lu', 'r-bmitte'], options: { cover: false }, meta: {} });
+    assert.strictEqual(buf.slice(0, 5).toString(), '%PDF-');
 });
