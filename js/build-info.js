@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'c780b69',
-        date: '2026-11-06',
-        message: 'chore: offene Waricam-Punkte (todo-waricam.md) + paralleler Stand (Fliesen als R'
+        hash: '2df9f11',
+        date: '2026-11-07',
+        message: 'feat: lib/store.js — JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftr'
     },
 
     modules: {
@@ -70,7 +70,8 @@ const CERACUT_BUILD = {
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },
         'session-store':      { version: '1.1', build: '20261104-reviewfix' },
-        'auth-helper':        { version: '1.1', build: '20261104-reviewfix' }
+        'auth-helper':        { version: '1.1', build: '20261104-reviewfix' },
+        'store':              { version: '1.0', build: '20261107-store' }
     },
 
     changes: [
