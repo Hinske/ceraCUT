@@ -200,18 +200,16 @@ test('Layout: Verband — Fuge in einer Reihe verschieben beeinflusst nur diese 
     checkInvariants(G.compute({ ...baseIn, muster: 'verband', versatz: 0.5, anker: 'lu' }, m), 'Verband editiert');
 });
 
-test('Layout: Fuge setzen und loeschen sind umkehrbar', () => {
+test('Layout: Fuge setzen (Kreuzfuge: in allen Reihen, ausserhalb ignoriert)', () => {
     const r = G.compute({ ...baseIn, anker: 'lu' }), L = r.layout, p = r.p;
     const a = G.addLine(p, L, 500);
     assert.strictEqual(a.lines.length, L.lines.length + 1);
     assert.strictEqual(a.sub.length, L.sub.length + 1);
-    const b = G.removeLine(p, a, a.lines.indexOf(500));
-    assert.deepStrictEqual(b, L);
     const c = G.addSub(p, L, 1, 333);
     assert.ok(c.sub.every(arr => arr.includes(333)), 'gekoppelt: in allen Reihen');
-    assert.deepStrictEqual(G.removeSub(p, c, 0, c.sub[0].indexOf(333)), L);
     assert.strictEqual(G.addLine(p, L, -5).lines.length, L.lines.length, 'ausserhalb ignoriert');
     checkInvariants(G.compute({ ...baseIn, anker: 'lu' }, a), 'nach Fuge setzen');
+    assert.strictEqual(G.removeLine, undefined, 'Fuge-loeschen wurde entfernt');
 });
 
 test('Layout: jointSegments liefert Fugen als Strecken', () => {
@@ -245,14 +243,67 @@ test('Raster ab Ablaufkante: kein Teil ist groesser als die Fliese (Regression: 
         for (const ausrichtung of ['horizontal', 'vertikal']) {
             const r = G.compute({ breite: b, tiefe: t, ablauf: { w: dw, h: dh }, fliese: { lang: 600, kurz: 300 }, ausrichtung });
             assert.ok(r.ok, r.error);
-            const diag = Math.hypot(600, 300);
             for (const pc of r.pieces) {
                 const bb = G._internals.bboxOf(pc.poly);
-                assert.ok(G._internals.diameter(pc.poly) <= diag + 0.5, `${b}x${t} ${ausrichtung}: Teil ${(bb.x1 - bb.x0).toFixed(0)}x${(bb.y1 - bb.y0).toFixed(0)} groesser als Fliese`);
+                assert.ok(pc.fit.ok, `${b}x${t} ${ausrichtung}: Teil ${(bb.x1 - bb.x0).toFixed(0)}x${(bb.y1 - bb.y0).toFixed(0)} passt nicht auf die Fliese`);
                 const [w, h] = ausrichtung === 'horizontal' ? [600, 300] : [300, 600];
                 assert.ok(bb.x1 - bb.x0 <= w + 0.5 && bb.y1 - bb.y0 <= h + 0.5, `${b}x${t} ${ausrichtung}: Teil ${(bb.x1 - bb.x0).toFixed(0)}x${(bb.y1 - bb.y0).toFixed(0)} ueberschreitet Fliesenzelle ${w}x${h}`);
             }
-            assert.ok(!r.warnings.some(w => /größer als die Fliese/.test(w.text)));
+            assert.ok(!r.warnings.some(w => w.type === 'fit'));
         }
     }
+});
+
+// ── Passpruefung Teil -> Fliese ──────────────────────────────────────────────
+const poly = pts => pts.map(([x, y]) => ({ x, y }));
+const rotPoly = (pts, deg) => { const c = Math.cos(deg * Math.PI / 180), s = Math.sin(deg * Math.PI / 180); return pts.map(([x, y]) => ({ x: x * c - y * s, y: x * s + y * c })); };
+
+test('Passpruefung: ganze Fliese passt, 1 mm zu gross nicht (beide Lagen)', () => {
+    const { fitInfo } = G._internals;
+    assert.ok(fitInfo(poly([[0, 0], [600, 0], [600, 300], [0, 300]]), 600, 300).ok);
+    assert.ok(fitInfo(poly([[0, 0], [300, 0], [300, 600], [0, 600]]), 600, 300).ok, 'hochkant');
+    assert.ok(!fitInfo(poly([[0, 0], [601, 0], [601, 300], [0, 300]]), 600, 300).ok);
+    assert.ok(!fitInfo(poly([[0, 0], [300, 0], [300, 301], [0, 301]]), 300, 300).ok, 'Quadrat 300x301 auf 300x300');
+});
+
+test('Passpruefung: laengste Kante (Diagonale) zaehlt — schlankes Teil passt nur gedreht in die Fliesendiagonale', () => {
+    const { fitInfo } = G._internals;
+    const sliver = len => rotPoly([[0, 0], [len, 0], [len, 10], [0, 10]], 0);
+    assert.ok(fitInfo(sliver(640), 600, 300).ok, '640x10 passt entlang der Diagonale (achsparallel waere es zu lang)');
+    assert.ok(fitInfo(sliver(660), 600, 300).ok, '660x10 passt gedreht (ca. 26 Grad) gerade noch');
+    assert.ok(!fitInfo(sliver(670), 600, 300).ok, '670x10 passt nicht mehr (Fliesendiagonale 670, Teil hat Breite)');
+    assert.ok(!fitInfo(sliver(700), 600, 300).ok, 'laenger als die Fliesendiagonale');
+    // gleiches Teil gedreht eingebaut (Lage im Board egal)
+    assert.ok(fitInfo(rotPoly([[0, 0], [640, 0], [640, 10], [0, 10]], 37), 600, 300).ok);
+    // Dreieck mit Gehrung: Hypotenuse 640 > 600, Bounding-Box 590 x 230 passt achsparallel
+    const tri = poly([[0, 0], [590, 0], [590, 230]]);
+    const fi = fitInfo(tri, 600, 300);
+    assert.ok(fi.ok && fi.a < 640);
+    // Bedarf = kleinste Box
+    assert.ok(Math.abs(fitInfo(poly([[0, 0], [500, 0], [500, 100], [0, 100]]), 600, 300).a - 500) < 1e-6);
+});
+
+test('Passpruefung: Fugen von Hand zu weit auseinander -> Teile passen nicht, Warnung enthaelt Mass; Randabstand wirkt', () => {
+    const r0 = G.compute({ ...baseIn, anker: 'lu' });
+    assert.ok(r0.ok && !r0.warnings.some(w => w.type === 'fit'));
+    const moved = G.moveSub(r0.p, r0.layout, 1, 0, 340);
+    const r1 = G.compute({ ...baseIn, anker: 'lu' }, moved);
+    const w = r1.warnings.filter(x => x.type === 'fit');
+    assert.ok(w.length > 0 && /passt nicht auf die Fliese 300×150/.test(w[0].text));
+    assert.ok(r1.pieces.some(pc => !pc.fit.ok) && r1.pieces.every(pc => pc.fit && typeof pc.fit.a === 'number'));
+    // Randabstand 5 mm: ganze Fliesen (300x150) passen nicht mehr in 290x140
+    const r2 = G.compute({ ...baseIn, anker: 'lu', fliesenRand: 5 });
+    assert.ok(r2.warnings.some(x => x.type === 'fit'));
+    assert.strictEqual(G.compute({ ...baseIn, fliesenRand: -1 }).ok, false);
+});
+
+test('Dialog: Statuszeile nennt nicht passende Teile mit Nummer und Mass', () => {
+    global.ShowerBoardGenerator = G;
+    const D = require('../js/shower-board-dialog.js');
+    const r0 = G.compute({ ...baseIn, anker: 'lu' });
+    const r1 = G.compute({ ...baseIn, anker: 'lu' }, G.moveSub(r0.p, r0.layout, 1, 0, 340));
+    const html = D._internals.statusHTML(r1, true);
+    assert.ok(/passen nicht auf die Fliese 300×150: Nr\. \d+/.test(html), html);
+    assert.ok(D._internals.previewSVG(r1, true).includes('rgba(255,60,60,0.45)'));
+    delete global.ShowerBoardGenerator;
 });

@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-11-07
-> **Version:** V7.33
-> **Build:** 20261107-dusch5
+> **Version:** V7.34
+> **Build:** 20261107-dusch6
 
 ---
 
@@ -226,8 +226,8 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Advanced Tools** | `advanced-tools.js` | **V1.9** | Fillet, Trim, Extend, Offset (Ghost-Preview), Chamfer, Arabeske, Aufteilen, Overkill, Boundary (DCEL) |
 | **CAM Tools** | `cam-tools.js` | **V1.7** | 7 CAM-Werkzeuge im Tab CAD (Gruppe CAM-Tools) (EF, REP, AN, BT, PJ, VZ, HULL); Schwerpunkt-/Kanten-korrekte Logik, Analyze mit BBox-Vorfilter, VZ via Simplify; Tests: tests/cam-tools.test.js |
 | **Zuschnitt-Generator** | `mosaic-generator.js` | **V1.3** | Menue CAD-Tools (Ribbon CAD nach CAM-Tools): Mosaik Wuerfel/Rechteck (Teilung = Stueck + 0,8 mm, Rand 3 mm, Verschnittpruefung, Dekor-Lage, Mischlage, Ueberlauf), Sockel-Streifen; Befehle MOSW/MOSR/MOSS; erzeugt DXF -> neuer Tab |
-| **Duschboard-Generator** | `shower-board-generator.js` | **V0.3** | Kern ohne Dialog (Fugen-Layout Reihen/Spalten + moveLine/moveSub/addLine/addSub/removeLine/removeSub): Fliesenfeld + rechteckiger Punktablauf, Gehrung Ablaufecke→Boardecke (Fuge/2 senkrecht versetzt), Verlegemuster (Kreuzfuge, Verband 1/2·1/3·1/4·frei, Zufall, Fischgrät, Korbgeflecht), Ausrichtung, Drehwinkel, Anker; Kreuzfuge/Verband/Zufall ohne Drehung editierbar. Teile = LWPOLYLINE auf Layer Fliesen. Plan: `tasks/duschboard-generator-design.md`; Tests `tests/shower-board.test.js` |
-| **Duschboard-Dialog** | `shower-board-dialog.js` | **V0.3** | Fugenbild bearbeiten (Fuge ziehen/setzen/löschen, Fugenlisten, Undo/Redo Strg+Z/Y, Zurücksetzen). Dialog (Befehl DUSCH, Ribbon CAD → Zuschnitte), Zeichnung füllt den Dialog, Zoom (Mausrad)/Verschieben/Einpassen, Live-Bemaßung (Gesamt-, Ablauf-, Spalten-/Zeilenmaße, Gehrungswinkel, Teilemaße/-nummern), Verlegemuster-Auswahl; Erzeugen → neuer Tab |
+| **Duschboard-Generator** | `shower-board-generator.js` | **V0.3** | Kern ohne Dialog (Fugen-Layout Reihen/Spalten + moveLine/moveSub/addLine/addSub, fitInfo = Passprüfung mit Drehung): Fliesenfeld + rechteckiger Punktablauf, Gehrung Ablaufecke→Boardecke (Fuge/2 senkrecht versetzt), Verlegemuster (Kreuzfuge, Verband 1/2·1/3·1/4·frei, Zufall, Fischgrät, Korbgeflecht), Ausrichtung, Drehwinkel, Anker; Kreuzfuge/Verband/Zufall ohne Drehung editierbar. Teile = LWPOLYLINE auf Layer Fliesen. Plan: `tasks/duschboard-generator-design.md`; Tests `tests/shower-board.test.js` |
+| **Duschboard-Dialog** | `shower-board-dialog.js` | **V0.3** | Fugenbild bearbeiten (Fuge ziehen/setzen, Fugenlisten, Undo/Redo Strg+Z/Y, Zurücksetzen), Passprüfung Teil→Fliese (rot + Nummern in der Statuszeile). Dialog (Befehl DUSCH, Ribbon CAD → Zuschnitte), Zeichnung füllt den Dialog, Zoom (Mausrad)/Verschieben/Einpassen, Live-Bemaßung (Gesamt-, Ablauf-, Spalten-/Zeilenmaße, Gehrungswinkel, Teilemaße/-nummern), Verlegemuster-Auswahl; Erzeugen → neuer Tab |
 | **Tool Manager** | `tool-manager.js` | **V2.2** | Tool-Routing, Always-Active, Shortcut-Dispatch, Tier 4 |
 | **Command Line** | `command-line.js` | **V1.6** | AutoCAD-style Prompt, Koordinaten-Parser, History, ArrowUp/Down Navigation, Input-Validation-Feedback |
 | **Dynamic Input** | `dynamic-input.js` | **V1.1** | Koordinaten/Distanz/Winkel HUD am Cursor |
@@ -268,7 +268,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Seed** | `lib/seed.js` | **V1.0** | Erststart-Befuellung materials/technologies aus CeraJetEngine (nie ueberschreibend) |
 | **Data-API** | `lib/data-api.js` | **V1.0** | REST: /api/parts,plans,sheets,orders,materials,technologies, /api/technology/resolve; If-Match, Filter, Admin-only fuer Preise/Technologie |
 | **Store** | `lib/store.js` | **V1.0** | JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftraege, Technologie): atomar, Versions-Sperre (If-Match), ID-Validierung |
-| **Build-Info** | `build-info.js` | **V7.33** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V7.34** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.14 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -303,9 +303,9 @@ ceraCUT/
 │   └── auth.js                        ← Cookie/Body-Parsing-Helper V1.0
 ├── data/                               ← users.json (gitignored — Passwort-Hashes)
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V7.33
+│   ├── build-info.js                  ← Versions-Banner V7.34
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
-│   ├── app.js                         ← Hauptanwendung V7.33 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
+│   ├── app.js                         ← Hauptanwendung V7.34 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.20 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.14
 │   ├── geometry-ops.js                ← GeometryOps V2.7 (Intersection, Arabeske, splitAndOverlap)

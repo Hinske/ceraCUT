@@ -12,22 +12,23 @@
  * Phase 2a: nur rechteckiger Punktablauf. Rinne (2d), runder/aussermittiger Sonderfall-Check (2e) folgen.
  * Rein (kein DOM) — laeuft in Node (tests/shower-board.test.js).
  *
+ * V0.3.2: Passpruefung Teil -> Fliese mit Drehung (laengste Kante/Diagonalen), Bedarf = kleinste umschliessende Box, Randabstand zur Fliesenkante; Fugen-Loeschen entfernt
  * V0.3.1: Raster 'ab Ablaufkante': Mittelband ueber dem Ablauf wird in Zellen <= Fliese geteilt (vorher Teile > Fliesenlaenge); Warnung 'Teil groesser als Fliese'
  * V0.3: Fugen-Layout (Reihen/Spalten + Fugenlisten je Reihe) fuer Kreuzfuge/Verband/Zufall ohne Drehung; Bearbeitungsfunktionen
- *       (moveLine/moveSub/addLine/addSub/removeLine/removeSub), jointSegments fuer Anzeige/Hit-Test
+ *       (moveLine/moveSub/addLine/addSub), jointSegments fuer Anzeige/Hit-Test
  * V0.2: Verlegemuster (Kreuzfuge, Verband 1/2 1/3 1/4 frei, Zufall, Fischgraet, Korbgeflecht), Ausrichtung horizontal/vertikal,
  *       Drehwinkel (z. B. 45 Grad), Anker (Ecken, Mitte, Fuge), Reihen-/Spaltenversatz; Teile = Fliese (Zelle - Fuge/2) ∩ Sektor
  * V0.1: Erstversion (Raster, Sektoren, Clipping, DXF)
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch5
+ * Build: 20261107-dusch6
  */
 
 const ShowerBoardGenerator = (() => {
     'use strict';
 
-    const VERSION = '0.3';
-    const LOG = '[Duschboard V0.3]';
+    const VERSION = '0.3.2';
+    const LOG = '[Duschboard V0.3.2]';
     const LAYER_FLIESE = 'Fliesen';
     const LAYER_COLOR = 160;
     const EPS = 1e-6;
@@ -49,6 +50,7 @@ const ShowerBoardGenerator = (() => {
         drehung: 0,              // Drehwinkel des Musters in Grad (45 = diagonal)
         anker: 'ablauf',         // 'ablauf' (nur Kreuzfuge) | 'lu' | 'ru' | 'lo' | 'ro' | 'mitte' (Fliese mittig auf Ablauf) | 'fuge' (Fugenkreuz auf Ablauf)
         minTeil: 30,             // Warnung: Teil schmaler als (mm)
+        fliesenRand: 0,          // Randabstand zur Fliesenkante fuer die Passpruefung (mm je Seite)
         maxTeile: 6000
     };
 
@@ -121,6 +123,7 @@ const ShowerBoardGenerator = (() => {
         if (!['kreuz', 'verband', 'zufall', 'fischgraet', 'korb', 'keins'].includes(o.muster)) return err('Unbekanntes Verlegemuster.');
         if (!(o.versatz > 0 && o.versatz < 1)) { if (o.muster === 'verband') return err('Versatz muss zwischen 0 und 100 % liegen.'); }
         if (!isFinite(o.drehung)) return err('Drehwinkel ungültig.');
+        if (!(o.fliesenRand >= 0 && o.fliesenRand < Math.min(o.fliese.kurz, o.fliese.lang) / 2)) return err('Randabstand zur Fliesenkante ungültig.');
         const W = o.masseArt === 'aussen' ? o.breite - 2 * o.randfuge : o.breite;
         const H = o.masseArt === 'aussen' ? o.tiefe - 2 * o.randfuge : o.tiefe;
         if (!(W > 0 && H > 0)) return err('Fliesenfeld ist nach Abzug der Randfugen nicht positiv.');
@@ -279,18 +282,6 @@ const ShowerBoardGenerator = (() => {
         }
         return n;
     }
-    function removeLine(p, L, idx) {
-        const n = cloneLayout(L);
-        if (idx < 0 || idx >= n.lines.length) return n;
-        n.lines.splice(idx, 1); n.sub.splice(idx + 1, 1);   // Streifen idx und idx+1 verschmelzen, Fugen des unteren/linken bleiben
-        return n;
-    }
-    function removeSub(p, L, strip, idx) {
-        const n = cloneLayout(L);
-        for (const k of n.coupled ? n.sub.keys() : [strip]) if (idx >= 0 && idx < n.sub[k].length) n.sub[k].splice(idx, 1);
-        return n;
-    }
-
     /** Fugenmitten als Strecken im Feld (fuer Anzeige und Hit-Test) */
     function jointSegments(p, L) {
         const rows = L.strips === 'rows', { P, S } = fieldLens(p, L);
@@ -473,20 +464,44 @@ const ShowerBoardGenerator = (() => {
         return best;
     }
 
-    /** groesster Abstand zweier Eckpunkte */
-    function diameter(poly) {
-        let d = 0;
-        for (let i = 0; i < poly.length; i++) for (let j = i + 1; j < poly.length; j++) d = Math.max(d, Math.hypot(poly[i].x - poly[j].x, poly[i].y - poly[j].y));
-        return d;
+    /**
+     * Passt das Teil auf die Fliese? Das Teil darf auf der Fliese beliebig gedreht liegen (Wasserstrahl schneidet frei),
+     * also: gibt es einen Winkel, bei dem die umschliessende Box <= Fliesenmass ist? Das beruecksichtigt auch die
+     * laengste Kante bei Gehrungsschnitten (Diagonale), nicht nur die achsparallelen Masse.
+     * Rueckgabe: { ok, a, b } mit (a >= b) = Mass der flaechenkleinsten umschliessenden Box (Bedarf auf der Fliese),
+     * angle = Drehung (Grad), bei der das Teil passt (nur wenn ok).
+     */
+    function fitInfo(poly, L, K, tol = 0.01) {
+        const big = Math.max(L, K), small = Math.min(L, K);
+        const boxAt = th => {
+            const c = Math.cos(th), sn = Math.sin(th);
+            let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+            for (const q of poly) { const u = q.x * c + q.y * sn, v = -q.x * sn + q.y * c; if (u < u0) u0 = u; if (u > u1) u1 = u; if (v < v0) v0 = v; if (v > v1) v1 = v; }
+            return [u1 - u0, v1 - v0];
+        };
+        const fits = (w, h) => (w <= big + tol && h <= small + tol) || (w <= small + tol && h <= big + tol);
+        // flaechenkleinste Box (Kantenrichtungen) = Bedarf; zugleich schneller Test auf Passung
+        let best = null, ok = false, angle = 0;
+        for (let i = 0; i < poly.length; i++) {
+            const a0 = poly[i], b0 = poly[(i + 1) % poly.length];
+            const th = Math.atan2(b0.y - a0.y, b0.x - a0.x), [w, h] = boxAt(th);
+            if (!best || w * h < best[0] * best[1] - 1e-9) best = [w, h];
+            if (!ok && fits(w, h)) { ok = true; angle = th * 180 / Math.PI; }
+        }
+        if (!ok) {   // Passung kann auch zwischen den Kantenrichtungen liegen -> Raster 0.5 Grad
+            for (let d = 0; d < 180 && !ok; d += 0.5) { const [w, h] = boxAt(d * Math.PI / 180); if (fits(w, h)) { ok = true; angle = d; } }
+        }
+        return { ok, a: Math.max(best[0], best[1]), b: Math.min(best[0], best[1]), angle };
     }
 
     function validate(p, pieces) {
         const warn = [];
-        const diag = Math.hypot(p.fliese.lang, p.fliese.kurz);
+        const r = p.fliesenRand, L = p.fliese.lang - 2 * r, K = p.fliese.kurz - 2 * r;
         for (const pc of pieces) {
-            if (p.muster !== 'keins' && diameter(pc.poly) > diag + 0.5) warn.push({ piece: pc, text: `Teil größer als die Fliese (${diameter(pc.poly).toFixed(0)} mm) in Sektor ${pc.sector} — Fugenbild prüfen` });
+            pc.fit = p.muster === 'keins' ? { ok: true, ...fitInfo(pc.poly, 1e9, 1e9) } : fitInfo(pc.poly, L, K);
+            if (!pc.fit.ok) warn.push({ type: 'fit', piece: pc, text: `Teil passt nicht auf die Fliese ${p.fliese.lang}×${p.fliese.kurz}${r ? ` (Rand ${r})` : ''}: braucht ${pc.fit.a.toFixed(1)}×${pc.fit.b.toFixed(1)} mm` });
             const w = minWidth(pc.poly);
-            if (w < p.minTeil) warn.push({ piece: pc, text: `Schmales Teil (${w.toFixed(1)} mm) in Sektor ${pc.sector}` });
+            if (w < p.minTeil) warn.push({ type: 'narrow', piece: pc, text: `Schmales Teil (${w.toFixed(1)} mm) in Sektor ${pc.sector}` });
         }
         return warn;
     }
@@ -532,7 +547,7 @@ const ShowerBoardGenerator = (() => {
         return { ok: true, p, layout, chains, grid, editable: !!layout, pieces, warnings: validate(p, pieces), count: pieces.length, fileName, dxf: buildDXF(pieces) };
     }
 
-    return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, moveLine, moveSub, addLine, addSub, removeLine, removeSub, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, diameter, bboxOf, tilesFromPattern, hash01 } };
+    return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, moveLine, moveSub, addLine, addSub, fitInfo, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, fitInfo, bboxOf, tilesFromPattern, hash01 } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = ShowerBoardGenerator;

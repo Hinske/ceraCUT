@@ -110,3 +110,7 @@ Nicht umgesetzt: Römischer Verband (Mischformate), Fischgrät 45°-Gehrungs-Var
 Modell `layout = { strips: 'rows'|'cols', lines[], sub[][], coupled }`: Reihen (bzw. Spalten) mit eigener Fugenliste je Reihe; Kreuzfuge ist `coupled` (Änderung gilt für alle Reihen), Verband/Zufall nicht (Fuge einer Reihe einzeln verschiebbar). Gilt für Kreuzfuge, Verband, Zufall ohne Drehung; Fischgrät/Korb/gedrehte Raster sind nur über Parameter einstellbar.
 Dialog: Modi Ansicht / Fuge ziehen (Snap 1 mm) / senkrecht setzen / waagerecht setzen / Fuge löschen; Fugenlisten numerisch editierbar; Undo/Redo (Strg+Z/Y); „Fugenbild zurücksetzen“. Ändert der User Muster, Fliese, Anker, Maße usw., wird das editierte Layout verworfen (Fuge, Randfuge, Warnschwelle, Ablaufmaße/-lage behalten es). Fugen lassen sich nicht über Nachbarfugen oder die Feldkante ziehen (Mindestabstand 1 mm).
 Kein Sperren/Teil-Neuberechnen: das editierte Layout gilt komplett bis zum Zurücksetzen.
+
+## 12. Passprüfung Teil → Fliese (V0.3.2)
+
+Jedes Teil wird geprüft, ob es in beliebiger Drehung in die vorhandene Fliese (lang × kurz, abzüglich Randabstand) passt: es gibt einen Winkel, bei dem die umschließende Box ≤ Fliesenmaß ist (beide Lagen). Damit zählt die längste Kante bei Gehrungs-/Diagonalschnitten (ein 660×10-Streifen passt, ein 670×10 nicht). Angezeigt wird das Teilemaß als kleinste Box (lang × kurz); Teile, die nicht passen, sind rot, die Statuszeile nennt Nummer und Bedarf. „Fuge löschen“ wurde entfernt (kein Anwendungsfall); Fugen lassen sich ziehen und setzen.

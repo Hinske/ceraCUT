@@ -1,19 +1,20 @@
 /**
- * CeraCUT Duschboard-Dialog V0.3: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
+ * CeraCUT Duschboard-Dialog V0.3.2: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
  * Kern: shower-board-generator.js (ShowerBoardGenerator). Befehl DUSCH, Ribbon CAD -> Zuschnitte -> Duschboard.
  *
  * Bemaßung (zur Kontrolle): Gesamtmaß (Fliesenfeld, bei Außenmaß zusätzlich Außenmaß), Ablaufmaße und -lage,
  * Teilebreiten/-höhen je Fugenspalte/-zeile, Gehrungswinkel, Maße je Teil (bbox) + Nummern, Stückliste.
  * Phase 2b: Vorschau nur lesend; Fugenbild von Hand editieren folgt in 2c.
  *
- * V0.3 (Phase 2c): Fugenbild bearbeiten — Fugen ziehen/setzen/loeschen in der Zeichnung, Fugenlisten (numerisch), Rueckgaengig/Wiederholen
+ * V0.3.2: Passpruefung Teil -> Fliese (Drehung, laengste Kante): rote Markierung, Teilemass = kleinste Box, Nummern in der Statuszeile; Fuge-loeschen entfernt
+ * V0.3 (Phase 2c): Fugenbild bearbeiten — Fugen ziehen/setzen in der Zeichnung, Fugenlisten (numerisch), Rueckgaengig/Wiederholen
  *       (Strg+Z / Strg+Y), Zuruecksetzen; gilt fuer Kreuzfuge/Verband/Zufall ohne Drehung
  * V0.2: Stueckliste entfernt, Zeichnung fuellt den Dialog, Zoom (Mausrad) + Verschieben (Ziehen) + Einpassen, Verlegemuster-Auswahl
  *       (Kreuzfuge, Verbaende, Zufall, Fischgraet, Korbgeflecht), Ausrichtung, Drehwinkel, Anker
  * V0.1: Erstversion
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch4
+ * Build: 20261107-dusch6
  */
 
 const ShowerBoardDialog = (() => {
@@ -72,14 +73,13 @@ const ShowerBoardDialog = (() => {
         const warnSet = new Set(r.warnings.map(w => w.piece));
         const f = v => v.toFixed(1);
         const COL = '#ffd24a', COLD = '#9fd0ff';
-        const axisAligned = Math.abs(r.p.drehung % 90) < 1e-9;   // Teilemasse (bbox) nur bei achsparallelem Muster sinnvoll
         let g = '';
 
         // Teile
         for (const it of items) {
             const pts = it.pc.poly.map(q => `${f(X(q.x))},${f(Y(q.y))}`).join(' ');
-            const bad = warnSet.has(it.pc);
-            g += `<polygon points="${pts}" fill="${bad ? 'rgba(240,180,41,0.35)' : 'rgba(74,163,255,0.16)'}" stroke="${bad ? '#f0b429' : '#4aa3ff'}" stroke-width="1"/>`;
+            const noFit = it.pc.fit && !it.pc.fit.ok, bad = warnSet.has(it.pc);
+            g += `<polygon points="${pts}" fill="${noFit ? 'rgba(255,60,60,0.45)' : bad ? 'rgba(240,180,41,0.35)' : 'rgba(74,163,255,0.16)'}" stroke="${noFit ? '#ff4d4d' : bad ? '#f0b429' : '#4aa3ff'}" stroke-width="${noFit ? 2 : 1}"/>`;
         }
         // Ablauf
         g += `<rect x="${f(X(d.x0))}" y="${f(Y(d.y1))}" width="${f((d.x1 - d.x0) * s)}" height="${f((d.y1 - d.y0) * s)}" fill="rgba(255,90,77,0.18)" stroke="#ff5a4d" stroke-width="1.2" stroke-dasharray="4 3"/>`;
@@ -103,9 +103,10 @@ const ShowerBoardDialog = (() => {
         // Teilenummern + Maße
         for (const it of items) {
             const px = X(it.cx), py = Y(it.cy), big = it.w * s > 46 && it.h * s > 26;
-            if (showDims && big && axisAligned) {
-                g += `<text x="${f(px)}" y="${f(py - 2)}" text-anchor="middle" font-size="10" fill="#cfe6ff">${it.nr}</text>`;
-                g += `<text x="${f(px)}" y="${f(py + 10)}" text-anchor="middle" font-size="9" fill="#8fb4d8">${de(it.w)}×${de(it.h)}</text>`;
+            const nf = it.pc.fit && !it.pc.fit.ok;
+            if (showDims && big && it.pc.fit) {
+                g += `<text x="${f(px)}" y="${f(py - 2)}" text-anchor="middle" font-size="10" fill="${nf ? '#ff8a8a' : '#cfe6ff'}">${it.nr}</text>`;
+                g += `<text x="${f(px)}" y="${f(py + 10)}" text-anchor="middle" font-size="9" fill="${nf ? '#ff8a8a' : '#8fb4d8'}">${de(it.pc.fit.a)}×${de(it.pc.fit.b)}</text>`;
             } else if (it.w * s > 26 && it.h * s > 18) {
                 g += `<text x="${f(px)}" y="${f(py + 3)}" text-anchor="middle" font-size="9" fill="#cfe6ff">${it.nr}</text>`;
             }
@@ -162,7 +163,7 @@ const ShowerBoardDialog = (() => {
         g += lab(d.x1 + (W - d.x1) * 0.55, d.y0 - d.y0 * 0.45 - 4, `${de(angBR)}°`);
         g += lab(d.x0 - d.x0 * 0.55, d.y0 - d.y0 * 0.45 - 4, `${de(angBL)}°`);
         // Legende
-        g += `<text x="${M.l}" y="20" font-size="11" fill="#9aa">Gelb: Teilemaße (ohne Fuge) · Blau: Ablauflage · Rot: Gehrungswinkel · Orange: Teil schmaler als Warnschwelle</text>`;
+        g += `<text x="${M.l}" y="20" font-size="11" fill="#9aa">Teilemaß = kleinste Box auf der Fliese (gedreht) · Rot: Teil passt nicht auf die Fliese · Orange: Teil schmaler als Warnschwelle</text>`;
 
         return `<svg width="${VW}" height="${VH}" viewBox="0 0 ${VW} ${VH}" style="display:block" font-family="Segoe UI,sans-serif">` +
             `<rect x="${f(X(0))}" y="${f(Y(H))}" width="${f(W * s)}" height="${f(H * s)}" fill="none" stroke="#556" stroke-width="1" stroke-dasharray="2 3"/>${g}</svg>`;
@@ -176,10 +177,13 @@ const ShowerBoardDialog = (() => {
         else if (r.layout) t += r.layout.strips === 'rows' ? ` · ${r.layout.lines.length + 1} Reihen` : ` · ${r.layout.lines.length + 1} Spalten`;
         t += `</span>`;
         if (edited) t += ` &nbsp;<span style="color:#ffd24a">✎ Fugenbild angepasst</span>`;
-        if (r.warnings.length) {
-            const w = r.warnings.slice(0, 2).map(x => esc(x.text)).join('; ');
-            t += ` &nbsp;<span style="color:#f0b429">⚠ ${r.warnings.length} × schmal: ${w}${r.warnings.length > 2 ? ' …' : ''}</span>`;
+        const fit = r.warnings.filter(w => w.type === 'fit'), narrow = r.warnings.filter(w => w.type === 'narrow');
+        if (fit.length) {
+            const nr = new Map(numbered(r.pieces).map(it => [it.pc, it]));
+            const lst = fit.slice(0, 3).map(w => `Nr. ${nr.get(w.piece)?.nr} (${de(w.piece.fit.a)}×${de(w.piece.fit.b)})`).join(', ');
+            t += ` &nbsp;<span style="color:#ff6b6b;font-weight:600">⛔ ${fit.length} Teil${fit.length > 1 ? 'e' : ''} passen nicht auf die Fliese ${de(r.p.fliese.lang, 0)}×${de(r.p.fliese.kurz, 0)}: ${lst}${fit.length > 3 ? ' …' : ''}</span>`;
         }
+        if (narrow.length) t += ` &nbsp;<span style="color:#f0b429">⚠ ${narrow.length} × schmal (&lt; ${de(r.p.minTeil, 0)} mm)</span>`;
         return t;
     }
 
@@ -219,7 +223,6 @@ const ShowerBoardDialog = (() => {
                         <button id="ds-m-move" data-mode="move" style="${BTN}" title="Fuge anfassen und ziehen">↔ Fuge ziehen</button>
                         <button id="ds-m-addv" data-mode="addv" style="${BTN}" title="Klick setzt eine senkrechte Fuge">＋ senkrecht</button>
                         <button id="ds-m-addh" data-mode="addh" style="${BTN}" title="Klick setzt eine waagerechte Fuge">＋ waagerecht</button>
-                        <button id="ds-m-del" data-mode="del" style="${BTN}" title="Fuge anklicken zum Löschen">✕ Fuge löschen</button>
                         <button id="ds-undo" style="${BTN}" title="Rückgängig (Strg+Z)">↶</button>
                         <button id="ds-redo" style="${BTN}" title="Wiederholen (Strg+Y)">↷</button>
                         <button id="ds-reset" style="${BTN}" title="Fugenbild auf Automatik zurücksetzen">Fugenbild zurücksetzen</button>
@@ -255,6 +258,7 @@ const ShowerBoardDialog = (() => {
                         ${sec('Fugen (Fugenmitten, mm)')}
                         <div id="ds-lists" style="font-size:12px;"></div>
                         ${sec('Anzeige')}
+                        ${fld('ds-fr', 'Passprüfung: Randabstand zur Fliesenkante [mm]', '0')}
                         ${fld('ds-min', 'Warnung bei Teil schmaler als [mm]', '30')}
                         ${chk('ds-dims', 'Teilemaße in der Vorschau')}
                     </div>
@@ -273,7 +277,7 @@ const ShowerBoardDialog = (() => {
         let last = null, view = null, fitted = true, sizeKey = '';
         // Fugenbild-Bearbeitung
         let override = null, mode = 'view', hover = null, selStrip = 0, hist = [], redoStack = [], editDrag = null;
-        const KEEP_OVERRIDE = new Set(['ds-fuge', 'ds-rf', 'ds-min', 'ds-dims', 'ds-aw', 'ds-ah', 'ds-cx', 'ds-cy']);
+        const KEEP_OVERRIDE = new Set(['ds-fuge', 'ds-rf', 'ds-min', 'ds-fr', 'ds-dims', 'ds-aw', 'ds-ah', 'ds-cx', 'ds-cy']);
 
         const vis = (id, on) => { $(id).style.display = on ? '' : 'none'; };
         function syncControls() {
@@ -300,7 +304,7 @@ const ShowerBoardDialog = (() => {
                 muster: verband ? 'verband' : m, versatz, versatzFolge: $('ds-folge').value, verbandAchse: $('ds-achse').value,
                 startVersetzt: $('ds-start').checked, gegenlaeufig: $('ds-gegen').checked, seed: Math.round(parseNum($('ds-seed').value)) || 1,
                 drehung: parseNum($('ds-rot').value) || 0, anker: $('ds-anker').value,
-                minTeil: parseNum($('ds-min').value) || 0, ablauf
+                minTeil: parseNum($('ds-min').value) || 0, fliesenRand: parseNum($('ds-fr').value) || 0, ablauf
             };
         }
 
@@ -377,10 +381,6 @@ const ShowerBoardDialog = (() => {
         }
         const posOf = (sg, fp) => (sg.kind === 'line' ? last.layout.strips === 'rows' : last.layout.strips !== 'rows') ? fp.y : fp.x;
 
-        function removeSeg(sg) {
-            const P = last.p, L = override || last.layout;
-            commit(sg.kind === 'line' ? GEN.removeLine(P, L, sg.idx) : GEN.removeSub(P, L, sg.strip, sg.idx));
-        }
         /** Klick im Bearbeitungsmodus; true = verbraucht (kein Verschieben der Ansicht) */
         function editPointerDown(e) {
             const pt = local(e), fp = toField(pt), P = last.p, L = override || last.layout, rows = L.strips === 'rows';
@@ -391,7 +391,6 @@ const ShowerBoardDialog = (() => {
                 editDrag = { sg, base: JSON.parse(JSON.stringify(L)), val: sg.pos };
                 return true;
             }
-            if (mode === 'del') { const sg = hitTest(pt); if (!sg) return false; removeSeg(sg); hover = null; return true; }
             if (mode === 'addv') {   // senkrechte Fuge
                 commit(rows ? GEN.addSub(P, L, stripAt(fp), snap(fp.x)) : GEN.addLine(P, L, snap(fp.x))); return true;
             }
@@ -420,7 +419,7 @@ const ShowerBoardDialog = (() => {
                 let h = `<div style="color:#9aa;margin:6px 0 2px">${title}</div>`;
                 if (!arr.length) h += '<div style="color:#667">keine</div>';
                 arr.forEach((v, i) => {
-                    h += `<div style="display:flex;gap:4px;margin-bottom:2px"><input class="ds-lst" data-k="${kind}" data-i="${i}" value="${de(v, 2)}" style="${FIELD_CSS}padding:2px 6px;font-size:12px;"><button class="ds-lstdel" data-k="${kind}" data-i="${i}" style="padding:0 7px;background:#3a2a2a;border:1px solid #664;border-radius:4px;color:#e99;cursor:pointer" title="Fuge löschen">✕</button></div>`;
+                    h += `<div style="display:flex;gap:4px;margin-bottom:2px"><input class="ds-lst" data-k="${kind}" data-i="${i}" value="${de(v, 2)}" style="${FIELD_CSS}padding:2px 6px;font-size:12px;"></div>`;
                 });
                 return h;
             };
@@ -434,11 +433,6 @@ const ShowerBoardDialog = (() => {
             const v = parseNum(t.value); if (!isFinite(v)) { renderLists(); return; }
             const i = +t.dataset.i, P = last.p, L = override || last.layout;
             commit(t.dataset.k === 'line' ? GEN.moveLine(P, L, i, v) : GEN.moveSub(P, L, selStrip, i, v));
-        });
-        $('ds-lists').addEventListener('click', e => {
-            const t = e.target.closest('.ds-lstdel'); if (!t) return;
-            const i = +t.dataset.i, P = last.p, L = override || last.layout;
-            commit(t.dataset.k === 'line' ? GEN.removeLine(P, L, i) : GEN.removeSub(P, L, selStrip, i));
         });
         overlay.querySelectorAll('#ds-modes [data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
         $('ds-undo').addEventListener('click', undo);
@@ -468,9 +462,9 @@ const ShowerBoardDialog = (() => {
         prev.addEventListener('pointermove', e => {
             if (editDrag) { editDragMove(e); return; }
             if (!drag && mode !== 'view' && canEdit() && view) {
-                const h = (mode === 'move' || mode === 'del') ? hitTest(local(e)) : null;
+                const h = mode === 'move' ? hitTest(local(e)) : null;
                 if (h !== hover && !(h && hover && h.kind === hover.kind && h.idx === hover.idx && h.strip === hover.strip)) { hover = h; redraw(); }
-                prev.style.cursor = h ? (mode === 'del' ? 'pointer' : ((h.y0 === h.y1) ? 'ns-resize' : 'ew-resize')) : (mode === 'addv' || mode === 'addh') ? 'crosshair' : 'default';
+                prev.style.cursor = h ? ((h.y0 === h.y1) ? 'ns-resize' : 'ew-resize') : (mode === 'addv' || mode === 'addh') ? 'crosshair' : 'default';
             }
             if (!drag || !view) return;
             view = { ...view, ox: drag.ox + e.clientX - drag.x, oy: drag.oy + e.clientY - drag.y };
