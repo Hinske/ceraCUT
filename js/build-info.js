@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.26',
-    build: '20261107-tips',
+    version: '7.27',
+    build: '20261107-anrun',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'd59ad8b',
+        hash: 'ebdbc80',
         date: '2026-11-07',
-        message: 'feat: Hover-Beschreibungen fuer CAM-Tools inkl. Flyout-Eintraege (constants V2.1'
+        message: 'fix: Analyze startet sofort ohne Auswahl und meldet Ergebnis (cam-tools V1.9)'
     },
 
     modules: {
@@ -53,7 +53,7 @@ const CERACUT_BUILD = {
         'machine-profiles':   { version: '1.2', build: '20261104-reviewfix' },
         'bridge-cutting':     { version: '1.1', build: '20261104-reviewfix' },
         'quality-zones':      { version: '1.2', build: '20261104-reviewfix' },
-        'cam-tools':          { version: '1.8', build: '20261107-efjoin' },
+        'cam-tools':          { version: '1.9', build: '20261107-anrun' },
         'advanced-tools':     { version: '1.9', build: '20261104-reviewfix' },
         'arc-fitting':        { version: '3.4', build: '20261105-meander' },
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },

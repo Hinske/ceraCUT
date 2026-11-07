@@ -158,3 +158,10 @@ test('EF: verbindet zwei offene Konturen ueber Arc, Undo', () => {
     sc.undo.undoStack.pop().undo();
     assert.strictEqual(cs.length, 2); assert.strictEqual(c1.points.length, 2);
 });
+
+test('AN: start() ohne Auswahl prueft sofort alle Konturen und setzt Marker', () => {
+    const l1 = new E.CamContour([{ x: 0, y: 0 }, { x: 50, y: 0 }], { isClosed: false }), l2 = new E.CamContour([{ x: 50.3, y: 0 }, { x: 100, y: 0 }], { isClosed: false });
+    const sc = scene([l1, l2]); sc.mgr.renderer = { render() {}, _analyzeMarkers: null };
+    const t = new E.AnalyzeTool(sc.mgr); t.cancel = () => {}; t.start();
+    assert.strictEqual(sc.mgr.renderer._analyzeMarkers.length, 1);
+});

@@ -1,5 +1,5 @@
 /**
- * CeraCUT CAM-Tools V1.8 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
+ * CeraCUT CAM-Tools V1.9 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
  * 7 Tools für Analyse, Optimierung und Vorbereitung der Schnittgeometrie
  *
  * Tools:
@@ -22,6 +22,7 @@
  * Created: 2026-02-17 MEZ
  * Last Modified: 2026-11-07
  * Build: 20261107-efjoin
+ * V1.9: Analyze startet ohne Auswahl sofort (alle Konturen) und meldet das Ergebnis als Hinweis
  * V1.8: Edgefix verbindet zwei offene Konturen (Punkt B auf anderer Kontur), laengeres Stueck bleibt, Arc/Linie ueber C
  * V1.7: Praxis-Check — REP (Flaechenschwerpunkt statt Punktemittel, vorher ~48 mm Versatz), BT (Eckpunkt-/Kantentest statt
  *       Mittelwert; Kreuzende bleiben), PJ (Join: Steg-Flaeche je Drehsinn korrekt; Split: 2 geschlossene Konturen),
@@ -496,9 +497,11 @@ class AnalyzeTool extends ModificationTool {
             this.selectedContours = [...preSelected];
             this._executeAnalyze();
         } else {
+            // V1.9: ohne Auswahl sofort alle Konturen pruefen (vorher Wartezustand auf Enter -> wirkte wie "zeigt nichts")
+            this.selectedContours = [];
             this.state = 'select';
-            this.cmd?.setPrompt('ANALYZE — Objekte wählen, Enter = alle analysieren:');
             this.cmd?.log('🔍 Analyze: Lücken und Überlappungen anzeigen', 'info');
+            this._executeAnalyze();
         }
     }
 
@@ -666,6 +669,12 @@ class AnalyzeTool extends ModificationTool {
         if (gapCount === 0 && overlapCount === 0) {
             this.cmd?.log('✅ Geometrie ist sauber — keine Probleme gefunden', 'info');
         }
+        // V1.9: Ergebnis auch als Hinweis im Fenster (Kommandozeile ist oft nicht sichtbar)
+        this.manager.app?.showToast?.(
+            (gapCount === 0 && overlapCount === 0)
+                ? 'Analyze: keine Lücken oder Überlappungen gefunden'
+                : 'Analyze: ' + gapCount + ' Lücke(n) rot, ' + overlapCount + ' Überlappung(en) gelb markiert',
+            (gapCount === 0 && overlapCount === 0) ? 'success' : 'warning');
 
         this.cancel();
         console.log('[CAM-Tools] Analyze._execute: ' + (performance.now() - _t0).toFixed(2) + 'ms');
