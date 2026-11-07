@@ -2507,6 +2507,14 @@ html, body {
     transition-delay: 0.4s;
 }
 
+/* Tooltip rechts neben dem Element (Flyout-Eintraege) */
+[data-tip-pos="right"]::after {
+    bottom: auto;
+    top: 50%;
+    left: calc(100% + 8px);
+    transform: translateY(-50%);
+}
+
 /* Tooltip nach unten (fuer Title-Bar-Buttons) */
 [data-tip-pos="bottom"]::after {
     bottom: auto;

@@ -14,6 +14,7 @@
  * V6.60: Feat — Schnittreihenfolge manuell: Schnitte anklicken, Auswahl Anfang/↑/↓/Ende/Position N (je Fliese, Undo); alte Schnittliste war seit V5.7 nicht mehr im HTML
  * V6.59: Feat — Fliesen-Reihenfolge im Tab Reihenfolge: Presets (Zeile/Spalte/Schlangenlinie/Nachbar, Startecke, umkehren), Anklick-Modus, Drag&Drop, Sperre bei manueller Reihenfolge; Button "Fliesen erkennen" entfällt (Erkennung automatisch)
  * V6.58: Fix — Fliesen nach Auto-Referenz neu zuordnen, Nullpunkt-Gedaechtnis, Rechteck-Erkennung tolerant (verkettete Linien)
+ * V6.72: Feat — Tooltips auch fuer Flyout-Eintraege (data-fly-tool, Position rechts)
  * V6.57: Feat — Konturgeometrie nur im Tab CAD änderbar (isGeometryEditAllowed: Tools, Grips, Löschen); Schnittliste hält Fliesengruppen
  * V6.56: Fix — Fliesen-Zuordnung bleibt nach Konturaenderungen aktuell (_ensureTilesFresh, Signatur), vorher veraltete Indizes
  * V6.55: Fix — Schnittliste fliesenweise gruppiert (regroupCutOrderByTile), Nummern/Fahrwege je Fliese ab Fliesen-Nullpunkt
@@ -7609,6 +7610,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (entry) {
                 el.setAttribute('data-tip', entry.tip + '\nTaste: ' + entry.shortcut);
                 el.removeAttribute('title');
+            }
+        });
+        // Flyout-Eintraege (z.B. Geometrie ▾ / Zuschnitte ▾): Tooltip rechts neben dem Eintrag
+        document.querySelectorAll('[data-fly-tool]').forEach(el => {
+            const entry = TOOL_TOOLTIPS[el.dataset.flyTool];
+            if (entry) {
+                el.setAttribute('data-tip', entry.tip + '\nTaste: ' + entry.shortcut);
+                el.setAttribute('data-tip-pos', 'right');
             }
         });
         // Sonder-Buttons ohne data-tool

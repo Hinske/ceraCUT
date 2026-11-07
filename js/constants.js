@@ -1,5 +1,6 @@
 /**
- * CeraCUT V2.15 Constants
+ * CeraCUT V2.16 Constants
+ * V2.16: TOOL_TOOLTIPS — ausfuehrliche Beschreibungen der 7 CAM-Tools (Hover-Tooltip)
  * V2.15: TOOL_TOOLTIPS — VERB (Verband), AUSS (Ausschnitte)
  * V2.14: TOOL_TOOLTIPS — Zuschnitt-Generator (MOSW Mosaik-Wuerfel, MOSR Rechteck, MOSS Sockel)
  * V2.13: GENERAL_SHORTCUTS — Strg+Shift+P Bereich drucken
@@ -157,13 +158,13 @@ const TOOL_TOOLTIPS = {
     'OK':    { label: 'Overkill',    tip: 'Duplikate und ueberlappende Linien entfernen', shortcut: 'OK', group: 'edit' },
 
     // ── CAM / Analyse ──
-    'EF':    { label: 'Edgefix',     tip: 'Polylinien-Abschnitt durch Arc/Linie ersetzen', shortcut: 'EF',  group: 'cam' },
-    'REP':   { label: 'Replace',     tip: 'Objekte durch Quell-Objekt ersetzen',     shortcut: 'REP',   group: 'cam' },
-    'AN':    { label: 'Analyze',     tip: 'Geometrie auf Fehler pruefen',            shortcut: 'AN',    group: 'cam' },
-    'BT':    { label: 'Boundary Trim', tip: 'Objekte innerhalb/ausserhalb Grenze loeschen (Shift=invertiert)', shortcut: 'BT', group: 'cam' },
-    'PJ':    { label: 'Poly Joint',  tip: 'Geschlossene Polylinien verbinden oder aufteilen', shortcut: 'PJ', group: 'cam' },
-    'VZ':    { label: 'Vectorize',   tip: 'Kurven/Arcs in Liniensegmente umwandeln', shortcut: 'VZ',    group: 'cam' },
-    'HULL':  { label: 'Convex Hull', tip: 'Konvexes Huellpolygon um Objekte',        shortcut: 'HULL',  group: 'cam' },
+    'EF':    { label: 'Edgefix',     tip: "Edgefix – Abschnitt durch Bogen/Linie ersetzen\n1) Kontur, 2) Punkt A, 3) Punkt B, 4) Punkt C (Bogenseite).\nB auf einer anderen offenen Kontur: beide werden verbunden.", shortcut: 'EF',  group: 'cam' },
+    'REP':   { label: 'Replace',     tip: "Replace – Konturen austauschen\nErst Quell-Kontur, dann Ziele anklicken, Enter.\nZiele erhalten die Form der Quelle (am Flächenschwerpunkt).",     shortcut: 'REP',   group: 'cam' },
+    'AN':    { label: 'Analyze',     tip: "Analyze – Geometrie prüfen\nMarkiert Lücken (rot) und Überlappungen (gelb).\nAuswahl oder Enter = alle. Ändert nichts.",            shortcut: 'AN',    group: 'cam' },
+    'BT':    { label: 'Boundary Trim', tip: "Boundary Trim – innerhalb/außerhalb löschen\nGeschlossene Grenze anklicken: Konturen komplett innen werden gelöscht.\nShift = außen löschen. Kreuzende bleiben.", shortcut: 'BT', group: 'cam' },
+    'PJ':    { label: 'Poly Joint',  tip: "Poly Joint – verbinden oder teilen\nA und B auf zwei Konturen: Join mit Steg (Breite).\nA und B auf einer Kontur: Split in zwei geschlossene Konturen.", shortcut: 'PJ', group: 'cam' },
+    'VZ':    { label: 'Vectorize',   tip: "Vectorize – Punkte reduzieren\nToleranz eingeben, Konturen wählen, Enter.\nEcken und Startpunkt bleiben, Abweichung max. Toleranz.", shortcut: 'VZ',    group: 'cam' },
+    'HULL':  { label: 'Convex Hull', tip: "Convex Hull – Hüllkontur\nErzeugt eine konvexe Hülle um die gewählten Konturen als neue Kontur. Originale bleiben.",        shortcut: 'HULL',  group: 'cam' },
     'MOSW':  { label: 'Zuschnitt Mosaik Wuerfel',  tip: 'Zuschnitt-Programm Mosaik Wuerfel aus Fliese + Wuerfelmass (+0,8 mm Aufmass)', shortcut: 'MOSW', group: 'cam' },
     'MOSR':  { label: 'Zuschnitt Rechteck', tip: 'Zuschnitt-Programm Rechteck mit Verschnittpruefung, Dekor, Mischlage',   shortcut: 'MOSR', group: 'cam' },
     'FLI':   { label: 'Fliesen-Raster',     tip: 'Raster aus Fliesen (je 4 zusammenhaengende Linien, Layer Fliese) mit Fuge, Nummerierung (Layer Beschriftung) und Maserungspfeil (Layer Konstruktion), beide nicht geschnitten', shortcut: 'FLI', group: 'cam' },

@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.25',
-    build: '20261107-cadgrp',
+    version: '7.26',
+    build: '20261107-tips',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '1cf239f',
+        hash: 'd59ad8b',
         date: '2026-11-07',
-        message: 'refactor: CAM-Tools in die CAD-Tools-Gruppe integriert'
+        message: 'feat: Hover-Beschreibungen fuer CAM-Tools inkl. Flyout-Eintraege (constants V2.1'
     },
 
     modules: {
@@ -42,7 +42,7 @@ const CERACUT_BUILD = {
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.5', build: '20261106-arcangle' },
         'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
-        'app':                { version: '6.71', build: '20261107-kerfopen' },
+        'app':                { version: '6.72', build: '20261107-tips' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.7', build: '20261107-leadmenu' },
@@ -62,7 +62,7 @@ const CERACUT_BUILD = {
         'server':             { version: '1.12', build: '20261107-seed' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
-        'constants': { version: '2.15', build: '20261105-verband' },
+        'constants': { version: '2.16', build: '20261107-tips' },
         'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
