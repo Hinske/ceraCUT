@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'a33ce3b',
+        hash: '5ce7415',
         date: '2026-11-07',
-        message: 'feat: Kostenkalkulation fuer Plaene + PDF-Bericht (cost-plan, cost-dialog, repor'
+        message: 'Fix: Fugenband offener Konturen neben der Kontur (V7.19)'
     },
 
     modules: {
