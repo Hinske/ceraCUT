@@ -171,3 +171,31 @@ test('Reports: Kalkulation (JSON) und PDF aus gespeichertem/inline Plan', async 
     assert.strictEqual((await s.call('GET', '/api/reports/cost')).status, 404);
     s.close();
 });
+
+test('Plan: update-parts (single/all, andere Pläne, Fehler)', async () => {
+    const s = await setup();
+    const mk = (id, rev) => ({ ...part(id), revision: rev });
+    await s.call('POST', '/api/parts', mk('P-1', 1));
+    const inst = (n, rot, rev = 1) => ({ instId: `i${n}`, partId: 'P-1', revision: rev, tx: n * 10, ty: 0, rot, sheetIndex: 0 });
+    const base = { materialId: 21, thickness: 10, sheet: { width: 1000, length: 500 }, stats: { sheets: 1 } };
+    await s.call('POST', '/api/plans', { ...base, planId: 'PL1', instances: [inst(1, 0), inst(2, 90), inst(3, 0)] });
+    await s.call('POST', '/api/plans', { ...base, planId: 'PL2', instances: [inst(1, 0)] });
+    // neue Revision 2
+    const r2 = await s.call('POST', '/api/parts/P-1/revision', part('P-1', { name: 'neu' }), { 'If-Match': '1' });
+    assert.strictEqual(r2.body.revision, 2);
+
+    let r = await s.call('POST', '/api/plans/PL1/update-parts', { partId: 'P-1', revision: 2, mode: 'single', instId: 'i2' });
+    assert.strictEqual(r.status, 200); assert.strictEqual(r.body.changed, 1);
+    let pl = (await s.call('GET', '/api/plans/PL1')).body;
+    assert.deepStrictEqual(pl.instances.map(i => i.revision), [1, 2, 1]);
+    r = await s.call('POST', '/api/plans/PL1/update-parts', { partId: 'P-1', revision: 2, mode: 'all', otherPlans: true });
+    assert.deepStrictEqual(r.body.updated.map(u => [u.planId, u.changed]), [['PL1', 2], ['PL2', 1]]);
+    assert.deepStrictEqual((await s.call('GET', '/api/plans/PL2')).body.instances.map(i => i.revision), [2]);
+    // Fehler
+    assert.strictEqual((await s.call('POST', '/api/plans/PL1/update-parts', { partId: 'P-1', revision: 9, mode: 'all' })).status, 400);
+    assert.strictEqual((await s.call('POST', '/api/plans/PL1/update-parts', { partId: 'NOPE', revision: 1, mode: 'all' })).status, 404);
+    assert.strictEqual((await s.call('POST', '/api/plans/PL1/update-parts', { partId: 'P-1', revision: 1, mode: 'single', instId: 'zz' })).status, 400);
+    assert.strictEqual((await s.call('POST', '/api/plans/PL1/update-parts', { partId: 'P-1', revision: 1, mode: 'all' }, { 'If-Match': '999' })).status, 409);
+    assert.strictEqual((await s.call('GET', '/api/plans/PL1/update-parts')).status, 405);
+    s.close();
+});

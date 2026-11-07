@@ -43,3 +43,25 @@ test('Namen und Datensatz', () => {
     assert.strictEqual(rec.status, 'ready'); assert.strictEqual(rec.revision, 1); assert.strictEqual(rec.qty, 3);
     assert.match(PartGeometry.newPartId(2), /^P-[A-Z0-9]+$/);
 });
+
+test('toDXF → Parser → analyze: Round-Trip bleibt geometrisch gleich (inkl. offene Kontur, Layer)', () => {
+    const P = require('../js/dxf-parser.js'); const D = P.DXFParser || P;
+    const a = PartGeometry.analyze([rect(0, 0, 100, 50, { layer: 'Teil' }), rect(20, 10, 20, 20, { layer: 'Text' }),
+        { points: [{ x: 5, y: 5 }, { x: 15, y: 5 }, { x: 15, y: 9 }], isClosed: false, layer: 'Ritz' }]);
+    const part = PartGeometry.toRecord(a, { partId: 'P-1', fileName: 'a.dxf', name: 'a', orderId: 'O', techRef: {} });
+    const log = console.log, dbg = console.debug, wrn = console.warn; console.log = console.debug = console.warn = () => {};
+    let res; try { res = D.parse(PartGeometry.toDXF(part), { chainingTolerance: 0.1 }); } finally { console.log = log; console.debug = dbg; console.warn = wrn; }
+    assert.ok(res.success);
+    const b = PartGeometry.analyze(PartGeometry.fromAppContours(res.contours));
+    assert.deepStrictEqual(b.geometry.bbox, a.geometry.bbox);
+    assert.strictEqual(b.geometry.netArea, a.geometry.netArea);
+    assert.strictEqual(b.geometry.contours.length, 3);
+    assert.deepStrictEqual(b.geometry.contours.map(c => c.role).sort(), ['disc', 'hole', 'open']);
+    assert.deepStrictEqual(b.geometry.contours.map(c => c.layer).sort(), ['Ritz', 'Teil', 'Text']);
+});
+
+test('fromAppContours filtert Referenz/Schraffur/zu kurze', () => {
+    const out = PartGeometry.fromAppContours([{ points: [{ x: 0, y: 0 }, { x: 1, y: 1 }], isClosed: false }, { isReference: true, points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
+        { isHatchContour: true, points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] }, { points: [{ x: 0, y: 0 }] }, null]);
+    assert.strictEqual(out.length, 1);
+});

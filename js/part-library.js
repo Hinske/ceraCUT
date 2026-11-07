@@ -12,7 +12,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-partimport
+ * Build: 20261107-partedit
+ * V1.1: Feat — PartGeometry.toDXF / fromAppContours (Teil bearbeiten, part-editor.js)
  *
  * (c) Cerasell GmbH
  */
@@ -168,7 +169,30 @@ const PartGeometry = (() => {
         };
     }
 
-    return { analyze, toRecord, namesFromFile, newPartId, signedArea, pointInPolygon };
+    /**
+     * Teil als DXF (R12, POLYLINE) — zum Bearbeiten im CAD-Editor. Layer bleiben erhalten,
+     * offene Konturen bleiben offen. Ursprung = Teil-Ursprung (unten-links).
+     */
+    function toDXF(part) {
+        const out = ['0', 'SECTION', '2', 'ENTITIES'];
+        const layerOf = c => String(c.layer || '0').replace(/[\r\n]/g, ' ').trim() || '0';
+        for (const c of part.geometry.contours) {
+            const layer = layerOf(c);
+            out.push('0', 'POLYLINE', '8', layer, '66', '1', '70', c.closed ? '1' : '0');
+            for (const p of c.points) out.push('0', 'VERTEX', '8', layer, '10', String(p[0]), '20', String(p[1]));
+            out.push('0', 'SEQEND', '8', layer);
+        }
+        out.push('0', 'ENDSEC', '0', 'EOF');
+        return out.join('\n') + '\n';
+    }
+
+    /** App-Konturen (CamContour) → analyze()-Eingabe; Referenz- und Schraffur-Konturen bleiben draußen. */
+    function fromAppContours(contours) {
+        return (contours || []).filter(c => c && !c.isReference && !c.isHatchContour && c.points && c.points.length >= 2)
+            .map(c => ({ points: c.points.map(p => ({ x: p.x, y: p.y })), isClosed: !!c.isClosed, layer: c.layer || '' }));
+    }
+
+    return { analyze, toRecord, toDXF, fromAppContours, namesFromFile, newPartId, signedArea, pointInPolygon };
 })();
 
 // ═══════════════════════════════════════════════════════════════════

@@ -12,7 +12,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-costdialog
+ * Build: 20261107-partedit
+ * V1.3: Feat — Teil bearbeiten (Planliste „Teile", Autonest-Treffer) → part-editor.js
  * V1.2: Feat — Button „Kalkulation" (Autonest-Dialog, Planliste) → cost-dialog.js
  * V1.1: Feat — Plan öffnen (PlanOpenDialog, toDXF, loadPlanParts), „Im Editor öffnen" im Autonest-Dialog
  *
@@ -288,6 +289,7 @@ class AutoNestDialog {
             const i = e.target.closest('[data-i]')?.dataset.i;
             ({ close: () => this.close(), search: () => this._search(), run: () => this._run(), save: () => this._save(), edit: () => this._openInEditor(), cost: () => this._cost(),
                add: () => this._addPart(e.target.closest('[data-pid]').dataset.pid),
+               editpart: () => PartEditor.openPart(this.app, e.target.closest('[data-pid]').dataset.pid).then(() => this.close()).catch(err => this._toast(`Öffnen fehlgeschlagen: ${err.message}`, 'error')),
                del: () => { this.rows.splice(Number(i), 1); this._renderRows(); } }[act] || (() => {}))();
         });
         ov.querySelector('#an-q').addEventListener('keydown', e => { if (e.key === 'Enter') this._search(); });
@@ -312,7 +314,7 @@ class AutoNestDialog {
             this.overlay.querySelector('#an-hits').innerHTML = r.items.length ? r.items.map(p =>
                 `<div data-pid="${this._esc(p.partId)}" style="display:flex;gap:8px;padding:2px 6px;border-bottom:1px solid #eee;align-items:center">
                     <span style="flex:1">${this._esc(p.name)} <span style="color:#888">· ${this._esc(p.orderId)} · ${p.bbox ? p.bbox.w + '×' + p.bbox.l : ''}</span></span>
-                    <button data-act="add">+</button></div>`).join('') : '<div style="padding:6px;color:#888">Keine Teile gefunden</div>';
+                    <button data-act="editpart" title="Teil im CAD-Editor bearbeiten">Bearbeiten</button> <button data-act="add">+</button></div>`).join('') : '<div style="padding:6px;color:#888">Keine Teile gefunden</div>';
         } catch (e) { this._toast(`Teilesuche fehlgeschlagen: ${e.message}`, 'error'); }
     }
 
@@ -419,6 +421,7 @@ class PlanOpenDialog {
                 <table style="width:100%;border-collapse:collapse;font-size:11px">
                     <thead><tr style="background:#e8eef5;text-align:left"><th>Plan</th><th>Blech</th><th>Teile</th><th>Bleche</th><th>Auslastung</th><th>Geändert</th><th></th></tr></thead>
                     <tbody id="po-rows"></tbody></table>
+                <div id="po-parts" style="font-size:11px;margin-top:6px"></div>
                 <div id="po-status" style="font-size:11px;color:#444"></div>
             </div>
         </div>`;
@@ -429,6 +432,8 @@ class PlanOpenDialog {
             const act = e.target.closest('[data-act]')?.dataset.act; if (!act) return;
             if (act === 'close') this.close();
             if (act === 'search') this._search();
+            if (act === 'parts') this._parts(e.target.closest('tr').dataset.id);
+            if (act === 'editpart') this._editPart(e.target.closest('[data-pid]'));
             if (act === 'cost') PlanCostDialog.open(this.app, { planId: e.target.closest('tr').dataset.id });
             if (act === 'open') this._open(e.target.closest('tr').dataset.id, Number(e.target.closest('tr').querySelector('select')?.value || 0));
         });
@@ -448,9 +453,36 @@ class PlanOpenDialog {
                 return `<tr data-id="${this._esc(p.planId)}" style="border-top:1px solid #ddd"><td>${this._esc(p.planId)}</td>
                     <td>${p.sheet ? p.sheet.width + '×' + p.sheet.length : ''}</td><td>${p.stats?.nested ?? p.instanceCount}</td><td>${n}</td>
                     <td>${p.stats?.utilization ?? ''}%</td><td>${this._esc((p.updatedAt || '').slice(0, 16).replace('T', ' '))}</td>
-                    <td>${n > 1 ? `<select>${Array.from({ length: n }, (_, i) => `<option value="${i}">Blech ${i + 1}</option>`).join('')}</select> ` : ''}<button data-act="cost">Kalkulation</button> <button data-act="open">Öffnen</button></td></tr>`;
+                    <td>${n > 1 ? `<select>${Array.from({ length: n }, (_, i) => `<option value="${i}">Blech ${i + 1}</option>`).join('')}</select> ` : ''}<button data-act="parts">Teile</button> <button data-act="cost">Kalkulation</button> <button data-act="open">Öffnen</button></td></tr>`;
             }).join('') : '<tr><td colspan="7" style="padding:8px;color:#888">Keine Pläne gefunden</td></tr>';
         } catch (e) { this._toast(`Planliste nicht ladbar: ${e.message}`, 'error'); }
+    }
+
+    /** Teile eines Plans auflisten (Menge, Revision) mit "Bearbeiten" (In-Place-Edit). */
+    async _parts(planId) {
+        const box = this.overlay.querySelector('#po-parts');
+        try {
+            const r = await fetch(`/api/plans/${encodeURIComponent(planId)}`, { credentials: 'same-origin' });
+            const plan = await r.json(); if (!r.ok) throw new Error(plan.error || `HTTP ${r.status}`);
+            const by = new Map();
+            for (const i of plan.instances) {
+                const e = by.get(i.partId) || { partId: i.partId, qty: 0, revs: new Set() };
+                e.qty++; e.revs.add(i.revision); by.set(i.partId, e);
+            }
+            const names = {};
+            await Promise.all([...by.keys()].map(async id => { try { names[id] = (await PartLibrary.get(id)).name; } catch { names[id] = id + ' (fehlt)'; } }));
+            box.innerHTML = `<div style="font-weight:600;margin-bottom:2px">Teile in ${this._esc(planId)}</div>` + [...by.values()].map(e =>
+                `<div data-pid="${this._esc(e.partId)}" data-plan="${this._esc(planId)}" data-rev="${Math.max(...e.revs)}" style="display:flex;gap:10px;align-items:center;padding:2px 0;border-bottom:1px solid #eee">
+                    <span style="flex:1">${this._esc(names[e.partId])}</span><span>${e.qty}×</span><span>Rev ${[...e.revs].sort().join(', ')}</span>
+                    <button data-act="editpart">Bearbeiten</button></div>`).join('');
+        } catch (e) { this._toast(`Teile nicht ladbar: ${e.message}`, 'error'); }
+    }
+
+    async _editPart(row) {
+        try {
+            await PartEditor.openPart(this.app, row.dataset.pid, { revision: Number(row.dataset.rev), planId: row.dataset.plan });
+            this.close();
+        } catch (e) { this._toast(`Öffnen fehlgeschlagen: ${e.message}`, 'error'); }
     }
 
     async _open(planId, sheetIndex) {

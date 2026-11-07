@@ -249,13 +249,15 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **User-Store** | `lib/user-store.js` | **V1.0** | Benutzerverwaltung (scrypt-Hashing), Bootstrap erster Admin via Env-Vars |
 | **Session-Store** | `lib/session-store.js` | **V1.0** | In-Memory Session-Map, Sliding Expiry |
 | **Auth-Helper** | `lib/auth.js` | **V1.0** | Cookie-Parsing, Session-Cookie-Helper, JSON-Body-Parsing |
-| **Part Library** | `part-library.js` | **V1.0** | Teileimport-Dialog (Ribbon Datei), PartGeometry (DXF-Konturen -> Teile-Datensatz), API-Client |
-| **Nesting Plan** | `nesting-plan.js` | **V1.2** | Autonest aus Teilebibliothek (Bedarf -> Plan), Dialog im Tab Nesting; Blech vorerst manuell, sheetId spaeter aus Blechbibliothek (tasks/todo-finest-phase2a.md) |
+| **Part Library** | `part-library.js` | **V1.1** | Teileimport-Dialog (Ribbon Datei), PartGeometry (DXF-Konturen -> Teile-Datensatz), API-Client |
+| **Nesting Plan** | `nesting-plan.js` | **V1.3** | Autonest aus Teilebibliothek (Bedarf -> Plan), Dialog im Tab Nesting; Blech vorerst manuell, sheetId spaeter aus Blechbibliothek (tasks/todo-finest-phase2a.md) |
 | **NC Tools** | `nc-tools.js` | **V1.0** | NC erstellen (Ribbon Export): NCCheck (Sinumerik-Parser/Pruefung), NC-Editor, Werkstattbericht (Druck/PDF), nur Einzelplan (Fliesenbogen -> CNC Export) |
 | **Plan Cost** | `cost-plan.js` | **V1.0** | Plan-Kalkulation (Fertigung/Material/Verbrauch/Zusatz, Teilepreise); Browser + Node; Richtwerte werden gemeldet |
 | **Cost Dialog** | `cost-dialog.js` | **V1.0** | Kostenkalkulation-Dialog (Autonest, Planliste), PDF-Export |
 | **Report PDF** | `lib/report-pdf.js` | **V1.0** | pdfkit-Bericht Nesting-Kalkulation (Server; `npm install` noetig) |
 | **Technology DB** | `technology-db.js` | **V1.0** | TechDB (Standardwerte, Validierung; auch Server) + Technologie-Manager-Dialog (Ribbon Extras): Material/Dicke-Baum, Reiter Allgemein/Lead/Mikroverbindungen/Schnitt/Nesting/Sonstiges/Kosten; Schreiben nur Admin |
+| **Plan Update** | `plan-update.js` | **V1.0** | Teil-Update im Plan (single / gleiche Transformation / alle), Instanzen bekommen neue Revision; auch Server (`POST /api/plans/:id/update-parts`) |
+| **Part Editor** | `part-editor.js` | **V1.0** | Teil bearbeiten (Tab ueber Dateiname gebunden), Teil aktualisieren + Update-Dialog, Teilebibliothek (Suche/Filter/Vorschau/DXF/Loeschen) |
 | **Seed** | `lib/seed.js` | **V1.0** | Erststart-Befuellung materials/technologies aus CeraJetEngine (nie ueberschreibend) |
 | **Data-API** | `lib/data-api.js` | **V1.0** | REST: /api/parts,plans,sheets,orders,materials,technologies, /api/technology/resolve; If-Match, Filter, Admin-only fuer Preise/Technologie |
 | **Store** | `lib/store.js` | **V1.0** | JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftraege, Technologie): atomar, Versions-Sperre (If-Match), ID-Validierung |

@@ -118,3 +118,99 @@ test('NC-Editor: Prüfliste live, Klick springt zur Zeile, Speichern ruft Server
         ed.close();
     } finally { h.close(); }
 });
+
+test('In-Place-Edit: Plan → Teile → Bearbeiten → Textmarke → Aktualisieren (gleiche Transformation) + Teilebibliothek', async () => {
+    const h = await start();
+    try {
+        await quiet(async () => {
+            h.w.CeraJetEngine = CeraJetEngine;
+            h.load('dxf-parser.js', ['DXFParser']);
+            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog']);
+            h.load('plan-update.js', ['PlanUpdate']);
+            h.load('part-editor.js', ['PartEditor', 'PartUpdateDialog', 'PartLibraryDialog']);
+            h.load('nesting.js', ['NestingEngine']);
+            h.load('cost-plan.js', ['PlanCost']);
+            h.load('cost-dialog.js', ['PlanCostDialog']);
+            h.load('nesting-plan.js', ['NestingPlan', 'AutoNestDialog', 'PlanOpenDialog']);
+        });
+        const $ = s => h.doc.querySelector(s);
+        const loaded = [];
+        h.app.loadDXFContent = (name, dxf) => { loaded.push({ name, dxf }); h.app.dxfFileName = name; };
+
+        // Daten: ein Teil (Rev 1) + Plan mit 4 Instanzen (2× 0°, 2× 90°)
+        const an = await quiet(() => h.w.PartGeometry.analyze([
+            { points: [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 100 }, { x: 0, y: 100 }], isClosed: true, layer: 'Teil' }]));
+        const part = h.w.PartGeometry.toRecord(an, { partId: 'P-A', fileName: 'a.dxf', name: 'PLATTE', orderId: 'O-PLATTE', customer: 'Heide', qty: 4,
+            techRef: { machineId: null, materialId: 21, thickness: 10 } });
+        await h.stores.parts.put(JSON.parse(JSON.stringify(part)));
+        const inst = (n, rot) => ({ instId: `i${n}`, partId: 'P-A', revision: 1, tx: n * 250, ty: 10, rot, sheetIndex: 0, mirror: false });
+        await h.stores.plans.put({ planId: 'PLAN-X', materialId: 21, thickness: 10, sheet: { width: 1500, length: 1000 }, stats: { sheets: 1 },
+            instances: [inst(1, 0), inst(2, 0), inst(3, 90), inst(4, 90)] });
+
+        // Plan öffnen → Teile → Bearbeiten
+        const po = new h.w.PlanOpenDialog(h.app);
+        await po.open();
+        await h.waitFor(() => $('.plan-open-overlay tr[data-id="PLAN-X"]'));
+        click($('.plan-open-overlay tr[data-id="PLAN-X"] [data-act="parts"]'));
+        await h.waitFor(() => $('#po-parts [data-act="editpart"]'));
+        click($('#po-parts [data-act="editpart"]'));
+        await h.waitFor(() => loaded.length === 1);
+        assert.match(loaded[0].name, /^TEIL_PLATTE_r1\.dxf$/);
+        assert.ok(h.w.PartEditor.sessions.get(loaded[0].name).planId === 'PLAN-X');
+
+        // "CAD": Tab-Inhalt parsen, Textmarke (kleines Rechteck) ergänzen
+        const parsed = await quiet(() => h.w.DXFParser.parse(loaded[0].dxf, { chainingTolerance: 0.1 }));
+        h.app.contours = [...parsed.contours, { points: [{ x: 90, y: 40 }, { x: 110, y: 40 }, { x: 110, y: 60 }, { x: 90, y: 60 }], isClosed: true, layer: 'Text' }];
+
+        // Teil aktualisieren → Dialog → "gleiche Transformation" mit Referenz i1
+        const upd = h.w.PartEditor.updateFromTab(h.app);
+        await h.waitFor(() => $('.part-update-overlay'));
+        assert.match($('.part-update-overlay').textContent, /Neue Revision 2/);
+        assert.doesNotMatch($('.part-update-overlay').textContent, /Umriss geändert/);
+        const radio = $('.part-update-overlay input[value="sameTransform"]'); radio.checked = true; fire(radio, 'change');
+        assert.strictEqual($('#pu-ref-row').style.display, 'flex');
+        $('#pu-ref').value = 'i1';
+        click($('.part-update-overlay [data-act="ok"]'));
+        await upd;
+
+        const p2 = h.stores.parts.get('P-A');
+        assert.strictEqual(p2.revision, 2);
+        assert.strictEqual(p2.geometry.contours.length, 2);
+        assert.strictEqual(p2.geometry.contours.find(c => c.layer === 'Text').role, 'hole');
+        assert.deepStrictEqual(h.stores.parts.revisions('P-A'), [1]);
+        const pl = h.stores.plans.get('PLAN-X');
+        assert.deepStrictEqual(pl.instances.map(i => [i.instId, i.revision]), [['i1', 2], ['i2', 2], ['i3', 1], ['i4', 1]]);
+        assert.strictEqual(pl.instances[0].derivedFrom, 'P-A@1');
+        assert.ok(h.toasts.some(t => /Revision 2 gespeichert · 2 Instanz/.test(t[0])));
+        po.close();
+
+        // Plan mit alter Rev öffnet weiterhin Rev 1 (ohne Textmarke): i3/i4
+        const planParts = {};
+        planParts['P-A@1'] = await h.w.PartLibrary.get('P-A', 1);
+        assert.strictEqual(planParts['P-A@1'].geometry.contours.length, 1);
+
+        // Tab ohne Sitzung → Hinweis
+        h.app.dxfFileName = 'irgendwas.dxf';
+        await h.w.PartEditor.updateFromTab(h.app);
+        assert.ok(h.toasts.some(t => /gehört zu keinem Bibliotheksteil/.test(t[0])));
+
+        // Teilebibliothek: Suche, Bearbeiten, Löschen
+        const lib = new h.w.PartLibraryDialog(h.app);
+        await lib.open();
+        await h.waitFor(() => $('.part-library-overlay tr[data-id="P-A"]'));
+        assert.match($('.part-library-overlay').textContent, /PLATTE.*Heide/s);
+        $('#pl-q').value = 'gibtsnicht'; click($('.part-library-overlay [data-act="search"]'));
+        await h.waitFor(() => /Keine Teile gefunden/.test($('#pl-rows').textContent));
+        click($('.part-library-overlay [data-act="reset"]'));
+        await h.waitFor(() => $('.part-library-overlay tr[data-id="P-A"]'));
+        click($('.part-library-overlay tr[data-id="P-A"] [data-act="edit"]'));
+        await h.waitFor(() => loaded.length === 2);
+        assert.match(loaded[1].name, /^TEIL_PLATTE_r2\.dxf$/);
+        const lib2 = new h.w.PartLibraryDialog(h.app);
+        await lib2.open();
+        await h.waitFor(() => $('.part-library-overlay tr[data-id="P-A"]'));
+        click($('.part-library-overlay tr[data-id="P-A"] [data-act="del"]'));
+        await h.waitFor(() => !h.stores.parts.exists('P-A'));
+        lib2.close();
+    } finally { h.close(); }
+});

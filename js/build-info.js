@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '5bfaa82',
+        hash: '9be3d8e',
         date: '2026-11-07',
-        message: 'feat: Technologie-Manager (technology-db V1.0) + Server-Validierung, jsdom-UI-Te'
+        message: 'feat: In-Place-Edit (Teil bearbeiten/aktualisieren, Update-Modi im Plan) + Teile'
     },
 
     modules: {
@@ -72,15 +72,17 @@ const CERACUT_BUILD = {
         'session-store':      { version: '1.1', build: '20261104-reviewfix' },
         'auth-helper':        { version: '1.1', build: '20261104-reviewfix' },
         'store':              { version: '1.0', build: '20261107-store' },
-        'data-api':           { version: '1.2', build: '20261107-techdb' },
+        'data-api':           { version: '1.3', build: '20261107-partedit' },
         'seed':               { version: '1.1', build: '20261107-techdb' },
-        'part-library':       { version: '1.0', build: '20261107-partimport' },
-        'nesting-plan':       { version: '1.2', build: '20261107-costdialog' },
+        'part-library':       { version: '1.1', build: '20261107-partedit' },
+        'nesting-plan':       { version: '1.3', build: '20261107-partedit' },
         'nc-tools':           { version: '1.1', build: '20261107-techdb' },
         'cost-plan':          { version: '1.0', build: '20261107-plancost' },
         'cost-dialog':        { version: '1.0', build: '20261107-costdialog' },
         'report-pdf':         { version: '1.0', build: '20261107-reportpdf' },
-        'technology-db':      { version: '1.0', build: '20261107-techdb' }
+        'technology-db':      { version: '1.0', build: '20261107-techdb' },
+        'plan-update':        { version: '1.0', build: '20261107-partedit' },
+        'part-editor':        { version: '1.0', build: '20261107-partedit' }
     },
 
     changes: [
