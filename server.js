@@ -19,11 +19,12 @@
  * V1.9: Feat — /api/dxf/list liefert mtime (Änderungsdatum) für Ordner und Dateien
  * V1.12: Feat — Seed (lib/seed.js): materials/technologies beim ersten Start aus CeraJetEngine
  * V1.11: Feat — Daten-API (lib/data-api.js): /api/parts|plans|sheets|orders|materials|technologies + /api/technology/resolve, hinter Login
+ * V1.15: Perf — CNC-Listing ohne stat (Datum egal) + 30 s Cache (9.700 Dateien auf CIFS: readdir 1,4 s, stat 3 s)
  * V1.14: Perf — Listing stat parallel (32 gleichzeitig) statt serielles statSync (Netzlaufwerk)
  * V1.13: Feat — GET /api/cnc/list + /api/cnc/file (CNC-Ordner browsen, read-only, hinter Login)
  * V1.10: Feat — POST /api/cnc/save schreibt .CNC-Dateien nach CNC_ROOT (default /mnt/cnc)
  * Last Modified: 2026-11-07
- * Build: 20261107-listperf
+ * Build: 20261107-cnclist
  * V1.7: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * Statischer Dateiserver + DXF-Browse-API für Netzlaufwerk-Zugriff.
@@ -255,7 +256,15 @@ function sendJSON(res, statusCode, data) {
  * API: GET /api/dxf/list?path=
  * Listet Verzeichnisinhalt (nur .dxf-Dateien und Unterordner).
  */
-function handleDXFList(res, queryPath, root = DXF_ROOT, exts = ['.dxf']) {
+const _listCache = new Map();   // CNC-Ordner: ~10.000 Dateien auf CIFS → readdir 1-2 s; kurz zwischenspeichern
+const LIST_CACHE_MS = 30000;
+function handleDXFList(res, queryPath, root = DXF_ROOT, exts = ['.dxf'], opts = {}) {
+    const noStat = !!opts.noStat;
+    const cacheKey = noStat ? root + '\0' + (queryPath || '') : null;
+    if (cacheKey) {
+        const hit = _listCache.get(cacheKey);
+        if (hit && Date.now() - hit.t < LIST_CACHE_MS) return sendJSON(res, 200, hit.body);
+    }
     const dirPath = safePath(root, queryPath);
     if (!dirPath) {
         return sendJSON(res, 403, { error: 'Zugriff verweigert' });
@@ -277,7 +286,7 @@ function handleDXFList(res, queryPath, root = DXF_ROOT, exts = ['.dxf']) {
             const items = [];
             const statOne = async (entry) => {
                 let st = null;
-                try { st = await fs.promises.stat(path.join(dirPath, entry.name)); } catch {}
+                if (!noStat) { try { st = await fs.promises.stat(path.join(dirPath, entry.name)); } catch {} }
                 if (entry.isDirectory()) items.push({ name: entry.name, type: 'directory', mtime: st ? st.mtimeMs : 0 });
                 else items.push({ name: entry.name, type: 'file', size: st ? st.size : 0, mtime: st ? st.mtimeMs : 0 });
             };
@@ -291,10 +300,9 @@ function handleDXFList(res, queryPath, root = DXF_ROOT, exts = ['.dxf']) {
                     return a.name.localeCompare(b.name, 'de');
                 });
 
-                sendJSON(res, 200, {
-                    path: queryPath || '',
-                    items: items,
-                });
+                const body = { path: queryPath || '', items: items };
+                if (cacheKey) _listCache.set(cacheKey, { t: Date.now(), body });
+                sendJSON(res, 200, body);
             }).catch(() => sendJSON(res, 500, { error: 'Lesefehler' }));
         });
     });
@@ -339,6 +347,7 @@ async function handleCNCSave(req, res) {
     } catch (err) {
         return sendJSON(res, 500, { error: 'Schreibfehler: ' + err.code });
     }
+    _listCache.clear();
     sendJSON(res, 200, { ok: true, filename: path.basename(target), overwritten: exists });
 }
 
@@ -654,7 +663,7 @@ function requestHandler(req, res) {
     // ── CNC-Ordner browsen (read-only, analog DXF): Login nötig ──
     if (pathname === '/api/cnc/list' && req.method === 'GET') {
         if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
-        return handleDXFList(res, parsed.query.path || '', CNC_ROOT, CNC_EXTS);
+        return handleDXFList(res, parsed.query.path || '', CNC_ROOT, CNC_EXTS, { noStat: true });
     }
     if (pathname === '/api/cnc/file' && req.method === 'GET') {
         if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });

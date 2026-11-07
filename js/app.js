@@ -14,6 +14,7 @@
  * V6.60: Feat — Schnittreihenfolge manuell: Schnitte anklicken, Auswahl Anfang/↑/↓/Ende/Position N (je Fliese, Undo); alte Schnittliste war seit V5.7 nicht mehr im HTML
  * V6.59: Feat — Fliesen-Reihenfolge im Tab Reihenfolge: Presets (Zeile/Spalte/Schlangenlinie/Nachbar, Startecke, umkehren), Anklick-Modus, Drag&Drop, Sperre bei manueller Reihenfolge; Button "Fliesen erkennen" entfällt (Erkennung automatisch)
  * V6.58: Fix — Fliesen nach Auto-Referenz neu zuordnen, Nullpunkt-Gedaechtnis, Rechteck-Erkennung tolerant (verkettete Linien)
+ * V6.75: Fix — CNC Server übergibt Dateinamen an den CNC-Import (öffnet neue Datei statt in aktuelles Dokument zu importieren)
  * V6.74: Feat — Button „CNC Server" (DXFBrowser kind=cnc, CNC-Ordner mit Vorschau)
  * V6.73: Fix — Ribbon-Tooltips per JS (CSS-Tooltip wurde im Ribbon abgeschnitten, z.B. Analyze)
  * V6.72: Feat — Tooltips auch fuer Flyout-Eintraege (data-fly-tool, Position rechts)
@@ -36,7 +37,7 @@
  * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
  * Last Modified: 2026-11-07
- * Build: 20261107-cncbrowse
+ * Build: 20261107-cncnewfile
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -272,7 +273,7 @@ class CeraCutApp {
         // V5.9: DXF Browser (Server-Netzlaufwerk)
         if (typeof DXFBrowser !== 'undefined') {
             this.dxfBrowser = new DXFBrowser(this);
-            this.cncBrowser = new DXFBrowser(this, { kind: 'cnc', onLoad: (name, text) => window.CeraCutCncImportContent?.(text) });
+            this.cncBrowser = new DXFBrowser(this, { kind: 'cnc', onLoad: (name, text) => window.CeraCutCncImportContent?.(text, name) });
         }
 
         // V3.11: Image Underlay Manager

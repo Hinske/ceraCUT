@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'ae34e0d',
+        hash: '8c8c8fc',
         date: '2026-11-07',
-        message: 'feat: Duschboard-Dialog Phase 2b (Live-Vorschau mit Bemassung, Stueckliste, Befe'
+        message: 'fix: CNC Server oeffnet neue Datei; schnelleres CNC-Listing (kein stat, Cache) + Filterf'
     },
 
     modules: {
@@ -42,7 +42,7 @@ const CERACUT_BUILD = {
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.5', build: '20261106-arcangle' },
         'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
-        'app':                { version: '6.74', build: '20261107-cncbrowse' },
+        'app':                { version: '6.75', build: '20261107-cncnewfile' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.7', build: '20261107-leadmenu' },
@@ -58,8 +58,8 @@ const CERACUT_BUILD = {
         'arc-fitting':        { version: '3.4', build: '20261105-meander' },
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
         'dimension-tool':     { version: '2.6', build: '20261104-pushexecuted' },
-        'dxf-browser':        { version: '1.6', build: '20261107-cncbrowse' },
-        'server':             { version: '1.14', build: '20261107-listperf' },
+        'dxf-browser':        { version: '1.7', build: '20261107-filter' },
+        'server':             { version: '1.15', build: '20261107-cnclist' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
         'constants': { version: '2.16', build: '20261107-tips' },

@@ -205,7 +205,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 
 | Modul | Datei | Version | Verantwortung |
 |-------|-------|---------|---------------|
-| **App** | `app.js` | **V6.74** | Wizard, Kontextmenu, Export-Modal, Undo (Granular per Kontur), ToolManager, Click-Routing, Window-Selection, DynamicInput, Print, FSAPI-Save, ProjectManager, CAM-Kontextmenu, Lead-Profiles, Intarsien V2.0, Layer-Visibility→Pipeline, Validation Engine, Multi-Material Export, Hatch-Entity, Undo/Redo-Button-Click, Snap-Modi-Statusbar, Cycle-Selection |
+| **App** | `app.js` | **V6.75** | Wizard, Kontextmenu, Export-Modal, Undo (Granular per Kontur), ToolManager, Click-Routing, Window-Selection, DynamicInput, Print, FSAPI-Save, ProjectManager, CAM-Kontextmenu, Lead-Profiles, Intarsien V2.0, Layer-Visibility→Pipeline, Validation Engine, Multi-Material Export, Hatch-Entity, Undo/Redo-Button-Click, Snap-Modi-Statusbar, Cycle-Selection |
 | **Geometry** | `geometry.js` | **V2.14** | Vektoren, SplineUtils (De Boor), MicroHealing (5-Stage), Shoelace, interiorPoint |
 | **GeometryOps** | `geometry-ops.js` | **V2.7** | Intersection, Segment-Modell, Arabeske, circumscribedCircle, splitAndOverlap, Boundary (DCEL Planar Graph), filletPolyline/chamferPolyline |
 | **DXF-Parser** | `dxf-parser.js` | **V3.20** | DXF → Entities, SPLINE-Tessellation, Deque-Chaining, Layer-aware, TEXT/MTEXT, TEXT-Glyphs, Center/Radius-Passthrough, R12-Layer-Table, HATCH-Skip |
@@ -557,7 +557,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   text-tool: V1.3 (20261104-reviewfix)
   dxf-writer: V1.16 (20261104-reviewfix)
   lead-profiles: V1.5 (20261106-arcangle)
-  app: V6.74 (20261107-cncbrowse)
+  app: V6.75 (20261107-cncnewfile)
   document-manager: V1.6 (20261106-fliesenrect)
   project-manager: V1.2 (20261104-pushexecuted)
   properties-panel: V1.7 (20261107-leadmenu)
@@ -572,8 +572,8 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   mosaic-generator: V1.4 (20261106-fliesenrect)
   advanced-tools: V1.9 (20261104-reviewfix)
   arc-fitting: V3.4 (20261105-meander)
-  dxf-browser: V1.6 (20261107-cncbrowse)
-  server: V1.14 (20261107-listperf)
+  dxf-browser: V1.7 (20261107-filter)
+  server: V1.15 (20261107-cnclist)
   user-store: V1.1 (20261104-reviewfix)
   session-store: V1.1 (20261104-reviewfix)
   auth-helper: V1.1 (20261104-reviewfix)

@@ -4,14 +4,15 @@
  * Ermöglicht das Browsen und Laden von DXF-Dateien vom Server-Netzlaufwerk
  * über die /api/dxf/* Endpunkte von server.js.
  *
- * Version: V1.6
+ * Version: V1.7
+ * V1.7: Feat — Filterfeld + max. 400 Zeilen (CNC-Ordner hat ~10.000 Dateien); CNC: kein Datum-Sortierknopf
  * V1.6: Feat — kind 'cnc': gleicher Browser für den CNC-Ordner (/api/cnc/*, CNCReader-Vorschau, onLoad-Callback); Titel „DXF Server"/„CNC Server"
  * V1.5: Feat — Vorschau-Panel (Canvas) rechts: Einfachklick = Vorschau, Doppelklick/Button = Laden
  * V1.4: Feat — pickMany(): Mehrfachauswahl für den Teileimport (Checkboxen, Alle im Ordner, 4 parallele Downloads); Fix selectFile(): dirPath war undefiniert
  * V1.3: Sortierung (Name/Datum, auf-/absteigend, Ordner immer oben, pro User gemerkt)
  * V1.1: Zuletzt-Pfad pro User (_userKey(), Login/User-Management V6.32)
  * Last Modified: 2026-11-07
- * Build: 20261107-cncbrowse
+ * Build: 20261107-filter
  */
 
 /** Pro-User-Namespacing für localStorage-Keys (V6.32 Login/User-Management). */
@@ -71,7 +72,7 @@ class DXFBrowser {
         const bar = this.overlay?.querySelector('.dxf-browser-sortbar');
         if (!bar) return;
         bar.innerHTML = '';
-        const defs = [['name', 'Name'], ['mtime', 'Datum']];
+        const defs = this.kind === 'cnc' ? [['name', 'Name']] : [['name', 'Name'], ['mtime', 'Datum']];
         for (const [key, label] of defs) {
             const active = this.sort.key === key;
             const b = document.createElement('span');
@@ -80,6 +81,19 @@ class DXFBrowser {
             b.addEventListener('click', () => this._setSort(key));
             bar.appendChild(b);
         }
+        const f = document.createElement('input');
+        f.type = 'search'; f.placeholder = 'Filter…'; f.value = this._filter || '';
+        f.style.cssText = 'margin-left:auto; width:200px; padding:3px 8px; background:#111; color:#ddd; border:1px solid #444; border-radius:3px; font-size:12px;';
+        let tm = null;
+        f.addEventListener('input', () => {
+            clearTimeout(tm);
+            tm = setTimeout(() => {
+                this._filter = f.value.trim().toLowerCase();
+                const listEl = this.overlay?.querySelector('.dxf-browser-list');
+                if (listEl) this._renderList(this.items, listEl);
+            }, 150);
+        });
+        bar.appendChild(f);
     }
 
     /**
@@ -269,6 +283,8 @@ class DXFBrowser {
      */
     async loadDirectory(dirPath) {
         this.currentPath = dirPath;
+        this._filter = '';
+        this._renderSortBar();
         const listEl = this.overlay?.querySelector('.dxf-browser-list');
         const statusEl = this.overlay?.querySelector('.dxf-browser-status');
         if (!listEl) return;
@@ -360,7 +376,12 @@ class DXFBrowser {
             listEl.appendChild(upItem);
         }
 
-        for (const item of this._sortItems(items)) {
+        const flt = this._filter || '';
+        let all = this._sortItems(items);
+        if (flt) all = all.filter(i => i.name.toLowerCase().includes(flt));
+        const MAX = 400;   // 10.000 DOM-Zeilen waren der zweite Flaschenhals
+        const shown = all.length > MAX ? all.slice(0, MAX) : all;
+        for (const item of shown) {
             const el = this._createListItem(item.name, item.type, item.size, item.mtime);
 
             if (item.type === 'directory') {
@@ -391,6 +412,12 @@ class DXFBrowser {
             }
 
             listEl.appendChild(el);
+        }
+        if (all.length > shown.length) {
+            const more = document.createElement('div');
+            more.style.cssText = 'padding:10px 16px; color:#888; font-size:12px; text-align:center;';
+            more.textContent = `… ${all.length - shown.length} weitere — Filter oben verwenden`;
+            listEl.appendChild(more);
         }
     }
 
