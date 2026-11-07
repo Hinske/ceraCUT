@@ -1,6 +1,7 @@
 /**
  * CeraCUT V3.52 - Canvas Renderer
  * V3.64: Fix — Schnittfugenband auch bei offenen Konturen (mittig auf dem Pfad, Breite = Kerf).
+ * V3.65: Fix — Fugenband offener Konturen bei Kerf-Seite Links/Rechts neben der Kontur (G41/G42), sonst mittig.
  * V3.62: Feat — AP3 Classic-Theme (Palette #666 ohne Raster, Default), isDark auch fuer classic.
  * V3.61: Feat — AP1 S4b: Leads/Ueberschnitt/Startmarke auf der Teilegeometrie (wie G-Code), Fugenband entlang der realen Strahlmitte (getLeadIn/OutToolSegments, overcut.toolPoints).
  * V3.63: Feat — Hover-Hinweis (Tooltip) am Lead-Warnsymbol mit Grund (gekuerzt/Startpunkt rotiert/Alternativ/Fallback).
@@ -1299,7 +1300,10 @@ class CanvasRenderer {
             // Schnittfuge massstaeblich als Band (offene Kontur: Werkzeug laeuft mittig auf dem Pfad)
             if (this.showKerfBand && contour.kerfWidth > 0 && points.length > 1 &&
                 (this.currentMode === 'anschuss' || this.currentMode === 'reihenfolge')) {
-                this._strokeBand(ctx, points, contour.kerfWidth);
+                // G41/G42: Fuge liegt neben der Kontur (Werkzeugbahn um kerf/2 versetzt), sonst mittig
+                const comp = contour.kerfComp || contour.kerfSide;
+                const off = (comp === 'left' || comp === 'right') ? contour.kerfWidth / 2 * (comp === 'left' ? 1 : -1) : 0;
+                this._strokeBand(ctx, off ? this._offsetOpenPolyline(points, off) : points, contour.kerfWidth);
             }
             this.drawPath(ctx, points, displayColor, baseWidth);
 
@@ -1752,6 +1756,27 @@ class CanvasRenderer {
                 ctx.lineTo(sg.p1.x, sg.p1.y);
             }
         }
+    }
+
+    /** Offene Polylinie seitlich versetzen (d > 0 = links der Laufrichtung, Weltkoordinaten). */
+    _offsetOpenPolyline(pts, d) {
+        const n = pts.length, out = [];
+        const nrm = (a, b) => { const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1; return { x: -dy / l, y: dx / l }; };
+        for (let i = 0; i < n; i++) {
+            const n1 = i > 0 ? nrm(pts[i - 1], pts[i]) : null;
+            const n2 = i < n - 1 ? nrm(pts[i], pts[i + 1]) : null;
+            let nx, ny, k = 1;
+            if (n1 && n2) {
+                nx = n1.x + n2.x; ny = n1.y + n2.y;
+                const l = Math.hypot(nx, ny);
+                if (l < 1e-9) { nx = n1.x; ny = n1.y; } else {
+                    nx /= l; ny /= l;
+                    k = Math.min(1 / Math.max(nx * n1.x + ny * n1.y, 0.25), 4);
+                }
+            } else { const m = n1 || n2 || { x: 0, y: 0 }; nx = m.x; ny = m.y; }
+            out.push({ x: pts[i].x + nx * d * k, y: pts[i].y + ny * d * k });
+        }
+        return out;
     }
 
     /** Schnittfugenband (Breite = Kerf in mm, massstaeblich) entlang Punktliste ODER Segmenten. */

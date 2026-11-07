@@ -8,8 +8,8 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.18',
-    build: '20261107-kerfopen',
+    version: '7.19',
+    build: '20261107-kerfside',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
@@ -25,7 +25,7 @@ const CERACUT_BUILD = {
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.12', build: '20261106-tileref' },
         'cam-contour':        { version: '5.31', build: '20261107-occorner' },
-        'canvas-renderer':    { version: '3.64', build: '20261107-kerfopen' },
+        'canvas-renderer':    { version: '3.65', build: '20261107-kerfside' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.9', build: '20261106-tileref' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
@@ -83,6 +83,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.19: Fix — Fugenband offener Konturen sitzt bei Kerf-Seite Links/Rechts neben der Kontur (canvas-renderer V3.65).',
         'V7.18: Fix — Schnittfuge bei offenen Konturen: Band wird gezeichnet (canvas-renderer V3.64) und Kerf-Aenderung (applyKerfWidth, app) wirkt jetzt auch auf offene Konturen (vorher nur geschlossene).',
         'V7.17: Feat — Lead-Menue fuer Einsteiger (app V6.70): Einfach-Ansicht mit Groesse Klein/Mittel/Gross, Klartext-Zusammenfassung des Anschnitts, verstaendliche Begriffe (Voreinstellung, Form, Laenge, Ueberschnitt, Auto fuer alle); alle Feinfelder (Winkel, Ausfahrt, Radius, Innen, Ecken, Piercing) unter Experte.',
         'V7.16: Feat — Lead-Menue: eigener Ausfahr-Typ und -Radius (leer = wie Anfahrt), Hover-Hinweis am Lead-Warnsymbol mit Grund, Properties-Panel: OC an Ecke + Sperr-Hinweis (app V6.69, canvas-renderer V3.63, properties-panel V1.7). Nachbarabstand (collision-margin) und Innen-Ueberschnitt (int-overcut-length) existierten bereits.',
