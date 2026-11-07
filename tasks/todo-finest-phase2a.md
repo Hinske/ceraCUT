@@ -23,6 +23,9 @@
 - Gemessene Richtwerte (Node, 3000×1500, Abstand 3 mm): 500 gemischte Teile ≈ 2 s, 1000 ≈ 4 s, 2000 ≈ 10 s; feine Teile (400 Punkte) 300 Stück ≈ 6 s
 - Grenzen: freie 10°-Drehung und sehr große/viele Bleche verlängern die Laufzeit; Rest-Heuristik ist BLF (kein True-Shape), die Packung ist nicht optimal
 
+- [x] **Fix Überlagerungen** (2026-11-07, Testdatei `HEIDED856000W-115V1.DXF`): Die Datei enthält zwei Stücke (je 140×140 mit 4 Löchern) **und** eine Waricam-Referenzlinie auf Layer `REFERENZ` (240×420). Der Import hat alles als EIN Teil gespeichert, das Nesting nur die größere Außenkontur berücksichtigt → zweites Stück und Referenzlinie wanderten mit und lagen über anderen Teilen (bei 30 Stück 200 Kontur-Überlappungen). Jetzt: (1) Import schließt REFERENZ-/Blech-/Rahmen-Layer standardmäßig aus, (2) mehrere getrennte Außenkonturen werden als eigene Teile importiert, identische Stücke zusammengefasst (Menge × Anzahl; Checkbox „Getrennte Außenkonturen als eigene Teile"), (3) Nesting behandelt Teile mit mehreren Außenkonturen als starre Einheit (konvexe Hülle) und ignoriert REFERENZ-Konturen — schützt auch ältere, schon importierte Teile. Hinweis: Bereits importierte Teile mit Referenzlinie enthalten diese noch in Schnittlänge/Fläche (Kalkulation) → neu importieren empfohlen
+- Tests: Brute-Force-Überlappungsprüfung (`tests/helpers/overlap.js`) mit der echten Datei (30 Stück → 0 Überlappungen; alter Code: 80–200)
+
 ## Offen
 - [ ] Geöffneter Plan ist ein normaler DXF-Tab: Änderungen am Plan (Verschieben im Tab) werden nicht in den Plan zurückgeschrieben; Teile-Update (In-Place-Edit, Phase 4) braucht echte Instanzbindung
 - [ ] Beim Öffnen gehen Löcher/Stückzahl-Zuordnung (Teilename je Kontur) nicht in den Tab ein — Konturnamen sind generisch

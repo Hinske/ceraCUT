@@ -82,3 +82,57 @@ test('toDXF: Parser-Round-Trip (Blechumriss + Teile + Löcher)', () => {
     const b = bb(sheet.points);
     assert.deepStrictEqual([b.maxX - b.minX, b.maxY - b.minY], [1000, 500]);
 });
+
+// ── Mehrere Außenkonturen / REFERENZ-Layer (Fehlerbild: überlagerte Konturen, Testdatei HEIDED856000W-115V1) ──
+const brute = require('./helpers/overlap.js');
+
+const twoDiscPart = (extra = {}) => ({ partId: 'P-2', name: 'ZWEI', revision: 1, technologyRef: { materialId: 21, thickness: 10 },
+    geometry: { bbox: { w: 240, l: 420 }, contours: [
+        { id: 'c1', role: 'open', closed: false, layer: 'REFERENZ', points: [[0, 0], [240, 0], [240, 420]] },
+        { id: 'c2', role: 'disc', closed: true, layer: 'SCHNEIDEN', points: [[8, 5], [148, 5], [148, 145], [8, 145]] },
+        { id: 'c3', role: 'hole', closed: true, layer: 'SCHNEIDEN', points: [[60, 60], [90, 60], [90, 90], [60, 90]] },
+        { id: 'c4', role: 'disc', closed: true, layer: 'SCHNEIDEN', points: [[8, 153], [148, 153], [148, 293], [8, 293]] },
+        { id: 'c5', role: 'hole', closed: true, layer: 'SCHNEIDEN', points: [[60, 200], [90, 200], [90, 230], [60, 230]] }] }, ...extra });
+
+test('Teil mit zwei Außenkonturen wird als starre Einheit genestet: keine Überlagerung zwischen Instanzen', () => {
+    const part = twoDiscPart();
+    const poly = NestingPlan.nestPolygon(part);
+    assert.ok(poly.length >= 4);
+    const { plan } = quiet(() => NestingPlan.run([{ partId: 'P-2', qty: 30 }], { 'P-2': part }, { width: 1500, length: 1000, partToPart: 5, partToEdge: 5 }));
+    assert.strictEqual(plan.stats.nested, 30);
+    const polys = plan.instances.map(i => NestingPlan.placePart(part, i.rot, i.tx, i.ty));
+    for (const p of polys) assert.ok(p.every(c => c.role !== 'open'), 'REFERENZ-Kontur wandert nicht mit');
+    assert.strictEqual(brute.overlaps(polys, plan.instances.map(i => i.sheetIndex)), 0);
+});
+
+test('Ältere Teile mit REFERENZ-Layer: Kontur wird weder gezeichnet noch in die DXF/Vorschau übernommen', () => {
+    const part = twoDiscPart();
+    const { plan } = quiet(() => NestingPlan.run([{ partId: 'P-2', qty: 3 }], { 'P-2': part }, { width: 1500, length: 1000, partToPart: 5, partToEdge: 5 }));
+    const pls = NestingPlan.sheetPolylines(plan, { 'P-2@1': part }, 0);
+    assert.ok(!pls.some(c => c.role === 'open'));
+    assert.strictEqual(pls.length, 3 * 4);
+    assert.ok(!NestingPlan.toDXF(plan, { 'P-2@1': part }, 0).includes('REFERENZ'));
+});
+
+test('Reale Testdatei HEIDED856000W-115V1: Import (REFERENZ aus, Aufteilen) + 30 Stück → keine Überlagerung', { skip: !require('fs').existsSync('/mnt/dxf/Output Waricam/HEIDED856000W-115V1.DXF') }, () => {
+    const P = require('../js/dxf-parser.js'); const D = P.DXFParser || P;
+    const { PartGeometry } = require('../js/part-library.js');
+    const txt = PartGeometry.decodeDXF(require('fs').readFileSync('/mnt/dxf/Output Waricam/HEIDED856000W-115V1.DXF'));
+    const res = quiet(() => D.parse(txt, { chainingTolerance: 0.1, applyInsUnits: true }));
+    const sel = res.contours.filter(c => !PartGeometry.isReferenceLayer(c.layer));
+    assert.ok(sel.length < res.contours.length, 'REFERENZ-Konturen werden ausgefiltert');
+    const sp = PartGeometry.analyzeSplit(sel);
+    assert.ok(sp.ok);
+    const total = sp.pieces.reduce((a, p) => a + p.count, 0);
+    assert.strictEqual(total, 2, 'zwei Stücke in der Datei');
+    const parts = {}; const demand = [];
+    sp.pieces.forEach((pc, k) => {
+        const id = `P-H${k}`;
+        parts[id] = PartGeometry.toRecord(pc.analysis, { partId: id, fileName: 'h.dxf', name: `H-${k}`, orderId: 'O', techRef: { materialId: 21, thickness: 10 } });
+        demand.push({ partId: id, qty: 15 * pc.count });
+    });
+    const { plan } = quiet(() => NestingPlan.run(demand, parts, { width: 1500, length: 1000, partToPart: 5, partToEdge: 5 }));
+    assert.strictEqual(plan.stats.nested, 30);
+    const polys = plan.instances.map(i => NestingPlan.placePart(parts[i.partId], i.rot, i.tx, i.ty));
+    assert.strictEqual(brute.overlaps(polys, plan.instances.map(i => i.sheetIndex)), 0);
+});

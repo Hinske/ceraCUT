@@ -76,3 +76,34 @@ test('previewSvg: y nach oben, Rollen-Stile, Ausdehnung', () => {
     assert.ok(svgInner.includes('vector-effect="non-scaling-stroke"'));
     assert.deepStrictEqual(PartGeometry.previewSvg({ contours: [] }).box, { x: 0, y: 0, w: 100, h: 100 });
 });
+
+test('isReferenceLayer erkennt Plattenrahmen-Layer (gleiche Regel wie nesting-plan.js)', () => {
+    for (const l of ['REFERENZ', 'Referenz', 'reference', 'REF', 'Blech', 'BLECH', 'Rahmen']) assert.ok(PartGeometry.isReferenceLayer(l), l);
+    for (const l of ['SCHNEIDEN', '0', 'Fliese', 'Text', '', undefined]) assert.ok(!PartGeometry.isReferenceLayer(l), String(l));
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'nesting-plan.js'), 'utf8');
+    const lib = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'part-library.js'), 'utf8');
+    assert.strictEqual(src.match(/const REF_LAYER_RE = (\/.+\/i);/)[1], lib.match(/const REF_LAYER_RE = (\/.+\/i);/)[1], 'beide Dateien verwenden dieselbe Regel');
+});
+
+test('analyzeSplit: zwei identische Stücke → ein Teil × 2; verschiedene → zwei Teile; Insel/Loch bleiben beim Stück; Waise wird gemeldet', () => {
+    const circ = (cx, cy, r, extra = {}) => ({ points: Array.from({ length: 24 }, (_, i) => ({ x: cx + r * Math.cos(i / 24 * 2 * Math.PI), y: cy + r * Math.sin(i / 24 * 2 * Math.PI) })), isClosed: true, ...extra });
+    const same = PartGeometry.analyzeSplit([rect(0, 0, 100, 60), rect(20, 20, 20, 20), rect(300, 200, 100, 60), rect(320, 220, 20, 20)]);
+    assert.ok(same.ok);
+    assert.strictEqual(same.pieces.length, 1);
+    assert.strictEqual(same.pieces[0].count, 2);
+    assert.strictEqual(same.pieces[0].analysis.geometry.contours.length, 2);
+    assert.deepStrictEqual(same.pieces[0].analysis.geometry.bbox, { w: 100, l: 60 });
+
+    const diff = PartGeometry.analyzeSplit([rect(0, 0, 100, 60), rect(500, 0, 80, 80), rect(510, 10, 20, 20), circ(530, 40, 5)]);   // Kreis liegt im Loch? nein: im 2. Stück
+    assert.deepStrictEqual(diff.pieces.map(p => p.count), [1, 1]);
+    assert.strictEqual(diff.pieces[1].analysis.geometry.contours.length, 3);
+
+    const orphan = PartGeometry.analyzeSplit([rect(0, 0, 100, 60), rect(300, 0, 50, 50), { points: [{ x: 900, y: 900 }, { x: 950, y: 900 }], isClosed: false }]);
+    assert.strictEqual(orphan.pieces.length, 2);
+    assert.ok(orphan.warnings.some(w => /außerhalb jeder Außenkontur/.test(w)));
+
+    // Ein Stück → wie analyze
+    const one = PartGeometry.analyzeSplit([rect(0, 0, 100, 60), rect(20, 20, 10, 10)]);
+    assert.strictEqual(one.pieces.length, 1); assert.strictEqual(one.pieces[0].count, 1);
+    assert.strictEqual(PartGeometry.analyzeSplit([]).ok, false);
+});

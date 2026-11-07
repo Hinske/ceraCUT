@@ -12,7 +12,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-nestperf
+ * Build: 20261107-multidisc
+ * V1.6: Fix — Mehrere Außenkonturen je DXF werden als eigene Teile importiert (analyzeSplit, identische zusammengefasst), REFERENZ-Layer standardmäßig ausgeschlossen (isReferenceLayer)
  * V1.5: Feat — ZoomPane (wiederverwendbare Zoom-/Verschiebefläche, auch im Autonest), PartViewer akzeptiert fertigen SVG-Inhalt
  * V1.4: Perf — Importtabelle rendert beim Mehrfachimport einmal statt je Datei (200 Dateien: 26 s → s. Test), Fortschritt „Lese Dateien …"
  * V1.3: Feat — PartViewer (große Vorschau mit Zoom/Verschieben), PartGeometry.previewSvg; größere Vorschau in der Importtabelle
@@ -143,6 +144,54 @@ const PartGeometry = (() => {
         };
     }
 
+
+    // Layer, die den Plattenrahmen/Nullpunkt beschreiben (Waricam: "REFERENZ") — gehören nicht zum Teil.
+    // Gleiche Regel steht in nesting-plan.js (REF_LAYER_RE) für ältere, schon importierte Teile.
+    const REF_LAYER_RE = /referenz|reference|^ref$|blech|rahmen/i;
+    const isReferenceLayer = name => REF_LAYER_RE.test(String(name || ''));
+
+    function probeOf(c) {
+        const pts = c.points;
+        return probePoint(pts.length >= 2 ? pts : [pts[0], pts[0]]);
+    }
+
+    /**
+     * DXF mit mehreren getrennten Außenkonturen (z. B. zwei Zuschnitte in einer Datei) → ein Teil je Außenkontur.
+     * Löcher, Inseln und Gravuren werden der kleinsten umschließenden Außenkontur zugeordnet; Konturen außerhalb jeder
+     * Außenkontur werden verworfen (Warnung). Identische Stücke (gleiche Form, nur verschoben) werden zusammengefasst.
+     * @returns {{ok:boolean, pieces:Array<{analysis:object,count:number}>, warnings:string[]}}
+     */
+    function analyzeSplit(rawContours, opts = {}) {
+        const usable = rawContours.filter(c => c.points && c.points.length >= 2);
+        const closed = usable.filter(c => c.isClosed && c.points.length >= 3).map(c => ({ c, area: Math.abs(signedArea(c.points)), probe: probeOf(c) }));
+        const outer = closed.filter(x => !closed.some(o => o !== x && o.area > x.area && pointInPolygon(x.probe, o.c.points)));
+        if (outer.length <= 1) {
+            const a = analyze(usable, opts);
+            return { ok: a.ok, pieces: a.ok ? [{ analysis: a, count: 1 }] : [], warnings: a.warnings };
+        }
+        const groups = outer.map(o => ({ seed: o, contours: [o.c] }));
+        let orphans = 0;
+        for (const c of usable) {
+            if (outer.some(o => o.c === c)) continue;
+            const pr = probeOf(c);
+            const home = groups.filter(g => pointInPolygon(pr, g.seed.c.points)).sort((a, b) => a.seed.area - b.seed.area)[0];
+            if (home) home.contours.push(c); else orphans++;
+        }
+        const warnings = orphans ? [`${orphans} Kontur(en) außerhalb jeder Außenkontur ignoriert`] : [];
+        // Stücke analysieren (Ursprung je Stück unten-links) und identische zusammenfassen
+        const merged = new Map();
+        for (const g of groups) {
+            const a = analyze(g.contours, opts);
+            if (!a.ok) continue;
+            const key = JSON.stringify(a.geometry.contours.map(c => [c.role, c.closed, c.points.map(p => [Math.round(p[0] * 20) / 20, Math.round(p[1] * 20) / 20])]));
+            const m = merged.get(key);
+            if (m) m.count++; else merged.set(key, { analysis: a, count: 1 });
+        }
+        const pieces = [...merged.values()];
+        for (const p of pieces) p.analysis.warnings.push(...[]);
+        return { ok: pieces.length > 0, pieces, warnings: warnings.concat(pieces.flatMap(p => p.analysis.warnings)) };
+    }
+
     /** Dateiname → Teilename (ohne Endung) und Auftrags-ID. */
     function namesFromFile(fileName) {
         const name = String(fileName).replace(/\.[^.]+$/, '').trim() || 'Teil';
@@ -226,7 +275,7 @@ const PartGeometry = (() => {
         return { svgInner: paths, box: { x: minX, y: minY, w: Math.max(maxX - minX, 1e-6), h: Math.max(maxY - minY, 1e-6) } };
     }
 
-    return { analyze, toRecord, toDXF, fromAppContours, decodeDXF, previewSvg, namesFromFile, newPartId, signedArea, pointInPolygon };
+    return { analyze, analyzeSplit, isReferenceLayer, toRecord, toDXF, fromAppContours, decodeDXF, previewSvg, namesFromFile, newPartId, signedArea, pointInPolygon };
 })();
 
 // ═══════════════════════════════════════════════════════════════════
@@ -343,6 +392,7 @@ class PartImportDialog {
                         <div id="pi-layers" style="font-size:11px"></div>
                     </div>
                 </div>
+                <label style="font-size:11px"><input type="checkbox" id="pi-split" checked> Getrennte Außenkonturen als eigene Teile importieren (identische Stücke werden zusammengefasst, Menge × Anzahl)</label>
                 <div id="pi-summary" style="font-size:11px;color:#444"></div>
             </div>
             <div class="cldcl-row" style="padding:8px 12px;border-top:1px solid #ccc;justify-content:flex-end">
@@ -397,6 +447,7 @@ class PartImportDialog {
                 this._revalidate();
             }
         });
+        ov.querySelector('#pi-split').addEventListener('change', () => this._revalidate());
         for (const id of ['pi-material', 'pi-thickness', 'pi-machine']) {
             ov.querySelector('#' + id).addEventListener('change', () => this._showTech());
         }
@@ -458,7 +509,7 @@ class PartImportDialog {
                 if (!res || !res.success) throw new Error('DXF-Parse-Fehler');
                 it.raw = res.contours || [];
                 it.layers = [...new Set(it.raw.map(c => c.layer || ''))];
-                for (const l of it.layers) if (!this.layerSel.has(l)) this.layerSel.set(l, true);
+                for (const l of it.layers) if (!this.layerSel.has(l)) this.layerSel.set(l, !PartGeometry.isReferenceLayer(l));   // REFERENZ-Layer standardmäßig aus
             } catch (e) {
                 it.status = 'error'; it.error = e.message;
             }
@@ -490,12 +541,16 @@ class PartImportDialog {
     }
 
     _revalidate() {
+        const split = this.overlay?.querySelector('#pi-split')?.checked !== false;
         for (const it of this.items) {
             if (!it.raw) continue;
             const sel = it.raw.filter(c => this.layerSel.get(c.layer || '') !== false);
-            it.analysis = PartGeometry.analyze(sel);
-            if (!it.analysis.ok) { it.status = 'error'; it.error = it.analysis.warnings.join('; '); }
-            else { it.status = it.analysis.warnings.length ? 'warning' : 'ready'; it.error = ''; }
+            const r = split ? PartGeometry.analyzeSplit(sel) : (() => { const a = PartGeometry.analyze(sel); return { ok: a.ok, pieces: a.ok ? [{ analysis: a, count: 1 }] : [], warnings: a.warnings }; })();
+            it.pieces = r.pieces;
+            it.analysis = r.pieces[0]?.analysis || { ok: false, warnings: r.warnings, geometry: null };
+            if (!r.ok) { it.status = 'error'; it.error = r.warnings.join('; ') || 'Keine Geometrie'; }
+            else { it.status = r.warnings.length ? 'warning' : 'ready'; it.error = ''; }
+            it.warnText = r.warnings.join('\n');
         }
         this._render();
     }
@@ -506,7 +561,7 @@ class PartImportDialog {
         const tb = this.overlay.querySelector('#pi-table tbody');
         tb.innerHTML = this.items.map((it, i) => {
             const g = it.analysis?.geometry;
-            const tip = this._esc((it.analysis?.warnings || []).concat(it.error ? [it.error] : []).join('\n'));
+            const tip = this._esc((it.warnText ? [it.warnText] : []).concat(it.error ? [it.error] : []).join('\n'));
             return `<tr data-i="${i}" style="border-top:1px solid #ddd">
                 <td><input type="checkbox" ${it.checked ? 'checked' : ''}></td>
                 <td title="${tip}">${icon[it.status] || it.status}</td>
@@ -514,7 +569,7 @@ class PartImportDialog {
                 <td>${this._esc(it.fileName)}</td>
                 <td><input data-f="name" value="${this._esc(it.name)}" style="width:130px"></td>
                 <td><input data-f="orderId" value="${this._esc(it.orderId)}" style="width:150px"></td>
-                <td><input data-f="qty" type="number" min="1" value="${it.qty}" style="width:55px"></td>
+                <td><input data-f="qty" type="number" min="1" value="${it.qty}" style="width:55px">${it.pieces && it.pieces.length > 1 || (it.pieces && it.pieces[0] && it.pieces[0].count > 1) ? `<div style="font-size:10px;color:#0b5cad" title="Aus dieser Datei entstehen ${it.pieces.length} Teil(e); identische Stücke werden zusammengefasst">${it.pieces.map(p => `${p.count}×`).join(' + ')} → ${it.pieces.length} Teil(e)</div>` : ''}</td>
                 <td>${g ? `${g.bbox.w} × ${g.bbox.l}` : ''}</td></tr>`;
         }).join('');
         tb.querySelectorAll('tr').forEach(tr => {
@@ -539,11 +594,20 @@ class PartImportDialog {
         const names = todo.map(i => i.name.trim());
         if (names.some(n => !n)) return this.app?.showToast?.('Teilename darf nicht leer sein', 'warning');
 
-        const records = todo.map((it, idx) => PartGeometry.toRecord(it.analysis, {
-            partId: PartGeometry.newPartId(idx), fileName: it.fileName, name: it.name.trim(),
-            orderId: it.orderId.trim() || PartGeometry.namesFromFile(it.fileName).orderId,
-            customer, qty: it.qty, techRef, layers: [...this.layerSel.entries()].filter(([, on]) => on).map(([l]) => l)
-        }));
+        const layers = [...this.layerSel.entries()].filter(([, on]) => on).map(([l]) => l);
+        const records = [], owner = [];            // owner[i] = Importzeile zu records[i]
+        for (const it of todo) {
+            const pcs = it.pieces && it.pieces.length ? it.pieces : [{ analysis: it.analysis, count: 1 }];
+            pcs.forEach((pc, k) => {
+                records.push(PartGeometry.toRecord(pc.analysis, {
+                    partId: PartGeometry.newPartId(records.length), fileName: it.fileName,
+                    name: pcs.length > 1 ? `${it.name.trim()}-${k + 1}` : it.name.trim(),
+                    orderId: it.orderId.trim() || PartGeometry.namesFromFile(it.fileName).orderId,
+                    customer, qty: it.qty * pc.count, techRef, layers
+                }));
+                owner.push(it);
+            });
+        }
         try {
             // In Paketen senden (Server begrenzt den Body auf 30 MB; komplexe Kunstteile haben >100 KB je Datensatz)
             const chunks = []; let cur = [], bytes = 0;
@@ -563,14 +627,14 @@ class PartImportDialog {
                     res.total += r.total; res.saved += r.saved; res.failed += r.failed;
                     // Status je Paket sofort setzen: bei späterem Fehler gelten bereits gespeicherte Teile nicht erneut als "bereit"
                     r.results.forEach((x, i) => {
-                        const it = todo[offset + i];
-                        if (x.ok) { it.status = 'saved'; it.error = ''; } else { it.status = 'error'; it.error = x.error; }
+                        const it = owner[offset + i];
+                        if (x.ok) { if (it.status !== 'error') { it.status = 'saved'; it.error = ''; } } else { it.status = 'error'; it.error = x.error; }
                     });
                     offset += chunks[c].length;
                 }
             } catch (e) {
                 this._render();
-                this.app?.showToast?.(`Speichern nach ${res.saved} von ${todo.length} Teilen abgebrochen: ${e.message} — gespeicherte Teile sind markiert, bitte erneut speichern`, 'error');
+                this.app?.showToast?.(`Speichern nach ${res.saved} von ${records.length} Teilen abgebrochen: ${e.message} — gespeicherte Teile sind markiert, bitte erneut speichern`, 'error');
                 return;
             }
             this._render();

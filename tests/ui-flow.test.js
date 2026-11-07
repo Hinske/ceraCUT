@@ -512,3 +512,45 @@ test('Worker-Skript: Fortschritt + Ergebnis, Fehler werden gemeldet', async () =
     await new Promise(r => setTimeout(r, 50));
     assert.strictEqual(m2.at(-1).type, 'error');
 });
+
+test('Import: DXF mit zwei identischen Stücken + REFERENZ-Layer → ein Teil, Menge × 2, Referenz standardmäßig aus', async () => {
+    const h = await start();
+    try {
+        await quiet(async () => {
+            h.w.CeraJetEngine = CeraJetEngine; await seedIfEmpty(h.stores);
+            h.load('dxf-parser.js', ['DXFParser']);
+            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer', 'ZoomPane']);
+        });
+        const $ = s => h.doc.querySelector(s);
+        const poly = (layer, pts, closed = true) => ['0', 'POLYLINE', '8', layer, '66', '1', '70', closed ? '1' : '0', ...pts.flatMap(p => ['0', 'VERTEX', '8', layer, '10', String(p[0]), '20', String(p[1])]), '0', 'SEQEND', '8', layer];
+        const piece = (oy) => [...poly('SCHNEIDEN', [[8, oy + 5], [148, oy + 5], [148, oy + 145], [8, oy + 145]]), ...poly('SCHNEIDEN', [[60, oy + 60], [90, oy + 60], [90, oy + 90], [60, oy + 90]])];
+        const dxf = ['0', 'SECTION', '2', 'ENTITIES', ...poly('REFERENZ', [[0, 0], [240, 0], [240, 420]], false), ...piece(0), ...piece(150), '0', 'ENDSEC', '0', 'EOF'].join('\n') + '\n';
+        const imp = new h.w.PartImportDialog(h.app);
+        await imp.open();
+        $('#pi-material').value = '21';
+        await quiet(() => imp._addFiles([new h.w.File([dxf], 'ZWEI.dxf')]));
+        await h.waitFor(() => imp.items[0]?.status === 'ready');
+        assert.strictEqual(imp.layerSel.get('REFERENZ'), false, 'REFERENZ-Layer standardmäßig abgewählt');
+        assert.strictEqual(imp.layerSel.get('SCHNEIDEN'), true);
+        const it = imp.items[0];
+        assert.strictEqual(it.pieces.length, 1); assert.strictEqual(it.pieces[0].count, 2);
+        assert.deepStrictEqual({ ...it.pieces[0].analysis.geometry.bbox }, { w: 140, l: 140 }, 'Teil ohne Referenzrahmen vermessen');
+        assert.match($('#pi-table').textContent, /2× → 1 Teil\(e\)/);
+        it.qty = 5;
+        click($('[data-act="save"]'));
+        await h.waitFor(() => h.stores.parts.list().length === 1);
+        const part = h.stores.parts.list()[0];
+        assert.strictEqual(part.qty, 10, 'Menge × Anzahl identischer Stücke');
+        assert.strictEqual(part.name, 'ZWEI');
+        assert.ok(!part.geometry.contours.some(c => c.layer === 'REFERENZ'));
+
+        // Aufteilen aus → ein Teil mit beiden Außenkonturen
+        const cb = $('#pi-split'); cb.checked = false; cb.dispatchEvent(new h.w.Event('change', { bubbles: true }));
+        assert.strictEqual(imp.items[0].pieces.length, 1); assert.strictEqual(imp.items[0].pieces[0].count, 1);
+        assert.strictEqual(imp.items[0].pieces[0].analysis.geometry.contours.filter(c => c.role === 'disc').length, 2);
+        // REFERENZ wieder einschalten → Teil wird groß, Warnung offene Kontur
+        const refBox = $('#pi-layers input[data-layer="REFERENZ"]'); refBox.checked = true; refBox.dispatchEvent(new h.w.Event('change', { bubbles: true }));
+        assert.strictEqual(imp.items[0].status, 'warning');
+        imp.close();
+    } finally { h.close(); }
+});

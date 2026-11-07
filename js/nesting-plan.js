@@ -12,7 +12,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-nestperf
+ * Build: 20261107-multidisc
+ * V1.6: Fix — Teile mit mehreren Außenkonturen werden als starre Einheit (konvexe Hülle) genestet, REFERENZ-Layer-Konturen wandern nicht mehr mit (Überlagerungen)
  * V1.5: Feat — Schachtelplan als PDF (Autonest-Dialog, Planliste) über /api/reports/plan-pdf
  * V1.4: Feat — Autonest im Web Worker (Fortschritt, Abbrechen), Vorschau mit Zoom/Verschieben + Große Ansicht, runAsync/prepare/finish
  * V1.3: Feat — Teil bearbeiten (Planliste „Teile", Autonest-Treffer) → part-editor.js
@@ -50,6 +51,44 @@ const NestingPlan = (() => {
         return pts.map(p => ({ x: cx + (p.x - cx) * c - (p.y - cy) * s, y: cy + (p.x - cx) * s + (p.y - cy) * c }));
     }
 
+    // Layer des Plattenrahmens/Nullpunkts (z. B. Waricam "REFERENZ") gehören nicht zum Teil — gleiche Regel wie PartGeometry.isReferenceLayer.
+    // Schützt auch ältere, schon importierte Teile, die diese Konturen noch enthalten.
+    const REF_LAYER_RE = /referenz|reference|^ref$|blech|rahmen/i;
+    const partContours = part => (part.geometry?.contours || []).filter(c => !REF_LAYER_RE.test(String(c.layer || '')));
+
+    function pip(pt, poly) {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const a = poly[i], b = poly[j];
+            if ((a.y > pt.y) !== (b.y > pt.y) && pt.x < (b.x - a.x) * (pt.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+        }
+        return inside;
+    }
+
+    function convexHull(pts) {
+        const p = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+        if (p.length < 3) return p;
+        const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+        const lo = [], up = [];
+        for (const q of p) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+        for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+        return lo.slice(0, -1).concat(up.slice(0, -1));
+    }
+
+    /**
+     * Umriss, mit dem ein Teil genestet wird: die Außenkontur; besteht das Teil aus mehreren getrennten Außenkonturen
+     * (mehrere Stücke in einer DXF), wird es als starre Einheit behandelt → konvexe Hülle aller Außenkonturen.
+     * (Beim Import werden getrennte Stücke normalerweise aufgeteilt; das hier fängt ältere/bewusst zusammenhängende Teile ab.)
+     * @returns {Array<{x,y}>|null}
+     */
+    function nestPolygon(part) {
+        const discs = partContours(part).filter(c => c.role === 'disc' && c.closed).map(c => toPts(c.points));
+        if (!discs.length) return null;
+        const outer = discs.filter((d, i) => !discs.some((o, j) => j !== i && pip(d[0], o) && !pip(o[0], d)));   // nicht in anderer Scheibe enthalten
+        if (outer.length === 1) return outer[0];
+        return convexHull(outer.flat());
+    }
+
     /** Äußerkontur des Teils: größte geschlossene 'disc'-Kontur (nach BBox-Fläche). */
     function outerContour(part) {
         let best = null, bestA = -1;
@@ -68,12 +107,12 @@ const NestingPlan = (() => {
      * @returns {Array<{role, closed, points:[{x,y}]}>}
      */
     function placePart(part, rot, tx, ty) {
-        const outer = outerContour(part);
-        if (!outer) return [];
-        const ob = bbox(toPts(outer.points));
+        const poly = nestPolygon(part);
+        if (!poly) return [];
+        const ob = bbox(poly);
         const cx = (ob.minX + ob.maxX) / 2, cy = (ob.minY + ob.maxY) / 2;
-        const rb = bbox(rotate(toPts(outer.points), rot, cx, cy));
-        return part.geometry.contours.map(c => ({
+        const rb = bbox(rotate(poly, rot, cx, cy));
+        return partContours(part).map(c => ({
             id: c.id, role: c.role, closed: c.closed,
             points: rotate(toPts(c.points), rot, cx, cy).map(p => ({ x: p.x - rb.minX + tx, y: p.y - rb.minY + ty }))
         }));
@@ -94,9 +133,8 @@ const NestingPlan = (() => {
             const part = partsMap[d.partId];
             const qty = Math.max(0, Math.floor(d.qty) || 0);
             if (!part) { errors.push(`${d.partId}: Teil nicht geladen`); continue; }
-            const outer = outerContour(part);
-            if (!outer) { errors.push(`${part.name}: keine geschlossene Außenkontur`); continue; }
-            const pts = toPts(outer.points);                                  // gemeinsam für alle Exemplare (kleinere Worker-Nachricht)
+            const pts = nestPolygon(part);                                    // gemeinsam für alle Exemplare (kleinere Worker-Nachricht)
+            if (!pts) { errors.push(`${part.name}: keine geschlossene Außenkontur`); continue; }
             const priority = PRIORITY[d.priority || 'normal'] ?? 0;
             const rotationSteps = ROTATIONS[d.angles || 'r90'] || ROTATIONS.r90;
             const typeKey = `${d.partId}@${part.revision}|${d.angles || 'r90'}`;
@@ -271,7 +309,7 @@ const NestingPlan = (() => {
              + `<g transform="translate(0 ${L}) scale(1 -1)"><rect x="0" y="0" width="${W}" height="${L}" fill="#fff" stroke="#888" stroke-width="${Math.max(W, L) / 400}"/>${paths}</g></svg>`;
     }
 
-    return { run, runAsync, prepare, finish, sheetContent, sheetLegend, placePart, partFor, sheetPolylines, toDXF, previewSvg, outerContour, ROTATIONS, PRIORITY };
+    return { run, runAsync, prepare, finish, sheetContent, sheetLegend, placePart, nestPolygon, partFor, sheetPolylines, toDXF, previewSvg, outerContour, ROTATIONS, PRIORITY };
 })();
 
 /** Alle Teile eines Plans in exakter Revision laden → Map `partId@rev`. */

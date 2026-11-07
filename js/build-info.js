@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'c0d89fe',
+        hash: '07202da',
         date: '2026-11-07',
-        message: 'perf+feat: Autonest fuer grosse Stueckzahlen (nesting V1.4: ~50x schneller, Web 'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
+        message: 'fix: Nesting-Ueberlagerungen — mehrere Aussenkonturen je DXF als eigene Teile, R'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
     },
 
     modules: {
@@ -74,8 +74,8 @@ const CERACUT_BUILD = {
         'store':              { version: '1.0', build: '20261107-store' },
         'data-api':           { version: '1.4', build: '20261107-nestperf' },
         'seed':               { version: '1.1', build: '20261107-techdb' },
-        'part-library':       { version: '1.5', build: '20261107-nestperf' },
-        'nesting-plan':       { version: '1.5', build: '20261107-nestperf' },
+        'part-library':       { version: '1.6', build: '20261107-multidisc' },
+        'nesting-plan':       { version: '1.6', build: '20261107-multidisc' },
         'nc-tools':           { version: '1.1', build: '20261107-techdb' },
         'cost-plan':          { version: '1.0', build: '20261107-plancost' },
         'cost-dialog':        { version: '1.0', build: '20261107-costdialog' },
