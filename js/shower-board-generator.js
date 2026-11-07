@@ -1,5 +1,5 @@
 /**
- * CeraCUT Duschboard-Generator V0.8 (Kern, ohne Dialog)
+ * CeraCUT Duschboard-Generator V0.9 (Kern, ohne Dialog)
  * Erzeugt die Zuschnitt-Teile eines Duschboards (Fliesen mit Gehrung zum Ablauf) aus Maßen, Ablauf und Fugenbild.
  *
  * Regeln (aus Kochhan_Duschboard_1000x1000.dxf, Ablauf 140x140 mittig):
@@ -13,6 +13,7 @@
  * Phase 2a: nur rechteckiger Punktablauf. Rinne (2d), runder/aussermittiger Sonderfall-Check (2e) folgen.
  * Rein (kein DOM) — laeuft in Node (tests/shower-board.test.js).
  *
+ * V0.9: Kerf-Seite je Schnitt (cuts[].kerf = Abfallseite: 'right' G42 / 'left' G41) + kerfForPath() fuer die automatische CAM-Einrichtung (Dialog)
  * V0.8: Schnittketten werden an scharfen Ecken (Richtungswechsel > 75 Grad: Diagonale <-> Boardkante, waagerecht <-> senkrecht) getrennt;
  *       jeder Schnitt wird einzeln in seiner Mitte gebrochen (Diagonale = ein Schnitt, waagerechter/senkrechter Schnitt = je ein Schnitt)
  * V0.7: DXF-Schnitte: nur echte Schnittkanten (keine Doppelung der Fliesenkante), als offene Einzellinien, Ablaufkante mit den angrenzenden
@@ -32,14 +33,14 @@
  * V0.1: Erstversion (Raster, Sektoren, Clipping, DXF)
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch13
+ * Build: 20261107-dusch14
  */
 
 const ShowerBoardGenerator = (() => {
     'use strict';
 
-    const VERSION = '0.8';
-    const LOG = '[Duschboard V0.8]';
+    const VERSION = '0.9';
+    const LOG = '[Duschboard V0.9]';
     const LAYER_FLIESE = 'Fliesen';    // Fliesenumriss = Referenz (ganze Fliese), nie Schneidkontur
     const LAYER_SCHNITT = 'Schnitt';   // Zuschnitt-Konturen = werden geschnitten
     const LAYER_COLORS = { [LAYER_FLIESE]: 160, [LAYER_SCHNITT]: 10 };   // wie Zuschnitt-Generator / Kochhan-Dateien
@@ -656,12 +657,34 @@ const ShowerBoardGenerator = (() => {
         return go.splitAndOverlap(pts, chain.closed, m.segmentIndex, m.point, p.obOverlap, null, p.obOuter).map(pt => (chain.closed ? pt : dropCollinear(pt)));
     }
 
-    /** Alle Schnitte aller Fliesen: [{ tile, chain, parts }] */
+    /**
+     * Kerf-Seite ('left' | 'right' = Abfallseite in Laufrichtung) fuer eine Kontur der geladenen DXF: Teil per Anfangs-/Endpunkt zuordnen
+     * (Richtung egal; bei umgekehrter Richtung kehrt sich die Seite um). null, wenn kein Schnitt passt.
+     */
+    function kerfForPath(pts, cuts, tol = 0.02) {
+        if (!pts || pts.length < 2) return null;
+        const a = pts[0], b = pts[pts.length - 1], near = (p, q) => Math.hypot(p.x - q.x, p.y - q.y) <= tol;
+        for (const c of cuts) for (let i = 0; i < c.parts.length; i++) {
+            const part = c.parts[i], s0 = part[0], s1 = part[part.length - 1];
+            if (part.length !== pts.length) continue;
+            const kerf = c.kerf[i];
+            if (near(a, s0) && near(b, s1)) return kerf;
+            if (near(a, s1) && near(b, s0)) return kerf === 'left' ? 'right' : 'left';
+        }
+        return null;
+    }
+
+    /** Alle Schnitte aller Fliesen: [{ tile, chain, parts, kerf[] }] */
     function buildCuts(p, pieces, tiles) {
         const out = [];
         for (const pc of pieces) {
             if (pc.full) continue;
-            for (const chain of cutChains(pc.poly, tiles[pc.tile], p.eckenTrennen)) out.push({ tile: pc.tile, chain, parts: overlapBreak(chain, p) });
+            for (const chain of cutChains(pc.poly, tiles[pc.tile], p.eckenTrennen)) {
+                const parts = overlapBreak(chain, p);
+                // Kerf: Werkzeug auf der Abfallseite, damit das Teil massgenau bleibt. Teile sind CCW -> Teil liegt links der Kettenrichtung, Abfall rechts
+                // ('right' = G42). Der zweite OB-Teil laeuft rueckwaerts (aussen -> innen) -> Abfall links ('left' = G41).
+                out.push({ tile: pc.tile, chain, parts, kerf: parts.map((_, i) => (parts.length === 2 && i === 1 ? 'left' : 'right')), piece: pc.poly });
+            }
         }
         return out;
     }
@@ -895,7 +918,7 @@ const ShowerBoardGenerator = (() => {
         return out;
     }
 
-    return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, numberPieces, variantDefs, variantCatalog, moveLine, moveSub, addLine, addSub, fitInfo, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, fitInfo, cutChains, splitSharp, turnAngle, onOutline, midPoint, overlapBreak, pathLength, dropCollinear, bboxOf, tilesFromPattern, hash01 } };
+    return { kerfForPath, VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, numberPieces, variantDefs, variantCatalog, moveLine, moveSub, addLine, addSub, fitInfo, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, fitInfo, cutChains, splitSharp, turnAngle, onOutline, midPoint, overlapBreak, pathLength, dropCollinear, bboxOf, tilesFromPattern, hash01 } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = ShowerBoardGenerator;

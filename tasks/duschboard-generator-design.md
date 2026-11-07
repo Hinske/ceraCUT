@@ -147,3 +147,11 @@ Layer **Schnitt** enthält nur noch echte Schnittkanten, als **offene Einzellini
 ## 18. Schnittketten an Ecken trennen (V0.8)
 
 Eine Kette (verbundene Schnittkanten eines Zuschnitts) wird an jedem inneren Punkt mit **Richtungswechsel > 75°** getrennt (`eckenTrennen`, 180 = nie). Damit sind die **Diagonale**, der **waagerechte** und der **senkrechte** Schnitt je **ein eigener Schnitt** (z. B. wenn die Boardecke auf einer Fliese liegt: senkrechter Rand, waagerechter Rand, Diagonale = drei Schnitte), jeder einzeln per Overlap Break in seiner Mitte gebrochen (geschnitten von außen und von innen). Sanfte Übergänge bleiben verbunden — Gehrung → Ablaufkante (36–53°) bleibt eine Kette. Da die Teile konvex sind, liegt die Aussenverlängerung an einer getrennten Ecke immer im Abfall (außerhalb des Teils).
+
+## 19. Automatische CAM-Einrichtung nach dem Erzeugen (V0.9)
+
+Nach „Erzeugen“ (DXF laden) richtet der Dialog die CAM-Verarbeitung selbst ein (`ShowerBoardDialog.camSetupAfterLoad`, wartet auf den asynchronen Import):
+- **Kerf je Schnitt:** Alle Schnitte sind Teilekanten; das Werkzeug läuft auf der **Abfallseite**, damit das Teil maßgenau bleibt. Die Generator-Geometrie kennt die Seite (`cuts[].kerf`: Teile sind CCW → Teil links der Kettenrichtung → Abfall rechts = `right`/G42; der zweite OB-Teil läuft rückwärts → `left`/G41). Zuordnung zur geladenen Kontur per Anfangs-/Endpunkt (`kerfForPath`, umgekehrte Richtung kehrt die Seite um), gesetzt als `kerfComp` + Kerfbreite der App-Einstellung.
+- **Fix in `cam-contour.js`:** Bei offenen Schnitten (Slit) hing „links/rechts“ vom Flächenvorzeichen der offenen Linie ab (2-Punkt-Linie: immer vertauscht). Jetzt links = G41, rechts = G42, unabhängig von der Geometrie.
+- **Nullpunkt:** `refreshTiles` → je Fliese Nullpunkt links unten (auto), dazu der Datei-Nullpunkt (links unten aller Fliesen). Fliesenumrisse = Referenz (im CAD-Tab bearbeitbar).
+- Test in der echten App (jsdom, `tests/shower-cam-setup.test.js`, Helfer `tests/helpers/app-boot.js`): Kerf aller Schnitte, G41/G42 im Postprozessor, Nullpunkte je Fliese.

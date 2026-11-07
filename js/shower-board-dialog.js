@@ -1,5 +1,5 @@
 /**
- * CeraCUT Duschboard-Dialog V0.7: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
+ * CeraCUT Duschboard-Dialog V0.9: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
  * Kern: shower-board-generator.js (ShowerBoardGenerator). Befehl DUSCH, Ribbon CAD -> Zuschnitte -> Duschboard.
  *
  * Bemaßung (zur Kontrolle): Gesamtmaß (Fliesenfeld, bei Außenmaß zusätzlich Außenmaß), Ablaufmaße und -lage,
@@ -7,6 +7,7 @@
  * Phase 2b: Vorschau nur lesend; Fugenbild von Hand editieren folgt in 2c.
  *
  * V0.3.3: Fugenliste nur auf Wunsch (Checkbox, Standard aus)
+ * V0.9: Nach dem Erzeugen automatische CAM-Einrichtung (camSetupAfterLoad): Kerf-Seite je Schnitt (Abfallseite G41/G42), Nullpunkt je Fliese, Nullpunkt der Datei
  * V0.7: Schnitte im DXF: Overlap Break in der Mitte (Einstellungen Ueberlappung/Aussenverlaengerung), Schnittlinien in der Vorschau, Statuszeile mit Schnittzahl/-laenge
  * V0.6: PDF-Varianten nach Rasterlage (Verlegemuster bleibt), andere Muster optional; Anker 'Fliese mittig im Board' / 'Fugenkreuz in Boardmitte'
  * V0.5: Projekte (Server /api/shower/projects: Oeffnen/Speichern/Kopie/Loeschen, Standard-Duschboards als Vorlage) + Kunden-PDF-Dialog (Varianten + Angaben waehlen, /api/shower/pdf)
@@ -19,7 +20,7 @@
  * V0.1: Erstversion
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch12
+ * Build: 20261107-dusch14
  */
 
 const ShowerBoardDialog = (() => {
@@ -181,6 +182,44 @@ const ShowerBoardDialog = (() => {
         }
         if (narrow.length) t += ` &nbsp;<span style="color:#f0b429">⚠ ${narrow.length} × schmal (&lt; ${de(r.p.minTeil, 0)} mm)</span>`;
         return t;
+    }
+
+    // ── Automatische CAM-Einrichtung nach dem Erzeugen ──────────────────────
+    /**
+     * Nach dem Laden des erzeugten DXF in ceraCUT: (1) Kerf je Schnitt automatisch auf die Abfallseite (G41/G42), damit die Teile massgenau
+     * bleiben, (2) Nullpunkt je Fliese (links unten, auto) und Nullpunkt der Datei, (3) Fliesenumrisse bleiben Referenz.
+     * Das Laden (Parser/Pipeline) laeuft asynchron -> warten, bis die Konturen da sind.
+     * @returns {Promise<{kerf:number, offen:number, fliesen:number}|null>}
+     */
+    async function camSetupAfterLoad(app, r, opts = {}) {
+        const G = GENr(), sleep = ms => new Promise(res => setTimeout(res, ms));
+        const loaded = () => Array.isArray(app.contours) && app.contours.some(c => c.layer === 'Schnitt' || c.layer === 'Fliesen');
+        const t0 = Date.now();
+        while (!loaded() && Date.now() - t0 < (opts.timeout ?? 5000)) await sleep(50);
+        if (!loaded()) return null;
+        const pipe = typeof CeraCutPipeline !== 'undefined' ? CeraCutPipeline : null;
+        let kerf = 0, offen = 0;
+        for (const c of app.contours) {
+            if (c.layer !== 'Schnitt' || c.isClosed) continue;
+            offen++;
+            const side = G.kerfForPath(c.points, r.cuts);
+            if (!side) continue;
+            c.kerfComp = side;                                   // Abfallseite in Laufrichtung: left = G41, right = G42
+            if (app.settings?.kerfWidth > 0) c.kerfWidth = app.settings.kerfWidth;
+            c.invalidate?.();
+            kerf++;
+        }
+        // Nullpunkte: Fliesenumrisse sind fuer das Setup Referenz (im CAD-Tab ist die Sperre aufgehoben) -> kurz setzen
+        let fliesen = 0;
+        try {
+            pipe?.restoreTileRefs(app.contours);
+            if (!app.isSetupComplete?.()) app.setOriginToReferenceUL?.();
+            fliesen = (app.refreshTiles?.(true) || []).length;   // Nullpunkt je Fliese: links unten (auto)
+        } finally {
+            if (pipe && app.isGeometryEditAllowed?.()) pipe.releaseTileRefs(app.contours);
+        }
+        app.updateContourPanel?.(); app.renderer?.render?.();
+        return { kerf, offen, fliesen };
     }
 
     // ── Dialog ──────────────────────────────────────────────────────────────
@@ -537,8 +576,12 @@ const ShowerBoardDialog = (() => {
         $('ds-ok').addEventListener('click', () => {
             if (!last?.ok) return;
             if (!app?.loadGeneratedDXF) { console.warn(LOG, 'app.loadGeneratedDXF nicht verfuegbar'); return; }
-            app.loadGeneratedDXF(last.fileName, last.dxf, (last.dxf.length / 1024).toFixed(1));
-            app.showToast?.(`Duschboard: ${last.count} Teile erzeugt`, 'success');
+            const gen = last;
+            app.loadGeneratedDXF(gen.fileName, gen.dxf, (gen.dxf.length / 1024).toFixed(1));
+            camSetupAfterLoad(app, gen).then(res => {
+                if (res) app.showToast?.(`CAM eingerichtet: Nullpunkt auf ${res.fliesen} Fliesen, Kerf-Seite bei ${res.kerf} von ${res.offen} Schnitten gesetzt`, 'success');
+            }).catch(e => console.warn(LOG, 'CAM-Einrichtung fehlgeschlagen', e));
+            app.showToast?.(`Duschboard: ${gen.count} Teile erzeugt`, 'success');
             console.log(LOG, 'erzeugt', last.fileName, last.count, 'Teile');
             close();
         });
@@ -743,7 +786,7 @@ const ShowerBoardDialog = (() => {
         setTimeout(() => { const f = $('ds-b'); f.focus(); f.select(); }, 50);
     }
 
-    return { openDialog, _internals: { previewSVG, statusHTML, fitView, numbered } };
+    return { openDialog, camSetupAfterLoad, _internals: { previewSVG, statusHTML, fitView, numbered } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = ShowerBoardDialog;

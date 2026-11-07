@@ -8,23 +8,23 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.43',
-    build: '20261107-dusch13',
+    version: '7.44',
+    build: '20261107-dusch14',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '4c47aef',
+        hash: '059c527',
         date: '2026-11-07',
-        message: 'feat: Duschboard-Schnitte - Ketten an scharfen Ecken trennen'
+        message: 'feat: Duschboard - CAM automatisch einrichten (Kerf-Seite, Nullpunkt je Fliese)'
     },
 
     modules: {
         'dxf-parser':         { version: '3.20', build: '20261106-fliese4' },
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.13', build: '20261107-tileref3' },
-        'cam-contour':        { version: '5.31', build: '20261107-occorner' },
+        'cam-contour':        { version: '5.32', build: '20261107-dusch14' },
         'canvas-renderer':    { version: '3.68', build: '20261107-tileref3' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.9', build: '20261106-tileref' },
@@ -67,8 +67,8 @@ const CERACUT_BUILD = {
         'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
-        'shower-board-generator': { version: '0.8', build: '20261107-dusch13' },
-        'shower-board-dialog': { version: '0.7', build: '20261107-dusch12' },
+        'shower-board-generator': { version: '0.9', build: '20261107-dusch14' },
+        'shower-board-dialog': { version: '0.9', build: '20261107-dusch14' },
         'shower-api': { version: '0.1', build: '20261107-showerapi' },
         'shower-pdf': { version: '0.2', build: '20261107-dusch11' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },

@@ -1,5 +1,6 @@
 /**
- * CeraCUT CamContour V5.31 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.32 - IGEMS-konformes Lead-In/Out System
+ * V5.32: Fix — Kerf-Seite eines offenen Schnitts (Slit) bei kerfComp left/right unabhaengig vom Umlaufsinn (links = G41, rechts = G42); vorher war die Seite durch das Flaechenvorzeichen der offenen Linie zufaellig vertauscht.
  * V5.31: Feat — Ueberschnitt an Ecken automatisch gesperrt (isStartAtCorner/isOvercutBlocked, overcutAtCorners/overcutCornerAngle).
  * V5.30: Feat — AP2 Bogenwinkel (leadInArcAngle/leadOutArcAngle, Default 90): Arc-Lead als Viertel- bis 3/4-Kreis
  *        (Waricam "3/4 Kreis"); toJSON/clone mitgefuehrt.
@@ -372,6 +373,9 @@ class CamContour {
     _effectiveFlip() {
         const c = this.kerfComp;
         if (c !== 'left' && c !== 'right') return !!this.kerfFlipped;
+        // V5.40: offener Schnitt (Slit): "links" = G41 = Flip (un-geflippt G42/rechts). Die Seite haengt NICHT vom Umlaufsinn ab —
+        // eine offene Linie hat keine Flaeche (Vorzeichen war Zufall: 2-Punkt-Linie vertauschte links/rechts).
+        if (!this.isClosed && this.cuttingMode === 'slit') return c === 'left';
         const isCW = Geometry.getSignedArea(this.points) > 0;
         const wasteLeft = ((this.cuttingMode === 'hole') === isCW);   // un-geflippt
         return (c === 'left') !== wasteLeft;
@@ -380,6 +384,7 @@ class CamContour {
     /** V5.24: Aufgeloeste Seite fuer UI/Postprozessor: 'left' | 'right' | 'online'. */
     resolveKerfSide() {
         if (this.kerfComp === 'online' || this.kerfSide === 'online') return 'online';
+        if (!this.isClosed && this.cuttingMode === 'slit') return this._effectiveFlip() ? 'left' : 'right';   // V5.40: Slit: G41 links / G42 rechts
         const isCW = Geometry.getSignedArea(this.points) > 0;
         const wasteLeft = (this._isEffectivelyHole() === isCW);
         return wasteLeft ? 'left' : 'right';
