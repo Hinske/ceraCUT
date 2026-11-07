@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.28',
-    build: '20261107-ribtip',
+    version: '7.29',
+    build: '20261107-dusch1',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '93b52c3',
+        hash: 'e2db4cc',
         date: '2026-11-07',
-        message: 'feat: DXF-/CNC-Server-Browser mit Vorschau-Panel, Common-Line-Schnitt (WIP), Duschboard-Entwu'
+        message: 'feat: Duschboard-Generator Phase 2a (Kern: Raster, Gehrung, Clipping, DXF, Tests'
     },
 
     modules: {
@@ -66,6 +66,7 @@ const CERACUT_BUILD = {
         'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
+        'shower-board-generator': { version: '0.1', build: '20261107-dusch1' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },
