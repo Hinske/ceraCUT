@@ -1,5 +1,6 @@
 /**
  * CeraCUT V6.50 - Main Application
+ * V6.68: Feat — Ribbon: eigener Ausfahrwinkel (lead-out-angle), Schalter Ueberschnitt an Ecken (overcut-at-corners); Ausfahrlaenge/Winkel nicht mehr unter Erweitert.
  * V6.67: Refactor — Setup-Tab entfaellt: Referenz + Nullpunkt (Checkbox "Auto beim Import") wandern in den Tab Datei, Technologie (Material/Dicke/Druck) als ③ Technologie in Bearbeitung
  * V6.66: Fix — Auto-Setup erkennt Fliesenbogen auch OHNE Layer Fliese (mehrere aeussere Rechtecke mit Schnitten) und setzt dort keine Auto-Referenz (eine Fliese ging verloren)
  * V6.65: Fix — Auto-Setup beim Import fasst Fliesen (Layer Fliese) und vorhandene Referenzen nicht mehr an (setzte sonst EINE Fliese als Referenz, eine Fliese fehlte in Erkennung/Schnitt); nur Nullpunkt
@@ -4648,7 +4649,7 @@ class CeraCutApp {
         const extInputs = [
             'lead-type', 'lead-in-length', 'lead-in-radius', 'lead-in-angle', 'lead-arc-angle',
             'corner-lead-type', 'corner-lead-angle', 'corner-degrade',
-            'overcut-length', 'lead-out-length',
+            'overcut-length', 'lead-out-length', 'lead-out-angle', 'overcut-at-corners',
             'prefer-corners', 'piercing-type',
             'piercing-stationary-time', 'piercing-circular-radius', 'piercing-circular-time',
             'dynamic-lead-ext', 'dyn-lead-min', 'dyn-lead-max'
@@ -4734,6 +4735,9 @@ class CeraCutApp {
             cornerDegradeThreshold: parseFloat(document.getElementById('corner-degrade')?.value) || 60,
             overcutLength: (() => { const v = parseFloat(document.getElementById('overcut-length')?.value); return isNaN(v) ? 1.0 : v; })(),
             leadOutLength: parseFloat(document.getElementById('lead-out-length')?.value) || 4.0,
+            // V5.31: eigener Ausfahrwinkel (0/leer = wie Anfahrt) + Ueberschnitt an Ecken erlauben
+            leadOutAngle: (() => { const v = parseFloat(document.getElementById('lead-out-angle')?.value); return (isNaN(v) || v <= 0) ? undefined : v; })(),
+            overcutAtCorners: document.getElementById('overcut-at-corners')?.checked ?? false,
             preferCorners: document.getElementById('prefer-corners')?.checked ?? true,
             piercingType:  piercingType,
             // B.1: Piercing R-Parameter
@@ -4762,6 +4766,7 @@ class CeraCutApp {
             cornerLeadType: ext.cornerLeadType, cornerLeadAngle: ext.cornerLeadAngle, cornerDegradeThreshold: ext.cornerDegradeThreshold,   // Ecken-Lead gilt fuer Innen wie Aussen
             overcutLength: (() => { const v = parseFloat(document.getElementById('int-overcut-length')?.value); return isNaN(v) ? ext.overcutLength : v; })(),
             leadOutLength: parseFloat(document.getElementById('int-lead-out-length')?.value) || ext.leadOutLength,
+            leadOutAngle: ext.leadOutAngle, overcutAtCorners: ext.overcutAtCorners,
             preferCorners: ext.preferCorners, // Gleiche Ecken-Präferenz für Innen
             piercingType:  ext.piercingType   // Gleicher Piercing-Typ (später per Flächenklasse überschreibbar)
         };
@@ -4792,7 +4797,9 @@ class CeraCutApp {
         c.leadOutType = vals.leadInType;
         c.leadOutLength = vals.leadOutLength;
         c.leadOutRadius = vals.leadInRadius;
-        c.leadOutAngle = vals.leadInAngle;
+        c.leadOutAngle = vals.leadOutAngle ?? vals.leadInAngle;   // V5.31: eigener Ausfahrwinkel
+        c.overcutAtCorners = vals.overcutAtCorners ?? false;
+        c.invalidate?.();
         c.leadInArcAngle = vals.leadInArcAngle ?? 90;     // V6.63: Bogenwinkel
         c.leadOutArcAngle = vals.leadInArcAngle ?? 90;
         c.preferCorners = vals.preferCorners;
@@ -5185,6 +5192,7 @@ class CeraCutApp {
                 'lead-in-angle': section.leadInAngle,
                 'lead-arc-angle': section.leadInArcAngle ?? 90,
                 'lead-out-length': section.leadOutLength,
+                'lead-out-angle': section.leadOutAngle ?? section.leadInAngle,
                 'overcut-length': section.overcutLength,
                 'piercing-type': section.piercingType,
                 'piercing-stationary-time': section.piercingStationaryTime,
@@ -5197,6 +5205,8 @@ class CeraCutApp {
                 const el = document.getElementById(id);
                 if (el && val !== undefined) el.value = val;
             }
+            const ocCorners = document.getElementById('overcut-at-corners');
+            if (ocCorners) ocCorners.checked = !!section.overcutAtCorners;
             const prefCorners = document.getElementById('prefer-corners');
             if (prefCorners) prefCorners.checked = section.preferCorners;
             const dynLead = document.getElementById('dynamic-lead-ext');

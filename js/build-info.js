@@ -8,23 +8,23 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.00',
-    build: '20261106-tileref',
-    date: '2026-11-06',
+    version: '7.15',
+    build: '20261107-occorner',
+    date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '706e28b',
+        hash: 'a76237b',
         date: '2026-11-07',
-        message: 'feat: REST-Daten-API (Teile, Plaene, Bleche, Auftraege, Technologie) + Server V1'
+        message: 'feat: Ueberschnitt an Ecken automatisch gesperrt; Ribbon: Ausfahrwinkel, Ausfahrlaenge/OC sichtbar, Schalter Ecke (cam-contour V5.31, app V6.68)'
     },
 
     modules: {
         'dxf-parser':         { version: '3.20', build: '20261106-fliese4' },
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.12', build: '20261106-tileref' },
-        'cam-contour':        { version: '5.30', build: '20261106-arcangle' },
+        'cam-contour':        { version: '5.31', build: '20261107-occorner' },
         'canvas-renderer':    { version: '3.62', build: '20261106-classic' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.9', build: '20261106-tileref' },
@@ -42,7 +42,7 @@ const CERACUT_BUILD = {
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.5', build: '20261106-arcangle' },
         'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
-        'app':                { version: '6.67', build: '20261106-nosetup' },
+        'app':                { version: '6.68', build: '20261107-occorner' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
@@ -77,6 +77,7 @@ const CERACUT_BUILD = {
 
     changes: [
         'V7.15: Refactor — Setup-Tab entfaellt (Referenz/Nullpunkt laufen beim Import automatisch): Referenz + Nullpunkt im Tab Datei (fuer manuelle Korrektur), Technologie (Material/Dicke/Druck/Duese) als Gruppe ③ Technologie im Tab Bearbeitung (app V6.67, styles.css).',
+        'V7.15: Feat — Ueberschnitt an Ecken automatisch gesperrt (cam-contour V5.31: isStartAtCorner/isOvercutBlocked, Schwelle 14 Grad, Option overcutAtCorners zum Erlauben); Ribbon: Ausfahrlaenge und Ueberschnitt nicht mehr hinter Erweitert, neuer eigener Ausfahrwinkel, Schalter Ecke (app V6.68).',
         'V7.14: Fix — Auto-Setup: Fliesenbogen auch ohne Layer Fliese erkannt (mehrere aeussere Rechtecke mit Schnitten, Fallback der Fliesen-Erkennung): keine Auto-Referenz mehr, sonst fehlte eine Fliese (app V6.66).',
         'V7.13: Fix — Regression durch AP4-Auto-Setup: bei Fliesen-Rastern (Layer Fliese, 4 Einzellinien) wurde per Auto-Referenz EINE Fliese zur Referenz gemacht und fehlte danach in Fliesen-Erkennung und Schnitt. Auto-Setup setzt bei Fliesen/vorhandenen Referenzen nur noch den Nullpunkt (app V6.65).',
         'V7.12: Feat — AP3/AP4 Feinschliff: Import-Hinweise zu einer Meldung zusammengefasst (Einzelmeldungen von autoDetectReference unterdrueckt), Gruppen Reihenfolge/Export als ④/⑤ nummeriert, Setup-Gruppen als (auto) gekennzeichnet, Classic-Theme fuer F1-Hilfe und Flyouts/Dialoge mit festen Dunkelfarben (app V6.64, styles.css).',

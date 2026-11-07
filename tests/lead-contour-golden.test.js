@@ -169,3 +169,19 @@ test('Lead-Laenge wird nicht mehr durch eigene Kruemmung/Ecke gekappt (V5.27)', 
     const slot = mk([{ x: 30, y: 0 }, { x: 60, y: 0 }, { x: 60, y: 4 }, { x: 0, y: 4 }, { x: 0, y: 0 }, { x: 30, y: 0 }], 'hole');
     assert.ok(len(slot.getLeadInPath().points) <= 2.0 + 1e-6, `Schlitz-Lead ${len(slot.getLeadInPath().points)}`);
 });
+
+// V5.31: Ueberschnitt an Ecken automatisch gesperrt
+test('Ueberschnitt: an Ecke gesperrt, auf glatter Kante/Kreis erlaubt, Override moeglich', () => {
+    const { CamContour: C, rect, circle } = require('./helpers/contour-fixtures.js');
+    const opt = { cuttingMode: 'disc', kerfWidth: 0.8, isClosed: true, overcutLength: 3 };
+    const corner = new C(rect(0, 0, 100, 60, true), { ...opt, overcutAtCorners: false });
+    assert.equal(corner.isStartAtCorner(), true);
+    assert.equal(corner.getOvercutPath(), null);
+    const forced = new C(rect(0, 0, 100, 60, true), { ...opt, overcutAtCorners: true });
+    assert.equal(forced.getOvercutPath().type, 'positive');
+    const circ = new C(circle(0, 0, 30), { ...opt, overcutAtCorners: false });
+    assert.equal(circ.isStartAtCorner(), false);
+    assert.equal(circ.getOvercutPath().type, 'positive');
+    const neg = new C(rect(0, 0, 100, 60, true), { ...opt, overcutLength: -2, overcutAtCorners: false });
+    assert.equal(neg.getOvercutPath(), null);
+});

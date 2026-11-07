@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CeraCUT V7.00 — Wasserstrahl CAM</title>
+    <title>CeraCUT V7.15 — Wasserstrahl CAM</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260625-favicon">
     <link rel="stylesheet" href="styles.css?v=20261106-nosetup">
     <link rel="stylesheet" href="properties-panel-styles.css?v=20260315-ctxmenu">
@@ -76,7 +76,7 @@
             </button>
         </div>
         <span class="title-text">
-            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V7.00 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
+            <span id="current-filename">Keine Datei geladen</span> — CeraCUT V7.15 <span id="build-datetime" style="font-size:0.85em;opacity:0.6"></span>
         </span>
         <div class="title-right">
             <span class="version-badge">SINUMERIK 840D</span>
@@ -648,7 +648,7 @@
                             <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
                         </div>
                     </div>
-                    <div class="ribbon-inline-row lead-adv">
+                    <div class="ribbon-inline-row">
                         <span class="ribbon-field-label lead-tip lead-col-in"
                               data-tip="Anfahrtwinkel&#10;Winkel der Anfahrt zur Kontur (15°–90°)">∠:</span>
                         <div class="stepper-wrap">
@@ -669,7 +669,7 @@
                 </div>
                 <!-- ▼ Ausfahrt-Spalte (orange) -->
                 <div class="ribbon-sm-stack lead-out-stack">
-                    <div class="ribbon-inline-row lead-adv">
+                    <div class="ribbon-inline-row">
                         <span class="ribbon-field-label lead-tip lead-col-out"
                               data-tip="Ausfahrtlänge&#10;Strecke des Strahls nach dem Schnittende (mm)">Out:</span>
                         <div class="stepper-wrap">
@@ -677,15 +677,26 @@
                             <input type="number" class="ribbon-input" id="lead-out-length" value="4.0" step="0.5" min="0" max="30" style="width:34px">
                             <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
                         </div>
+                        <span class="ribbon-field-label lead-tip lead-col-out"
+                              data-tip="Ausfahrwinkel&#10;Winkel der Ausfahrt zur Kontur (0°–90°). Leer/0 = wie Anfahrt">∠:</span>
+                        <div class="stepper-wrap">
+                            <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
+                            <input type="number" class="ribbon-input" id="lead-out-angle" value="90" step="5" min="0" max="90" style="width:30px">
+                            <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
+                        </div>
+                        <span class="ribbon-field-label">°</span>
                     </div>
                     <div class="ribbon-inline-row">
                         <span class="ribbon-field-label lead-tip lead-col-out"
-                              data-tip="Overcut / Überlauf&#10;Strecke die der Strahl über den Startpunkt hinausschneidet — schließt den Schnitt (mm)">OC:</span>
+                              data-tip="Overcut / Überlauf&#10;Strecke die der Strahl über den Startpunkt hinausschneidet — schließt den Schnitt (mm)&#10;An Ecken automatisch gesperrt">OC:</span>
                         <div class="stepper-wrap">
                             <button class="stepper-btn stepper-dec" tabindex="-1">−</button>
                             <input type="number" class="ribbon-input" id="overcut-length" value="1.0" step="0.5" min="-5" max="10" style="width:34px">
                             <button class="stepper-btn stepper-inc" tabindex="-1">+</button>
                         </div>
+                        <input type="checkbox" id="overcut-at-corners">
+                        <label for="overcut-at-corners" class="ribbon-cb-label lead-tip"
+                               data-tip="Überschnitt auch an Ecken erlauben&#10;Aus (Standard): Liegt der Start an einer Ecke, wird der Überschnitt automatisch gesperrt.">Ecke</label>
                     </div>
                 </div>
                 <!-- ▼ Anschluss / Piercing (blau) -->
@@ -1785,13 +1796,13 @@
 <!-- Scripts -->
 <!-- DebugMonitor: MUSS als ERSTES geladen werden — fängt alle Fehler ab -->
 <script src="js/debug-monitor.js?v=20260630-consolelog"></script>
-<script src="js/build-info.js?v=20261106-tileref"></script>
+<script src="js/build-info.js?v=20261107-occorner"></script>
 <script src="js/constants.js?v=20261106-fliese"></script>
 <script src="js/geometry.js?v=20261104-reviewfix"></script>
 <script src="js/arc-fitting.js?v=20261105-meander"></script>
 <script src="js/dxf-parser.js?v=20261106-fliese4"></script>
 <script src="js/lead-geometry.js?v=20261106-toolpath"></script>
-<script src="js/cam-contour.js?v=20261106-arcangle"></script>
+<script src="js/cam-contour.js?v=20261107-occorner"></script>
 <script src="js/lead-profiles.js?v=20261106-arcangle"></script>
 <script src="js/cerajet-engine.js?v=20261104-reviewfix"></script>
 <script src="js/ceracut-pipeline.js?v=20261106-tileref"></script>
@@ -1832,7 +1843,7 @@
 <script src="js/quality-zones.js?v=20261104-reviewfix"></script>
 <script src="js/project-manager.js?v=20261104-pushexecuted"></script>
 <script src="js/dxf-browser.js?v=20261105-sort2"></script>
-<script src="js/app.js?v=20261106-nosetup"></script>
+<script src="js/app.js?v=20261107-occorner"></script>
 
 <!-- Hidden Image Input -->
 <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/bmp,image/webp" hidden>

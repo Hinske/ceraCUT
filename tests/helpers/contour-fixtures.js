@@ -3,7 +3,12 @@
 const path = require('path');
 global.Geometry = require(path.join(__dirname, '../../js/geometry.js')).Geometry;
 try { global.LeadGeometry = require(path.join(__dirname, '../../js/lead-geometry.js')); } catch (e) { /* optional */ }
-const CamContour = require(path.join(__dirname, '../../js/cam-contour.js'));
+const CamContourBase = require(path.join(__dirname, '../../js/cam-contour.js'));
+// V5.31: Ueberschnitt ist an Ecken standardmaessig gesperrt. Die Golden-/PP-Tests nutzen Rechtecke
+// mit Start in der Ecke und pruefen den Ueberschnitt selbst -> dort explizit erlaubt.
+class CamContour extends CamContourBase {
+    constructor(points, options = {}) { super(points, { overcutAtCorners: true, ...options }); }
+}
 
 const rect = (x, y, w, h, ccw = true) => {
     const p = [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }, { x, y }];

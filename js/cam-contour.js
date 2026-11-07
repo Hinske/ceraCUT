@@ -1,5 +1,6 @@
 /**
- * CeraCUT CamContour V5.30 - IGEMS-konformes Lead-In/Out System
+ * CeraCUT CamContour V5.31 - IGEMS-konformes Lead-In/Out System
+ * V5.31: Feat — Ueberschnitt an Ecken automatisch gesperrt (isStartAtCorner/isOvercutBlocked, overcutAtCorners/overcutCornerAngle).
  * V5.30: Feat — AP2 Bogenwinkel (leadInArcAngle/leadOutArcAngle, Default 90): Arc-Lead als Viertel- bis 3/4-Kreis
  *        (Waricam "3/4 Kreis"); toJSON/clone mitgefuehrt.
  * V5.29: Refactor — AP1 S7: alte Bogen-Metadaten der Leads (arcCenter/arcRadius/arcStartAngle/arcEndAngle/
@@ -161,6 +162,8 @@ class CamContour {
 
         // ═══ OVERCUT (kann auch negativ sein) ═══
         this.overcutLength = options.overcutLength ?? 1.0;
+        this.overcutAtCorners = options.overcutAtCorners ?? false;   // V5.31: false = Ueberschnitt an Ecken automatisch gesperrt
+        this.overcutCornerAngle = options.overcutCornerAngle ?? 14;  // V5.31: Knickwinkel (Grad) am Konturstart, ab dem "Ecke" gilt
 
         // ═══ PIERCING (B.1 — IGEMS 6 Typen) ═══
         // Werte: 'auto'|'blind'|'pierce_linear'|'stationary'|'circular'|'drilling'|'air_start'
@@ -959,6 +962,27 @@ class CamContour {
     // OVERCUT - Entlang der Kontur
     // ════════════════════════════════════════════════════════════════
 
+    /**
+     * V5.31: Liegt der Konturstart an einer Ecke (Knick > overcutCornerAngle)?
+     * Ein Ueberschnitt/Lead mit Ueberlauf macht dort keinen Sinn (Strahl wuerde die erste Kante doppelt schneiden).
+     */
+    isStartAtCorner() {
+        if (!this.isClosed) return false;
+        const pts = this._leadBasisPts();
+        if (!pts || pts.length < 3) return false;
+        const e = pts[0], n = pts[1], pr = pts[pts.length - 2];
+        const l1 = Math.hypot(e.x - pr.x, e.y - pr.y), l2 = Math.hypot(n.x - e.x, n.y - e.y);
+        if (l1 < 1e-4 || l2 < 1e-4) return false;
+        const dot = ((e.x - pr.x) * (n.x - e.x) + (e.y - pr.y) * (n.y - e.y)) / (l1 * l2);
+        const angle = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+        return angle > (this.overcutCornerAngle ?? 14);
+    }
+
+    /** V5.31: Ueberschnitt an dieser Kontur automatisch gesperrt? (Ecke und nicht ausdruecklich erlaubt) */
+    isOvercutBlocked() {
+        return !this.overcutAtCorners && this.isStartAtCorner();
+    }
+
     getOvercutPath() {
         if (this._cachedOvercutPath) return this._cachedOvercutPath;
 
@@ -999,7 +1023,8 @@ class CamContour {
 
         if (!this.isClosed) return null;
 
-        // Bei Ecken: kein Overcut (IGEMS-Verhalten)
+        // Bei Ecken: kein Overcut (IGEMS-Verhalten) - V5.31: jetzt tatsaechlich gesperrt
+        if (this.isOvercutBlocked()) return null;
         const checkPts = this._leadBasisPts();
 
         const overcutLen = this.overcutLength;
@@ -2544,6 +2569,8 @@ class CamContour {
             cornerLeadAngle: this.cornerLeadAngle,
             cornerDegradeThreshold: this.cornerDegradeThreshold,
             overcutLength: this.overcutLength,
+            overcutAtCorners: this.overcutAtCorners,
+            overcutCornerAngle: this.overcutCornerAngle,
             piercingType: this.piercingType,
             preferCorners: this.preferCorners,
             cornerAngleThreshold: this.cornerAngleThreshold,
