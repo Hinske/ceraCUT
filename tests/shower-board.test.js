@@ -72,15 +72,57 @@ test('Eingabefehler', () => {
     assert.strictEqual(G.compute({ ...base, ablauf: { w: 0, h: 10 } }).ok, false);
 });
 
-test('DXF: Layer Fliesen = ganze Fliese (Umriss), Layer Schnitt = Zuschnitte; Kochhan-Struktur bei einer Platte', () => {
+const ents = (dxf, type, layer) => (dxf.match(new RegExp(`\\r\\n${type}\\r\\n8\\r\\n${layer}\\r\\n`, 'g')) || []).length;
+
+test('DXF Kochhan-Struktur: 1 Fliesenumriss, 4 Schnitte (Gehrung + Ablaufkante + Gehrung verkettet), je in der Mitte der Ablaufkante gebrochen', () => {
     const r = G.compute(base);   // keins: eine Platte, 4 Gehrungsteile (wie Kochhan_Duschboard_1000x1000.dxf)
-    const n = l => (r.dxf.match(new RegExp(`LWPOLYLINE\\r\\n8\\r\\n${l}\\r\\n`, 'g')) || []).length;
-    assert.strictEqual(n('Fliesen'), 1); assert.strictEqual(n('Schnitt'), 4);
+    assert.strictEqual(ents(r.dxf, 'LWPOLYLINE', 'Fliesen'), 1);
     assert.ok(/2\r\nFliesen\r\n70\r\n0\r\n62\r\n160/.test(r.dxf) && /2\r\nSchnitt\r\n70\r\n0\r\n62\r\n10/.test(r.dxf), 'Layer-Tabelle mit Farben');
     assert.deepStrictEqual(r.tiles[0].map(q => [q.x, q.y]), [[0, 0], [1000, 0], [1000, 1000], [0, 1000]]);
+    assert.strictEqual(r.cuts.length, 4, 'ein Schnitt je Gehrungsteil — die Plattenkante wird nicht nochmal geschnitten');
+    const right = r.cuts.find(c => Math.abs(c.chain.pts[0].x - 1000) < 1e-6 && c.chain.pts[0].y > 500);
+    assert.deepStrictEqual(right.chain.pts.map(q => [+q.x.toFixed(2), +q.y.toFixed(2)]), [[1000, 998.59], [570, 568.59], [570, 431.41], [1000, 1.41]]);
+    assert.strictEqual(right.parts.length, 2, 'Overlap Break: zwei Teile');
+    // Bruch in der Mitte der Schneidkontur = Mitte der Ablaufkante (570, 500); aussen -> innen
+    const onPath = (part, x, y) => part.some((q, i) => i && Math.abs((q.x - part[i - 1].x) * (y - part[i - 1].y) - (q.y - part[i - 1].y) * (x - part[i - 1].x)) < 1e-6 && x >= Math.min(q.x, part[i - 1].x) - 1e-6 && x <= Math.max(q.x, part[i - 1].x) + 1e-6 && y >= Math.min(q.y, part[i - 1].y) - 1e-6 && y <= Math.max(q.y, part[i - 1].y) + 1e-6);
+    for (const part of right.parts) assert.ok(onPath(part, 570, 500), 'Teil laeuft bis zum Bruchpunkt in der Mitte der Ablaufkante (570, 500)');
+    assert.ok(Math.abs(right.parts[0][0].x - 1003.5355) < 0.01, 'Aussenverlaengerung 5 mm am freien Ende');
+    assert.strictEqual(r.cutCount, 8);
+    assert.strictEqual(ents(r.dxf, 'LWPOLYLINE', 'Schnitt'), 8, 'alle Schnitte als offene Polylinien (Ketten)');
 });
 
-test('DXF: jeder Zuschnitt liegt in seinem Fliesenumriss, Umriss = ganze Fliese, ganze Fliesen ohne Schnitt-Kontur', () => {
+test('DXF Schnitte: nur echte Schnittkanten (keine Kante auf der Fliesenkante), Ketten luecken- und doppelungsfrei', () => {
+    for (const inp of [
+        { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 597, kurz: 597 } },
+        { breite: 1400, tiefe: 900, ablauf: { w: 150, h: 100, cx: 500, cy: 400 }, fliese: { lang: 600, kurz: 300 }, muster: 'verband', anker: 'lu' },
+        { breite: 3000, tiefe: 2400, ablauf: { w: 200, h: 200 }, fliese: { lang: 597, kurz: 597 } },
+        { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 600, kurz: 300 }, muster: 'fischgraet' }
+    ]) {
+        const r = G.compute(inp), { onOutline } = G._internals;
+        for (const pc of r.pieces) {
+            if (pc.full) continue;   // ganze Fliese: nichts zu schneiden
+            const T = r.tiles[pc.tile], n = pc.poly.length;
+            const cutsOfPiece = r.cuts.filter(c => c.tile === pc.tile).flatMap(c => c.chain.pts.slice(1).map((q, i) => [c.chain.pts[i], q]));
+            let edgesOnOutline = 0, edgesCut = 0;
+            for (let i = 0; i < n; i++) {
+                const a = pc.poly[i], b = pc.poly[(i + 1) % n], on = onOutline(a, b, T);
+                const inChain = cutsOfPiece.some(([c, d]) => (Math.hypot(a.x - c.x, a.y - c.y) < 1e-6 && Math.hypot(b.x - d.x, b.y - d.y) < 1e-6));
+                if (on) { edgesOnOutline++; assert.ok(!inChain, 'Kante auf der Fliesenkante darf nicht geschnitten werden'); }
+                else { edgesCut++; assert.ok(inChain, 'Schnittkante fehlt in einer Kette'); }
+            }
+            assert.strictEqual(edgesOnOutline + edgesCut, n);
+        }
+        assert.strictEqual(ents(r.dxf, 'LWPOLYLINE', 'Fliesen'), r.tilesUsed);
+        assert.strictEqual(ents(r.dxf, 'LINE', 'Schnitt') + ents(r.dxf, 'LWPOLYLINE', 'Schnitt'), r.cutCount);
+        for (const c of r.cuts) for (const part of c.parts) {
+            const q = part[0], T = r.tiles[c.tile];
+            assert.ok(part.length >= 2);
+            assert.ok(!c.chain.closed || part.length >= 3);
+        }
+    }
+});
+
+test('DXF: jeder Zuschnitt liegt in seinem Fliesenumriss, Umriss = ganze Fliese', () => {
     for (const inp of [
         { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 597, kurz: 597 } },
         { breite: 1400, tiefe: 900, ablauf: { w: 150, h: 100, cx: 500, cy: 400 }, fliese: { lang: 600, kurz: 300 }, muster: 'verband', anker: 'lu' },
@@ -89,18 +131,59 @@ test('DXF: jeder Zuschnitt liegt in seinem Fliesenumriss, Umriss = ganze Fliese,
         { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 597, kurz: 597 }, drehung: 45 }
     ]) {
         const r = G.compute(inp), p = r.p;
-        assert.ok(r.ok);
-        const n = l => (r.dxf.match(new RegExp(`LWPOLYLINE\\r\\n8\\r\\n${l}\\r\\n`, 'g')) || []).length;
-        assert.strictEqual(n('Fliesen'), r.tilesUsed, 'ein Umriss je benutzter Fliese');
-        assert.strictEqual(n('Schnitt'), r.count - r.full, 'Schnitt nur fuer geschnittene Teile');
         for (const pc of r.pieces) {
             const T = r.tiles[pc.tile], tb = G._internals.bboxOf(T), pb = G._internals.bboxOf(pc.poly);
-            assert.ok(pb.x0 >= tb.x0 - 1e-6 && pb.x1 <= tb.x1 + 1e-6 && pb.y0 >= tb.y0 - 1e-6 && pb.y1 <= tb.y1 + 1e-6, `Teil liegt nicht in seiner Fliese (${JSON.stringify(inp.muster || 'kreuz')})`);
-            const a = Math.abs(G._internals.area(T)), want = p.tx * p.ty;
-            if (inp.muster !== 'verband') assert.ok(Math.abs(a - want) < 0.5, `Fliesenumriss ${a} statt ${want}`);
-            if (pc.full) assert.ok(Math.abs(Math.abs(G._internals.area(pc.poly)) - want) < 0.5 * want / 1000 + 0.5);
+            assert.ok(pb.x0 >= tb.x0 - 1e-6 && pb.x1 <= tb.x1 + 1e-6 && pb.y0 >= tb.y0 - 1e-6 && pb.y1 <= tb.y1 + 1e-6, 'Teil liegt nicht in seiner Fliese');
+            if (inp.muster !== 'verband') assert.ok(Math.abs(Math.abs(G._internals.area(T)) - p.tx * p.ty) < 0.5, 'Fliesenumriss = ganze Fliese');
         }
     }
+});
+
+test('Overlap Break: jeder Schnitt wird mit GeometryOps.splitAndOverlap in der Mitte gebrochen (aussen->innen, 5 mm Ueberlappung, 5 mm aussen)', () => {
+    const GO = require('../js/geometry-ops.js');
+    const r = G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 597, kurz: 597 } });
+    const { pathLength, midPoint, dropCollinear } = G._internals;
+    let long = 0;
+    for (const c of r.cuts) {
+        const len = pathLength(c.chain.pts);
+        if (len < 20) { assert.strictEqual(c.parts.length, 1); continue; }
+        long++;
+        const m = midPoint(c.chain.pts);
+        const expect = GO.splitAndOverlap(c.chain.pts.map(q => ({ ...q })), false, m.segmentIndex, m.point, 5, null, 5).map(p => dropCollinear(p));
+        assert.deepStrictEqual(c.parts, expect, 'identisch zum Werkzeug OB');
+        const [l0, l1] = c.parts.map(pathLength);
+        assert.ok(Math.abs(l0 + l1 - (len + 15)) < 1e-6, 'Summe = Schnittlaenge + 2 x 5 aussen + 5 Ueberlappung');
+        assert.ok(Math.abs(Math.abs(l0 - l1) - 5) < 1e-6 || Math.abs(Math.abs(l0 - l1)) < 1e-6 + 5, 'beide Haelften gleich lang bis auf die Ueberlappung');
+        // beide Teile enden in der Naehe des Bruchpunkts (kurze Seite 5 mm dahinter)
+        for (const part of c.parts) assert.ok(Math.hypot(part[part.length - 1].x - m.point.x, part[part.length - 1].y - m.point.y) <= 5 + 1e-6);
+    }
+    assert.ok(long > 5);
+});
+
+test('Overlap Break: Einstellungen (aus, Ueberlappung, Aussenverlaengerung) und gerade Schnitte als Einzellinie (2 Punkte)', () => {
+    const inp = { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 597, kurz: 597 } };
+    const off = G.compute({ ...inp, overlapBreak: false });
+    assert.ok(off.cuts.every(c => c.parts.length === 1), 'ohne OB: ein Teil je Schnitt');
+    const on = G.compute({ ...inp, obOverlap: 8, obOuter: 0 });
+    for (const c of on.cuts) if (c.parts.length === 2) {
+        const [l0, l1] = c.parts.map(G._internals.pathLength);
+        assert.ok(Math.abs(l0 + l1 - (G._internals.pathLength(c.chain.pts) + 8)) < 1e-6, 'nur 8 mm Ueberlappung, keine Aussenverlaengerung');
+    }
+    const straight = G.compute(inp).cuts.filter(c => c.chain.pts.length === 2 && c.parts.length === 2);
+    assert.ok(straight.length > 0 && straight.every(c => c.parts.every(p => p.length === 2)), 'gerade Schnitte: Einzellinien');
+    assert.strictEqual(G.compute({ ...inp, obOverlap: -1 }).ok, false);
+});
+
+test('DXF: ceraCUT-Parser liest Fliesen = geschlossene Umrisse, Schnitt = offene Linien (Einzellinie bzw. Kette)', () => {
+    const P = require('../js/dxf-parser.js'), D = P.DXFParser || P;
+    const r = G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 597, kurz: 597 } });
+    const log = console.log; console.log = () => {};
+    let res; try { res = D.parse(r.dxf); } finally { console.log = log; }
+    const cs = res.contours || res.entities || [];
+    const fl = cs.filter(c => c.layer === 'Fliesen'), sc = cs.filter(c => c.layer === 'Schnitt');
+    assert.strictEqual(fl.length, r.tilesUsed); assert.ok(fl.every(c => c.isClosed));
+    assert.ok(sc.length > 0 && sc.every(c => !c.isClosed), 'Schnitte sind offene Konturen');
+    assert.strictEqual(sc.length, r.cutCount);
 });
 
 test('Dialog: Vorschau-SVG und Stueckliste liefern Bemassung (Smoke)', () => {

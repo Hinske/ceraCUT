@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.40',
-    build: '20261107-tileref2',
+    version: '7.41',
+    build: '20261107-dusch12',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '4101b6e',
+        hash: 'fb513a6',
         date: '2026-11-07',
-        message: 'feat: Fliesenumrisse im CAD-Tab als normale Linie, Referenz-Optik erst in CAM'
+        message: 'feat: Duschboard-DXF - nur echte Schnittkanten als Ketten, Overlap Break in der Mitte'
     },
 
     modules: {
@@ -30,7 +30,7 @@ const CERACUT_BUILD = {
         'sinumerik-pp':       { version: '2.9', build: '20261106-tileref' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
         'snap-manager':       { version: '1.9', build: '20261105-acmarker' },
-        'geometry-ops':       { version: '2.8', build: '20261107-obext' },
+        'geometry-ops':      { version: '2.9', build: '20261107-dusch12' },
         'feasibility':        { version: '1.0', build: '20261105-feas1' },
         'simplify':           { version: '1.0', build: '20261105-simp1' },
         'drawing-tools':      { version: '2.25', build: '20261107-obext' },
@@ -67,8 +67,8 @@ const CERACUT_BUILD = {
         'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
-        'shower-board-generator': { version: '0.6', build: '20261107-dusch11' },
-        'shower-board-dialog': { version: '0.6', build: '20261107-dusch11' },
+        'shower-board-generator': { version: '0.7', build: '20261107-dusch12' },
+        'shower-board-dialog': { version: '0.7', build: '20261107-dusch12' },
         'shower-api': { version: '0.1', build: '20261107-showerapi' },
         'shower-pdf': { version: '0.2', build: '20261107-dusch11' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },

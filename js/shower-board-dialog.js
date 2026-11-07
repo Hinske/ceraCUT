@@ -1,5 +1,5 @@
 /**
- * CeraCUT Duschboard-Dialog V0.6: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
+ * CeraCUT Duschboard-Dialog V0.7: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
  * Kern: shower-board-generator.js (ShowerBoardGenerator). Befehl DUSCH, Ribbon CAD -> Zuschnitte -> Duschboard.
  *
  * Bemaßung (zur Kontrolle): Gesamtmaß (Fliesenfeld, bei Außenmaß zusätzlich Außenmaß), Ablaufmaße und -lage,
@@ -7,6 +7,7 @@
  * Phase 2b: Vorschau nur lesend; Fugenbild von Hand editieren folgt in 2c.
  *
  * V0.3.3: Fugenliste nur auf Wunsch (Checkbox, Standard aus)
+ * V0.7: Schnitte im DXF: Overlap Break in der Mitte (Einstellungen Ueberlappung/Aussenverlaengerung), Schnittlinien in der Vorschau, Statuszeile mit Schnittzahl/-laenge
  * V0.6: PDF-Varianten nach Rasterlage (Verlegemuster bleibt), andere Muster optional; Anker 'Fliese mittig im Board' / 'Fugenkreuz in Boardmitte'
  * V0.5: Projekte (Server /api/shower/projects: Oeffnen/Speichern/Kopie/Loeschen, Standard-Duschboards als Vorlage) + Kunden-PDF-Dialog (Varianten + Angaben waehlen, /api/shower/pdf)
  * V0.4: Standardfliese 597x597, Raster 'Automatisch' (Standard), Statuszeile mit Fliesenbedarf (ganz/geschnitten) und gewaehlter Rasterlage
@@ -18,7 +19,7 @@
  * V0.1: Erstversion
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch11
+ * Build: 20261107-dusch12
  */
 
 const ShowerBoardDialog = (() => {
@@ -65,6 +66,16 @@ const ShowerBoardDialog = (() => {
         }
         // Ablauf
         g += `<rect x="${f(X(d.x0))}" y="${f(Y(d.y1))}" width="${f((d.x1 - d.x0) * s)}" height="${f((d.y1 - d.y0) * s)}" fill="rgba(255,90,77,0.18)" stroke="#ff5a4d" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+        // Schnittlinien (DXF Layer Schnitt): nur echte Schnittkanten, Bruchstelle in der Mitte (Overlap Break), Aussenenden verlaengert
+        if (ui && ui.showCuts && r.cuts) {
+            for (const c of r.cuts) for (const part of c.parts) {
+                g += `<polyline points="${part.map(q => `${f(X(q.x))},${f(Y(q.y))}`).join(' ')}" fill="none" stroke="#ff3b30" stroke-width="1.6" stroke-linejoin="round"/>`;
+            }
+            for (const c of r.cuts) if (c.parts.length === 2) {
+                const e = c.parts[0][c.parts[0].length - 1], e2 = c.parts[1][c.parts[1].length - 1];
+                g += `<circle cx="${f(X((e.x + e2.x) / 2))}" cy="${f(Y((e.y + e2.y) / 2))}" r="3.2" fill="#12161c" stroke="#ff3b30" stroke-width="1.4"/>`;
+            }
+        }
         // Fugen-Bearbeitung: Streifen-Auswahl, Fugenmitten, Hover
         if (ui && ui.mode && ui.mode !== 'view' && r.layout) {
             const L = r.layout, rowsL = L.strips === 'rows', bnd = [0, ...L.lines, rowsL ? H : W];
@@ -145,7 +156,7 @@ const ShowerBoardDialog = (() => {
         g += lab(d.x1 + (W - d.x1) * 0.55, d.y0 - d.y0 * 0.45 - 4, `${de(angBR)}°`);
         g += lab(d.x0 - d.x0 * 0.55, d.y0 - d.y0 * 0.45 - 4, `${de(angBL)}°`);
         // Legende
-        g += `<text x="${M.l}" y="20" font-size="11" fill="#9aa">Teilemaß = kleinste Box auf der Fliese (gedreht) · Rot: Teil passt nicht auf die Fliese · Orange: Teil schmaler als Warnschwelle</text>`;
+        g += `<text x="${M.l}" y="20" font-size="11" fill="#9aa">Rote Linien = Schnitte im DXF (○ = Overlap-Break-Bruch) · Teilemaß = kleinste Box auf der Fliese · Rotes Teil: passt nicht auf die Fliese · Orange: schmaler als Warnschwelle</text>`;
 
         return `<svg width="${VW}" height="${VH}" viewBox="0 0 ${VW} ${VH}" style="display:block" font-family="Segoe UI,sans-serif">` +
             `<rect x="${f(X(0))}" y="${f(Y(H))}" width="${f(W * s)}" height="${f(H * s)}" fill="none" stroke="#556" stroke-width="1" stroke-dasharray="2 3"/>${g}</svg>`;
@@ -158,6 +169,7 @@ const ShowerBoardDialog = (() => {
         if (r.grid) t += ` · ${r.grid.xLines.length + 1} Spalten × ${r.grid.yLines.length + 1} Zeilen`;
         else if (r.layout) t += r.layout.strips === 'rows' ? ` · ${r.layout.lines.length + 1} Reihen` : ` · ${r.layout.lines.length + 1} Spalten`;
         t += `</span>`;
+        if (r.cutCount !== undefined) t += ` &nbsp;<span style="color:#ff8a80">${r.cutCount} Schnitte (${de(r.cutLength / 1000, 2)} m)</span>`;
         t += ` &nbsp;<b style="color:#9fd0ff">${r.tilesUsed} Fliesen</b><span style="color:#9aa"> (${r.full} ganz, ${r.cutTiles} geschnitten)</span>`;
         if (r.autoInfo) t += ` &nbsp;<span style="color:#7c8" title="Automatisch gewählte Rasterlage">Raster: ${esc(r.autoInfo)}</span>`;
         if (edited) t += ` &nbsp;<span style="color:#ffd24a">✎ Fugenbild angepasst</span>`;
@@ -250,6 +262,10 @@ const ShowerBoardDialog = (() => {
                         ${sec('Fugen')}
                         ${chk('ds-showlist', 'Fugenliste anzeigen (Fugenmitten numerisch bearbeiten)')}
                         <div id="ds-lists" style="font-size:12px;display:none;"></div>
+                        ${sec('Schnitte im DXF (Layer Schnitt)')}
+                        <label style="display:block;font-size:12px;margin-top:6px;"><input type="checkbox" id="ds-ob" checked> Overlap Break in der Mitte jedes Schnitts</label>
+                        ${row2(fld('ds-obo', 'Überlappung [mm]', '5'), fld('ds-obe', 'Außen verlängern [mm]', '5'))}
+                        <label style="display:block;font-size:12px;margin-top:6px;"><input type="checkbox" id="ds-showcuts" checked> Schnittlinien in der Vorschau</label>
                         ${sec('Anzeige')}
                         ${fld('ds-fr', 'Passprüfung: Randabstand zur Fliesenkante [mm]', '0')}
                         ${fld('ds-min', 'Warnung bei Teil schmaler als [mm]', '30')}
@@ -270,7 +286,7 @@ const ShowerBoardDialog = (() => {
         let last = null, view = null, fitted = true, sizeKey = '';
         // Fugenbild-Bearbeitung
         let override = null, mode = 'view', hover = null, selStrip = 0, hist = [], redoStack = [], editDrag = null;
-        const KEEP_OVERRIDE = new Set(['ds-showlist', 'ds-fuge', 'ds-rf', 'ds-min', 'ds-fr', 'ds-dims', 'ds-aw', 'ds-ah', 'ds-cx', 'ds-cy']);
+        const KEEP_OVERRIDE = new Set(['ds-showlist', 'ds-ob', 'ds-obo', 'ds-obe', 'ds-showcuts', 'ds-fuge', 'ds-rf', 'ds-min', 'ds-fr', 'ds-dims', 'ds-aw', 'ds-ah', 'ds-cx', 'ds-cy']);
 
         const vis = (id, on) => { $(id).style.display = on ? '' : 'none'; };
         function syncControls() {
@@ -297,6 +313,7 @@ const ShowerBoardDialog = (() => {
                 muster: verband ? 'verband' : m, versatz, versatzFolge: $('ds-folge').value, verbandAchse: $('ds-achse').value,
                 startVersetzt: $('ds-start').checked, gegenlaeufig: $('ds-gegen').checked, seed: Math.round(parseNum($('ds-seed').value)) || 1,
                 drehung: parseNum($('ds-rot').value) || 0, anker: $('ds-anker').value,
+                overlapBreak: $('ds-ob').checked, obOverlap: parseNum($('ds-obo').value), obOuter: parseNum($('ds-obe').value),
                 minTeil: parseNum($('ds-min').value) || 0, fliesenRand: parseNum($('ds-fr').value) || 0, ablauf
             };
         }
@@ -310,7 +327,7 @@ const ShowerBoardDialog = (() => {
             const key = `${w}x${h}`;
             if (fitted || !view || key !== sizeKey) { if (fitted || !view) view = fitView(last, w, h); }
             sizeKey = key;
-            prev.innerHTML = previewSVG(last, $('ds-dims').checked, view, { w, h }, { mode, hover, sel: selStrip });
+            prev.innerHTML = previewSVG(last, $('ds-dims').checked, view, { w, h }, { mode, hover, sel: selStrip, showCuts: $('ds-showcuts').checked });
         }
         const redraw = () => { if (!raf) raf = requestAnimationFrame(draw); };
 

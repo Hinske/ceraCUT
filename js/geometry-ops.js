@@ -1,6 +1,7 @@
 /**
  * CeraCUT GeometryOps V2.8 — Geometry Operations Engine
  * Foundation für Tier 3+5 CAD Tools
+ * V2.9: CommonJS-Export fuer Node (Duschboard-Generator)
  * V2.8: splitAndOverlap/getOverlapPreview: outerExtension (Standard 5 mm) verlängert die aussenliegenden Enden
  *
  * V2.6: chamferPolyline() hinzugefügt (Pendant zu filletPolyline, für RectangleTool
@@ -1679,3 +1680,5 @@ const GeometryOps = {
 if (typeof window !== 'undefined') {
     window.GeometryOps = GeometryOps;
 }
+// V2.9: CommonJS-Export (Node: Duschboard-Generator nutzt splitAndOverlap fuer Overlap Break)
+if (typeof module !== 'undefined' && module.exports) { module.exports = GeometryOps; }

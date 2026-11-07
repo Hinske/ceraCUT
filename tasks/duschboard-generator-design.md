@@ -135,3 +135,11 @@ Jeder Zuschnitt liegt im Umriss seiner Fliese (Test). Gedrehte Raster (45°, Fis
 ## 16. PDF-Varianten nach Rasterlage (V0.6)
 
 Im Kunden-PDF ist das **Raster** das Auswahlkriterium, nicht das Verlegemuster: Das Verlegemuster bleibt wie im Dialog, die Varianten sind die Rasterlagen — Automatisch (wenig Schnitte), Ecke links/rechts unten/oben, Fliese bzw. Fugenkreuz in Boardmitte, Fliese bzw. Fugenkreuz auf dem Ablauf, bei der Kreuzfuge zusätzlich „ab Ablaufkante“ — jeweils bei Rechteckfliesen als „Fliese liegend“ und „hochkant“. Gleiche Ergebnisse werden zusammengefasst. Andere Verlegemuster gibt es nur auf Wunsch (Haken „Zusätzlich andere Verlegemuster anbieten“). Neue Anker `bmitte`/`bfuge` auch im Dialog.
+
+## 17. Schnitte im DXF (V0.7)
+
+Layer **Schnitt** enthält nur noch echte Schnittkanten, als **offene Einzellinien bzw. Ketten** (keine geschlossenen Teilekonturen mehr):
+- **Keine Doppelung:** Kanten eines Zuschnitts, die auf der Originalkante der Fliese liegen (Layer Fliesen), werden nicht nochmal geschnitten. Ganze Fliesen (bis auf < 1 mm² Eckanschnitt) haben nur den Umriss.
+- **Ketten:** Aufeinanderfolgende Schnittkanten bleiben verbunden und werden in einem Zug geschnitten — z. B. Gehrung + Ablaufkante + Gehrung (wie Kochhan_Duschboard_1000x1000.dxf). Gerade Schnitte sind Einzellinien (LINE, 2 Punkte). Geschlossen nur, wenn ein Teil ganz im Inneren der Fliese liegt.
+- **Overlap Break** (Werkzeug OB, `GeometryOps.splitAndOverlap`) auf **jeden** Schnitt, gebrochen in der **Mitte der Schneidkontur** (halbe Pfadlänge; bei der Kochhan-Platte genau Mitte der Ablaufkante): zwei Teile von außen nach innen, kurze Seite am Bruch um die Überlappung verlängert (Standard 5 mm), aussenliegende Enden um 5 mm verlängert. Einstellbar im Dialog (an/aus, Überlappung, Außenverlängerung). Schnitte unter 4 × Überlappung werden nicht gebrochen (nur Enden verlängert).
+- Vorschau: rote Linien = Schnitte im DXF, ○ = Bruchstelle. Statuszeile: Anzahl Schnitte und Gesamtlänge.

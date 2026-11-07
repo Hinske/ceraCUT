@@ -1,5 +1,5 @@
 /**
- * CeraCUT Duschboard-Generator V0.6 (Kern, ohne Dialog)
+ * CeraCUT Duschboard-Generator V0.7 (Kern, ohne Dialog)
  * Erzeugt die Zuschnitt-Teile eines Duschboards (Fliesen mit Gehrung zum Ablauf) aus Maßen, Ablauf und Fugenbild.
  *
  * Regeln (aus Kochhan_Duschboard_1000x1000.dxf, Ablauf 140x140 mittig):
@@ -13,6 +13,8 @@
  * Phase 2a: nur rechteckiger Punktablauf. Rinne (2d), runder/aussermittiger Sonderfall-Check (2e) folgen.
  * Rein (kein DOM) — laeuft in Node (tests/shower-board.test.js).
  *
+ * V0.7: DXF-Schnitte: nur echte Schnittkanten (keine Doppelung der Fliesenkante), als offene Einzellinien, Ablaufkante mit den angrenzenden
+ *       Diagonalschnitten zu EINEM Schnitt verkettet, Overlap Break (GeometryOps.splitAndOverlap) in der Mitte jedes Schnitts (Ueberlappung/Aussenverlaengerung 5 mm)
  * V0.6: PDF-Varianten nach RASTERLAGE (Ecken, Boardmitte, Ablauf, Automatik; liegend/hochkant) bei gleichem Verlegemuster; Verlegemuster-Varianten optional;
  *       neue Anker 'bmitte' (Fliese mittig im Board) und 'bfuge' (Fugenkreuz in Boardmitte)
  * V0.5.1: DXF-Layer korrekt: 'Fliesen' = ganze Fliese als Umriss (Referenz, ceracut-pipeline.isTileOutline), 'Schnitt' = Zuschnitt-Konturen;
@@ -28,14 +30,14 @@
  * V0.1: Erstversion (Raster, Sektoren, Clipping, DXF)
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch11
+ * Build: 20261107-dusch12
  */
 
 const ShowerBoardGenerator = (() => {
     'use strict';
 
-    const VERSION = '0.6';
-    const LOG = '[Duschboard V0.6]';
+    const VERSION = '0.7';
+    const LOG = '[Duschboard V0.7]';
     const LAYER_FLIESE = 'Fliesen';    // Fliesenumriss = Referenz (ganze Fliese), nie Schneidkontur
     const LAYER_SCHNITT = 'Schnitt';   // Zuschnitt-Konturen = werden geschnitten
     const LAYER_COLORS = { [LAYER_FLIESE]: 160, [LAYER_SCHNITT]: 10 };   // wie Zuschnitt-Generator / Kochhan-Dateien
@@ -59,7 +61,10 @@ const ShowerBoardGenerator = (() => {
         anker: 'auto',           // 'auto' (Rasterlage mit moeglichst vielen ganzen Fliesen) | 'ablauf' (nur Kreuzfuge) | 'lu' | 'ru' | 'lo' | 'ro' | 'mitte' (Fliese mittig auf Ablauf) | 'fuge' (Fugenkreuz auf Ablauf) | 'bmitte' (Fliese mittig im Board) | 'bfuge' (Fugenkreuz in Boardmitte)
         minTeil: 30,             // Warnung: Teil schmaler als (mm)
         fliesenRand: 0,          // Randabstand zur Fliesenkante fuer die Passpruefung (mm je Seite)
-        maxTeile: 6000
+        maxTeile: 6000,
+        overlapBreak: true,      // Overlap Break (Werkzeug OB) auf jeden Schnitt, gebrochen in der Mitte der Schneidkontur
+        obOverlap: 5,            // Ueberlappung am Bruch (mm)
+        obOuter: 5               // Verlaengerung der aussenliegenden Enden (mm, 0 = aus)
     };
 
     // ── Polygon-Helfer (konvex, Sutherland-Hodgman) ─────────────────────────
@@ -131,6 +136,7 @@ const ShowerBoardGenerator = (() => {
         if (!['kreuz', 'verband', 'zufall', 'fischgraet', 'korb', 'keins'].includes(o.muster)) return err('Unbekanntes Verlegemuster.');
         if (!(o.versatz > 0 && o.versatz < 1)) { if (o.muster === 'verband') return err('Versatz muss zwischen 0 und 100 % liegen.'); }
         if (!isFinite(o.drehung)) return err('Drehwinkel ungültig.');
+        if (!(o.obOverlap >= 0 && o.obOverlap <= 100) || !(o.obOuter >= 0 && o.obOuter <= 100)) return err('Overlap-Break-Maße müssen zwischen 0 und 100 mm liegen.');
         if (!(o.fliesenRand >= 0 && o.fliesenRand < Math.min(o.fliese.kurz, o.fliese.lang) / 2)) return err('Randabstand zur Fliesenkante ungültig.');
         const W = o.masseArt === 'aussen' ? o.breite - 2 * o.randfuge : o.breite;
         const H = o.masseArt === 'aussen' ? o.tiefe - 2 * o.randfuge : o.tiefe;
@@ -531,10 +537,96 @@ const ShowerBoardGenerator = (() => {
     }
 
     // ── DXF (AC1015, geschlossene LWPOLYLINE wie in den Kochhan-Dateien) ─────
+    // ── Schnitte (Layer "Schnitt") ──────────────────────────────────────────
+    const GO = () => (typeof GeometryOps !== 'undefined' ? GeometryOps : require('./geometry-ops.js'));
+
+    /** Liegt die Kante a-b auf einer Kante des Fliesenumrisses T (beide Endpunkte auf derselben Umrisskante)? */
+    function onOutline(a, b, T, tol = 0.01) {
+        for (let j = 0; j < T.length; j++) {
+            const c = T[j], d = T[(j + 1) % T.length], dx = d.x - c.x, dy = d.y - c.y, len = Math.hypot(dx, dy);
+            if (len < 1e-9) continue;
+            const on = q => Math.abs((q.x - c.x) * dy - (q.y - c.y) * dx) / len <= tol && ((q.x - c.x) * dx + (q.y - c.y) * dy) / len >= -tol && ((q.x - c.x) * dx + (q.y - c.y) * dy) / len <= len + tol;
+            if (on(a) && on(b)) return true;
+        }
+        return false;
+    }
+
     /**
-     * DXF: Layer "Fliesen" = ganze Fliese als Umriss (Referenz, je benutzter Fliese), Layer "Schnitt" = Zuschnitt-Konturen.
-     * Ganze, ungeschnittene Fliesen bekommen nur den Fliesenumriss (nichts zu schneiden).
-     * @param {{pieces:object[], tiles:object[][]}} r  tiles[pc.tile] = Umriss der ganzen Fliese
+     * Echte Schnittkanten eines Zuschnitts: alle Kanten, die NICHT auf der Originalkante der Fliese liegen (die ist schon da),
+     * zu Ketten verbunden (z. B. Gehrung + Ablaufkante + Gehrung = ein Schnitt). Geschlossen nur, wenn das Teil ganz im Inneren der Fliese liegt.
+     * @returns {{pts:{x:number,y:number}[], closed:boolean}[]}
+     */
+    function cutChains(poly, T) {
+        const n = poly.length, cut = poly.map((q, i) => !onOutline(q, poly[(i + 1) % n], T));
+        if (cut.every(Boolean)) return [{ pts: [...poly, poly[0]], closed: true }];
+        const out = [];
+        for (let s = 0; s < n; s++) {
+            if (!cut[s] || cut[(s - 1 + n) % n]) continue;   // Kette beginnt nach einer Umrisskante
+            const pts = [poly[s]];
+            for (let i = s; cut[i % n]; i++) pts.push(poly[(i + 1) % n]);
+            out.push({ pts, closed: false });
+        }
+        return out;
+    }
+
+    const pathLength = pts => { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); return l; };
+
+    /** Kollineare Zwischenpunkte entfernen (gerade Schnitte = Einzellinie aus 2 Punkten) */
+    function dropCollinear(pts, tol = 1e-6) {
+        if (pts.length <= 2) return pts;
+        const out = [pts[0]];
+        for (let i = 1; i < pts.length - 1; i++) {
+            const a = out[out.length - 1], b = pts[i], c = pts[i + 1];
+            const cr = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x), dot = (b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y);
+            if (Math.abs(cr) > tol * Math.max(1, Math.hypot(b.x - a.x, b.y - a.y) * Math.hypot(c.x - b.x, c.y - b.y)) || dot < 0) out.push(b);
+        }
+        out.push(pts[pts.length - 1]);
+        return out;
+    }
+
+    /** Punkt bei halber Pfadlaenge: { segmentIndex, point } */
+    function midPoint(pts) {
+        const half = pathLength(pts) / 2;
+        let acc = 0;
+        for (let i = 0; i < pts.length - 1; i++) {
+            const l = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+            if (acc + l >= half - 1e-9) { const t = l > 0 ? (half - acc) / l : 0; return { segmentIndex: i, point: { x: pts[i].x + (pts[i + 1].x - pts[i].x) * t, y: pts[i].y + (pts[i + 1].y - pts[i].y) * t } }; }
+            acc += l;
+        }
+        return { segmentIndex: pts.length - 2, point: { ...pts[pts.length - 1] } };
+    }
+
+    /**
+     * Overlap Break (Werkzeug OB, GeometryOps.splitAndOverlap) in der Mitte der Schneidkontur: zwei Teile von aussen nach innen,
+     * kurze Seite am Bruch um `overlap` verlaengert, aussenliegende Enden um `outer` verlaengert.
+     * Sehr kurze Schnitte (< 4 x Ueberlappung) werden nicht gebrochen (nur Enden verlaengert).
+     */
+    function overlapBreak(chain, p) {
+        const pts = chain.pts.map(q => ({ x: q.x, y: q.y })), go = GO();
+        if (!p.overlapBreak) return [chain.closed ? pts : dropCollinear(pts)];
+        if (pathLength(pts) < 4 * Math.max(p.obOverlap, 1)) {
+            let r = pts;
+            if (p.obOuter > 0 && !chain.closed) { r = go._extendEndTangential(r, 'start', p.obOuter); r = go._extendEndTangential(r, 'end', p.obOuter); }
+            return [chain.closed ? r : dropCollinear(r)];
+        }
+        const m = midPoint(pts);
+        return go.splitAndOverlap(pts, chain.closed, m.segmentIndex, m.point, p.obOverlap, null, p.obOuter).map(pt => (chain.closed ? pt : dropCollinear(pt)));
+    }
+
+    /** Alle Schnitte aller Fliesen: [{ tile, chain, parts }] */
+    function buildCuts(p, pieces, tiles) {
+        const out = [];
+        for (const pc of pieces) {
+            if (pc.full) continue;
+            for (const chain of cutChains(pc.poly, tiles[pc.tile])) out.push({ tile: pc.tile, chain, parts: overlapBreak(chain, p) });
+        }
+        return out;
+    }
+
+    /**
+     * DXF: Layer "Fliesen" = ganze Fliese als Umriss (Referenz, je benutzter Fliese), Layer "Schnitt" = Schnitte als offene Einzellinien
+     * (nur echte Schnittkanten, keine Doppelung der Fliesenkante; Overlap Break in der Mitte). Ganze Fliesen: nur der Umriss.
+     * @param {{pieces:object[], tiles:object[][], cuts:object[]}} r
      */
     function buildDXF(r) {
         const f = v => (+v.toFixed(4)).toString();
@@ -542,22 +634,27 @@ const ShowerBoardGenerator = (() => {
             '0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LAYER', '70', String(Object.keys(LAYER_COLORS).length)];
         for (const [name, color] of Object.entries(LAYER_COLORS)) z.push('0', 'LAYER', '2', name, '70', '0', '62', String(color), '6', 'CONTINUOUS');
         z.push('0', 'ENDTAB', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES');
-        const poly = (layer, pts) => {
+        const closed = (layer, pts) => {
             z.push('0', 'LWPOLYLINE', '8', layer, '90', String(pts.length), '70', '1');
             for (const q of pts) z.push('10', f(q.x), '20', f(q.y));
         };
-        const byTile = new Map();
-        for (const pc of r.pieces) { if (!byTile.has(pc.tile)) byTile.set(pc.tile, []); byTile.get(pc.tile).push(pc); }
-        for (const [ti, list] of [...byTile.entries()].sort((a, b) => a[0] - b[0])) {
-            poly(LAYER_FLIESE, r.tiles[ti]);
-            for (const pc of list) if (!pc.full) poly(LAYER_SCHNITT, pc.poly);
+        const open = (layer, pts) => {
+            if (pts.length === 2) { z.push('0', 'LINE', '8', layer, '10', f(pts[0].x), '20', f(pts[0].y), '30', '0.0', '11', f(pts[1].x), '21', f(pts[1].y), '31', '0.0'); return; }
+            z.push('0', 'LWPOLYLINE', '8', layer, '90', String(pts.length), '70', '0');
+            for (const q of pts) z.push('10', f(q.x), '20', f(q.y));
+        };
+        const used = [...new Set(r.pieces.map(pc => pc.tile))].sort((a, b) => a - b);
+        for (const ti of used) {
+            closed(LAYER_FLIESE, r.tiles[ti]);
+            for (const c of r.cuts) if (c.tile === ti) for (const part of c.parts) open(LAYER_SCHNITT, part);
         }
         z.push('0', 'ENDSEC', '0', 'EOF');
         return z.join('\r\n') + '\r\n';
     }
 
     // ── Automatische Rasterlage (moeglichst wenige geschnittene Fliesen) ────
-    const isFull = (pc, p) => Math.abs(area(pc.poly)) >= p.tx * p.ty * 0.9995;
+    /** Ganze Fliese = Teil deckt die Fliese (bis auf < 1 mm2, z. B. 0,3 mm Eckenanschnitt durch die Fugenversetzung) */
+    const isFull = (pc, p) => Math.abs(area(pc.poly)) >= p.tx * p.ty - 1;
 
     function piecesFor(p, override) {
         if (isGridPattern(p)) return { pieces: clipPieces(p, tilesFromLayout(p, override || buildLayout(p))) };
@@ -645,11 +742,13 @@ const ShowerBoardGenerator = (() => {
         // Fliesenumrisse (Layer Fliesen): Rasterfliesen = ganze Fliese; ohne Raster = das ganze Fliesenfeld als eine Platte (wie Kochhan 1000x1000)
         const tileOutlines = p.muster === 'keins' ? [rectPoly(0, 0, p.W, p.H)] : (tiles.phys || tiles);
         for (const pc of pieces) { pc.full = isFull(pc, p); if (p.muster === 'keins') pc.tile = 0; }
+        const cuts = buildCuts(p, pieces, tileOutlines);
+        const cutCount = cuts.reduce((n, c) => n + c.parts.length, 0), cutLength = cuts.reduce((l, c) => l + c.parts.reduce((s2, pt) => s2 + pathLength(pt), 0), 0);
         const fileName = `Duschboard_${Math.round(input.breite)}x${Math.round(input.tiefe)}_Ablauf${Math.round(input.ablauf.w)}x${Math.round(input.ablauf.h)}.dxf`;
         const chains = layout ? chainsOf(layout) : null;
         const grid = chains && chains.xLines && chains.yLines ? chains : null;
         const st = tileStats(p, pieces);
-        return { ok: true, p, layout, chains, grid, editable: !!layout, pieces, warnings: validate(p, pieces), count: pieces.length, full: st.full, cutTiles: st.cutTiles, tilesUsed: st.tilesUsed, autoInfo, tiles: tileOutlines, fileName, dxf: buildDXF({ pieces, tiles: tileOutlines }) };
+        return { ok: true, p, layout, chains, grid, editable: !!layout, pieces, warnings: validate(p, pieces), count: pieces.length, full: st.full, cutTiles: st.cutTiles, tilesUsed: st.tilesUsed, autoInfo, tiles: tileOutlines, cuts, cutCount, cutLength, fileName, dxf: buildDXF({ pieces, tiles: tileOutlines, cuts }) };
     }
 
     // ── Teilenummern (Dialog + PDF) ─────────────────────────────────────────
@@ -753,7 +852,7 @@ const ShowerBoardGenerator = (() => {
         return out;
     }
 
-    return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, numberPieces, variantDefs, variantCatalog, moveLine, moveSub, addLine, addSub, fitInfo, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, fitInfo, bboxOf, tilesFromPattern, hash01 } };
+    return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, numberPieces, variantDefs, variantCatalog, moveLine, moveSub, addLine, addSub, fitInfo, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, fitInfo, cutChains, onOutline, midPoint, overlapBreak, pathLength, dropCollinear, bboxOf, tilesFromPattern, hash01 } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = ShowerBoardGenerator;
