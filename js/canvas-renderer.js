@@ -1295,6 +1295,11 @@ class CanvasRenderer {
             let displayColor = layerDefOpen?.color || this.colors.slit;
             if (isHovered) displayColor = this.colors.hovered;
             if (isSelected) displayColor = this.colors.selected;
+            // Schnittfuge massstaeblich als Band (offene Kontur: Werkzeug laeuft mittig auf dem Pfad)
+            if (this.showKerfBand && contour.kerfWidth > 0 && points.length > 1 &&
+                (this.currentMode === 'anschuss' || this.currentMode === 'reihenfolge')) {
+                this._strokeBand(ctx, points, contour.kerfWidth);
+            }
             this.drawPath(ctx, points, displayColor, baseWidth);
 
             // V3.30: Gap-Marker bei offenen Konturen
