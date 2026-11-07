@@ -13,6 +13,7 @@
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
  * Build: 20261107-partedit
+ * V1.2: Feat — „Vom Server…" (DXFBrowser.pickMany), PartGeometry.decodeDXF (UTF-8/ISO-8859-1 wie app.js)
  * V1.1: Feat — PartGeometry.toDXF / fromAppContours (Teil bearbeiten, part-editor.js)
  *
  * (c) Cerasell GmbH
@@ -192,7 +193,17 @@ const PartGeometry = (() => {
             .map(c => ({ points: c.points.map(p => ({ x: p.x, y: p.y })), isClosed: !!c.isClosed, layer: c.layer || '' }));
     }
 
-    return { analyze, toRecord, toDXF, fromAppContours, namesFromFile, newPartId, signedArea, pointInPolygon };
+    /** DXF-Bytes → Text wie beim normalen Öffnen (app.js): AC1021+ = UTF-8, älter ISO-8859-1; \U+XXXX-Escapes dekodieren. */
+    function decodeDXF(buf) {
+        const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+        const head = new TextDecoder('iso-8859-1').decode(bytes.subarray(0, Math.min(bytes.length, 65536)));
+        const ver = head.match(/\$ACADVER\s*\r?\n\s*1\s*\r?\n\s*AC(\d+)/);
+        const utf8 = ver && parseInt(ver[1], 10) >= 1021;
+        return new TextDecoder(utf8 ? 'utf-8' : 'iso-8859-1').decode(bytes)
+            .replace(/\\U\+([0-9A-Fa-f]{4})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+    }
+
+    return { analyze, toRecord, toDXF, fromAppContours, decodeDXF, namesFromFile, newPartId, signedArea, pointInPolygon };
 })();
 
 // ═══════════════════════════════════════════════════════════════════
@@ -386,7 +397,7 @@ class PartImportDialog {
     async _addFromServer() {
         const b = this.app?.dxfBrowser;
         if (!b || typeof b.pickMany !== 'function') {
-            this.app?.showToast?.('Server-Mehrfachauswahl ist noch nicht verfügbar — bitte „Dateien hinzufügen“ nutzen', 'info');
+            this.app?.showToast?.('Server-DXF-Browser nicht verfügbar — bitte „Dateien hinzufügen“ nutzen', 'warning');
             return;
         }
         const files = await b.pickMany();
@@ -402,7 +413,7 @@ class PartImportDialog {
             this.items.push(it);
             this._render();
             try {
-                const text = await f.text();
+                const text = PartGeometry.decodeDXF(await f.arrayBuffer());
                 const res = DXFParser.parse(text, { chainingTolerance: parseFloat(document.getElementById('chaining-tolerance')?.value) || 0.1, applyInsUnits: true });
                 if (!res || !res.success) throw new Error('DXF-Parse-Fehler');
                 it.raw = res.contours || [];

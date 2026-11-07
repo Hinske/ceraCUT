@@ -4,11 +4,12 @@
  * Ermöglicht das Browsen und Laden von DXF-Dateien vom Server-Netzlaufwerk
  * über die /api/dxf/* Endpunkte von server.js.
  *
- * Version: V1.3
+ * Version: V1.4
+ * V1.4: Feat — pickMany(): Mehrfachauswahl für den Teileimport (Checkboxen, Alle im Ordner, 4 parallele Downloads); Fix selectFile(): dirPath war undefiniert
  * V1.3: Sortierung (Name/Datum, auf-/absteigend, Ordner immer oben, pro User gemerkt)
  * V1.1: Zuletzt-Pfad pro User (_userKey(), Login/User-Management V6.32)
  * Last Modified: 2026-11-05
- * Build: 20261105-sort2
+ * Build: 20261107-pickmany
  */
 
 /** Pro-User-Namespacing für localStorage-Keys (V6.32 Login/User-Management). */
@@ -22,6 +23,7 @@ class DXFBrowser {
         this.currentPath = localStorage.getItem(_userKey('ceracut-dxf-browser-path')) || '';
         this.overlay = null;
         this.isAvailable = null; // null = ungeprüft
+        this._multi = null;      // Mehrfachauswahl-Sitzung (pickMany): {sel: Map(pfad → {name,size}), resolve}
         this.items = [];
         this.sort = { key: 'name', dir: 'asc' };
         try {
@@ -102,9 +104,84 @@ class DXFBrowser {
     }
 
     /**
+     * V1.4: Mehrfachauswahl — mehrere DXF-Dateien (auch aus verschiedenen Ordnern) wählen und als
+     * File-Objekte (Rohbytes) zurückgeben. Abbruch/Schließen → leeres Array.
+     * @returns {Promise<File[]>}
+     */
+    async pickMany() {
+        if (this.isAvailable === null) await this.checkAvailability();
+        if (!this.isAvailable) {
+            this.app.showToast('Server-DXF-Browse nicht verfügbar (API antwortet nicht)', 'error');
+            return [];
+        }
+        if (this._multi) this._multi.resolve([]);
+        return new Promise(resolve => {
+            this._multi = { sel: new Map(), resolve };
+            this._createModal();
+            this.loadDirectory(this.currentPath || '');
+        });
+    }
+
+    _multiCount() { return this._multi ? this._multi.sel.size : 0; }
+
+    _updateMultiBar() {
+        const el = this.overlay?.querySelector('.dxf-browser-count');
+        if (el) el.textContent = `${this._multiCount()} Datei(en) ausgewählt`;
+        const ok = this.overlay?.querySelector('.dxf-browser-ok');
+        if (ok) ok.disabled = this._multiCount() === 0;
+    }
+
+    _toggleMulti(path, name, size, on) {
+        if (!this._multi) return;
+        const next = on === undefined ? !this._multi.sel.has(path) : on;
+        if (next) this._multi.sel.set(path, { name, size }); else this._multi.sel.delete(path);
+        this._updateMultiBar();
+        return next;
+    }
+
+    /** Alle DXF-Dateien des aktuellen Ordners an-/abwählen. */
+    _multiAllInFolder() {
+        const files = this.items.filter(i => i.type === 'file');
+        const allOn = files.length > 0 && files.every(i => this._multi.sel.has(this._fullPath(i.name)));
+        for (const i of files) this._toggleMulti(this._fullPath(i.name), i.name, i.size, !allOn);
+        const listEl = this.overlay?.querySelector('.dxf-browser-list');
+        if (listEl) this._renderList(this.items, listEl);
+    }
+
+    _fullPath(name) { return this.currentPath ? this.currentPath + '/' + name : name; }
+
+    /** Gewählte Dateien laden (4 parallel) und als File-Objekte liefern. */
+    async _finishMulti() {
+        const m = this._multi; if (!m || m.sel.size === 0) return;
+        const statusEl = this.overlay?.querySelector('.dxf-browser-status');
+        const entries = [...m.sel.entries()];
+        const out = new Array(entries.length);
+        let done = 0, failed = 0, next = 0;
+        const worker = async () => {
+            while (next < entries.length) {
+                const i = next++;
+                const [path, info] = entries[i];
+                try {
+                    const resp = await fetch(`/api/dxf/file?path=${encodeURIComponent(path)}`);
+                    if (!resp.ok) throw new Error(resp.statusText);
+                    out[i] = new File([await resp.arrayBuffer()], info.name);
+                } catch { failed++; }
+                done++;
+                if (statusEl) statusEl.textContent = `Lade ${done}/${entries.length}…`;
+            }
+        };
+        await Promise.all(Array.from({ length: Math.min(4, entries.length) }, worker));
+        this._multi = null;                 // vor close(), sonst würde close() mit [] auflösen
+        this.close();
+        if (failed) this.app.showToast(`${failed} Datei(en) konnten nicht geladen werden`, 'warning');
+        m.resolve(out.filter(Boolean));
+    }
+
+    /**
      * Schließt den Dialog.
      */
     close() {
+        if (this._multi) { const m = this._multi; this._multi = null; m.resolve([]); }
         if (this.overlay) {
             this.overlay.remove();
             this.overlay = null;
@@ -115,8 +192,9 @@ class DXFBrowser {
      * Erstellt das Modal-Overlay.
      */
     _createModal() {
-        // Altes Modal entfernen falls vorhanden
-        this.close();
+        // Altes Modal entfernen falls vorhanden (nicht close(): das würde eine laufende Mehrfachauswahl abbrechen)
+        if (this.overlay) { this.overlay.remove(); this.overlay = null; }
+        if (this._escHandler) document.removeEventListener('keydown', this._escHandler);
 
         this.overlay = document.createElement('div');
         this.overlay.className = 'modal-overlay';
@@ -125,7 +203,7 @@ class DXFBrowser {
         this.overlay.innerHTML = `
             <div style="width:600px; max-height:80vh; display:flex; flex-direction:column; background:#1e1e1e; border:1px solid #555; border-radius:6px; box-shadow:0 8px 32px rgba(0,0,0,0.5);">
                 <div class="dialog-header" style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid #444;">
-                    <h3 style="margin:0; font-size:14px; color:#e0e0e0;">Server DXF-Dateien</h3>
+                    <h3 style="margin:0; font-size:14px; color:#e0e0e0;">${this._multi ? 'Server DXF-Dateien auswählen' : 'Server DXF-Dateien'}</h3>
                     <button class="dxf-browser-close" style="background:none; border:none; color:#888; font-size:18px; cursor:pointer; padding:0 4px;">&times;</button>
                 </div>
                 <div class="dxf-browser-breadcrumb" style="padding:8px 16px; border-bottom:1px solid #333; font-size:12px; color:#888; display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
@@ -136,8 +214,17 @@ class DXFBrowser {
                 </div>
                 <div class="dxf-browser-status" style="padding:8px 16px; border-top:1px solid #333; font-size:11px; color:#666;">
                 </div>
+                ${this._multi ? `<div style="padding:8px 16px; border-top:1px solid #333; display:flex; gap:8px; align-items:center; font-size:12px; color:#aaa;">
+                    <span class="dxf-browser-count">0 Datei(en) ausgewählt</span>
+                    <button class="dxf-browser-all" style="margin-left:auto; padding:4px 10px; background:#333; color:#ddd; border:1px solid #555; border-radius:3px; cursor:pointer;">Alle im Ordner</button>
+                    <button class="dxf-browser-ok" disabled style="padding:4px 14px; background:#0d6efd; color:#fff; border:none; border-radius:3px; cursor:pointer; font-weight:600;">Übernehmen</button>
+                </div>` : ''}
             </div>
         `;
+        if (this._multi) {
+            this.overlay.querySelector('.dxf-browser-all').addEventListener('click', () => this._multiAllInFolder());
+            this.overlay.querySelector('.dxf-browser-ok').addEventListener('click', () => this._finishMulti());
+        }
 
         // Event: Overlay-Klick schließt
         this.overlay.addEventListener('click', (e) => {
@@ -261,6 +348,15 @@ class DXFBrowser {
                     const subPath = this.currentPath ? this.currentPath + '/' + item.name : item.name;
                     this.loadDirectory(subPath);
                 });
+            } else if (this._multi) {
+                const filePath = this._fullPath(item.name);
+                const cb = document.createElement('input');
+                cb.type = 'checkbox'; cb.checked = this._multi.sel.has(filePath); cb.style.cssText = 'margin:0;';
+                el.insertBefore(cb, el.firstChild);
+                el.addEventListener('click', (ev) => {
+                    const on = this._toggleMulti(filePath, item.name, item.size, ev.target === cb ? cb.checked : undefined);
+                    cb.checked = on;
+                });
             } else {
                 el.addEventListener('click', () => {
                     const filePath = this.currentPath ? this.currentPath + '/' + item.name : item.name;
@@ -322,8 +418,6 @@ class DXFBrowser {
             const resp = await fetch(`/api/dxf/file?path=${encodeURIComponent(filePath)}`);
             if (!resp.ok) {
                 const err = await resp.json().catch(() => ({}));
-                this._renderBreadcrumb(dirPath); // Root-Link bleibt erreichbar (keine Sackgasse)
-                try { localStorage.removeItem(_userKey('ceracut-dxf-browser-path')); } catch (e) {}
                 this.app.showToast(`Fehler: ${err.error || resp.statusText}`, 'error');
                 return;
             }

@@ -19,7 +19,8 @@ async function start(user = { username: 'mh', role: 'admin' }) {
     const base = `http://127.0.0.1:${server.address().port}`;
     const dom = new JSDOM('<!doctype html><body></body>', { url: base + '/', pretendToBeVisual: true, runScripts: 'outside-only' });
     const w = dom.window;
-    w.fetch = (u, o) => fetch(new URL(u, base), o);
+    const realFetch = (u, o) => fetch(new URL(u, base), o);
+    w.fetch = (u, o) => (w.__fetchHook && w.__fetchHook(u, o)) || realFetch(u, o);
     w.CeraCutCurrentRole = user.role;
     w.confirm = () => true;
     w.structuredClone = structuredClone;

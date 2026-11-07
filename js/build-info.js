@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '9be3d8e',
+        hash: 'bc9bd8b',
         date: '2026-11-07',
-        message: 'feat: In-Place-Edit (Teil bearbeiten/aktualisieren, Update-Modi im Plan) + Teile'
+        message: 'feat: Teileimport 'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
     },
 
     modules: {
@@ -58,7 +58,7 @@ const CERACUT_BUILD = {
         'arc-fitting':        { version: '3.4', build: '20261105-meander' },
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
         'dimension-tool':     { version: '2.6', build: '20261104-pushexecuted' },
-        'dxf-browser':        { version: '1.3', build: '20261105-cncsave' },
+        'dxf-browser':        { version: '1.4', build: '20261107-pickmany' },
         'server':             { version: '1.12', build: '20261107-seed' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
@@ -74,7 +74,7 @@ const CERACUT_BUILD = {
         'store':              { version: '1.0', build: '20261107-store' },
         'data-api':           { version: '1.3', build: '20261107-partedit' },
         'seed':               { version: '1.1', build: '20261107-techdb' },
-        'part-library':       { version: '1.1', build: '20261107-partedit' },
+        'part-library':       { version: '1.2', build: '20261107-pickmany' },
         'nesting-plan':       { version: '1.3', build: '20261107-partedit' },
         'nc-tools':           { version: '1.1', build: '20261107-techdb' },
         'cost-plan':          { version: '1.0', build: '20261107-plancost' },

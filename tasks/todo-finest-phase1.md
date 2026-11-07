@@ -35,3 +35,6 @@
 
 ## Abnahme
 6 DXFs importieren → als Teile mit Menge/Auftrag speichern → in neuem Tab laden → Leads kommen aus der Technologie → Export unverändert.
+
+## Nachtrag 2026-11-07
+- [x] „Vom Server…" im Teileimport: `DXFBrowser.pickMany()` (Checkboxen, Auswahl über Ordner hinweg, „Alle im Ordner", 4 parallele Downloads, Rohbytes als File); Dekodierung wie beim normalen Öffnen (`PartGeometry.decodeDXF`: AC1021+ UTF-8, sonst ISO-8859-1)

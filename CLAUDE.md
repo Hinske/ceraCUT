@@ -249,7 +249,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **User-Store** | `lib/user-store.js` | **V1.0** | Benutzerverwaltung (scrypt-Hashing), Bootstrap erster Admin via Env-Vars |
 | **Session-Store** | `lib/session-store.js` | **V1.0** | In-Memory Session-Map, Sliding Expiry |
 | **Auth-Helper** | `lib/auth.js` | **V1.0** | Cookie-Parsing, Session-Cookie-Helper, JSON-Body-Parsing |
-| **Part Library** | `part-library.js` | **V1.1** | Teileimport-Dialog (Ribbon Datei), PartGeometry (DXF-Konturen -> Teile-Datensatz), API-Client |
+| **Part Library** | `part-library.js` | **V1.2** | Teileimport-Dialog (Ribbon Datei), PartGeometry (DXF-Konturen -> Teile-Datensatz), API-Client |
 | **Nesting Plan** | `nesting-plan.js` | **V1.3** | Autonest aus Teilebibliothek (Bedarf -> Plan), Dialog im Tab Nesting; Blech vorerst manuell, sheetId spaeter aus Blechbibliothek (tasks/todo-finest-phase2a.md) |
 | **NC Tools** | `nc-tools.js` | **V1.0** | NC erstellen (Ribbon Export): NCCheck (Sinumerik-Parser/Pruefung), NC-Editor, Werkstattbericht (Druck/PDF), nur Einzelplan (Fliesenbogen -> CNC Export) |
 | **Plan Cost** | `cost-plan.js` | **V1.0** | Plan-Kalkulation (Fertigung/Material/Verbrauch/Zusatz, Teilepreise); Browser + Node; Richtwerte werden gemeldet |
@@ -567,7 +567,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   mosaic-generator: V1.4 (20261106-fliesenrect)
   advanced-tools: V1.9 (20261104-reviewfix)
   arc-fitting: V3.4 (20261105-meander)
-  dxf-browser: V1.3 (20261105-cncsave)
+  dxf-browser: V1.4 (20261107-pickmany)
   server: V1.12 (20261107-seed)
   user-store: V1.1 (20261104-reviewfix)
   session-store: V1.1 (20261104-reviewfix)

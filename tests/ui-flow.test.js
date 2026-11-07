@@ -214,3 +214,69 @@ test('In-Place-Edit: Plan → Teile → Bearbeiten → Textmarke → Aktualisier
         lib2.close();
     } finally { h.close(); }
 });
+
+test('Teileimport „Vom Server…": Mehrfachauswahl über Ordner, Alle im Ordner, Übernehmen → Import-Tabelle', async () => {
+    const h = await start();
+    try {
+        await quiet(async () => {
+            h.w.CeraJetEngine = CeraJetEngine;
+            await seedIfEmpty(h.stores);
+            h.load('dxf-parser.js', ['DXFParser']);
+            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog']);
+            h.load('dxf-browser.js', ['DXFBrowser']);
+        });
+        // Server-DXF-Mock: Root mit 2 Dateien + Ordner "Heide" mit 2 Dateien (eine mit Umlaut-Layer, ISO-8859-1)
+        const files = { 'A.dxf': dxfRect(100, 50, false), 'B.dxf': dxfRect(80, 40, true), 'Heide/C.dxf': dxfRect(60, 30, false),
+            'Heide/D.dxf': dxfRect(70, 35, false).replace('\n8\n0\n', '\n8\nTeile Ä\n') };
+        const calls = [];
+        h.w.__fetchHook = (u) => {
+            const url = new URL(u, h.base);
+            if (url.pathname === '/api/health') return Promise.resolve(new Response('{"status":"ok"}', { status: 200 }));
+            if (url.pathname === '/api/dxf/list') {
+                const dir = url.searchParams.get('path') || '';
+                const items = Object.keys(files).filter(k => (k.includes('/') ? k.split('/')[0] : '') === dir.split('/')[0] && dir === (k.includes('/') ? k.split('/')[0] : ''))
+                    .map(k => ({ name: k.split('/').pop(), type: 'file', size: files[k].length, mtime: 1 }));
+                if (!dir) items.push({ name: 'Heide', type: 'directory', size: 0, mtime: 1 });
+                return Promise.resolve(new Response(JSON.stringify({ path: dir, items }), { status: 200 }));
+            }
+            if (url.pathname === '/api/dxf/file') {
+                const p = url.searchParams.get('path'); calls.push(p);
+                const latin1 = Uint8Array.from(files[p], ch => ch.charCodeAt(0) & 255);
+                return Promise.resolve(new Response(latin1, { status: 200 }));
+            }
+            return null;
+        };
+        h.app.dxfBrowser = new h.w.DXFBrowser(h.app);
+        const $ = s => h.doc.querySelector(s);
+        const imp = new h.w.PartImportDialog(h.app);
+        await imp.open();
+        click($('[data-act="server"]'));
+        await h.waitFor(() => $('.dxf-browser-ok'));
+        assert.match($('.dxf-browser-list').textContent, /A\.dxf/);
+        assert.strictEqual($('.dxf-browser-ok').disabled, true);
+        // A.dxf einzeln, dann in Ordner Heide und dort "Alle im Ordner"
+        const rowOf = name => [...h.doc.querySelectorAll('.dxf-browser-list > div')].find(d => d.textContent.includes(name));
+        click(rowOf('A.dxf'));
+        assert.strictEqual($('.dxf-browser-count').textContent, '1 Datei(en) ausgewählt');
+        click(rowOf('Heide'));
+        await h.waitFor(() => /C\.dxf/.test($('.dxf-browser-list').textContent));
+        click($('.dxf-browser-all'));
+        assert.strictEqual($('.dxf-browser-count').textContent, '3 Datei(en) ausgewählt');
+        click($('.dxf-browser-all'));                                     // zweiter Klick wählt den Ordner wieder ab
+        assert.strictEqual($('.dxf-browser-count').textContent, '1 Datei(en) ausgewählt');
+        click($('.dxf-browser-all'));
+        click($('.dxf-browser-ok'));
+        await h.waitFor(() => imp.items.length === 3 && imp.items.every(i => i.status !== 'parsing')); 
+        assert.deepStrictEqual([...imp.items.map(i => i.fileName)].sort(), ['A.dxf', 'C.dxf', 'D.dxf']);
+        assert.ok(imp.items.every(i => i.status === 'ready'));
+        assert.ok(!$('.dxf-browser-ok'), 'Browser ist geschlossen');
+        assert.deepStrictEqual([...calls].sort(), ['A.dxf', 'Heide/C.dxf', 'Heide/D.dxf']);
+        assert.ok([...imp.layerSel.keys()].includes('Teile Ä'), 'ISO-8859-1-Umlaut im Layernamen bleibt erhalten');
+
+        // Abbrechen liefert []
+        const p = h.app.dxfBrowser.pickMany();
+        await h.waitFor(() => $('.dxf-browser-ok'));
+        click($('.dxf-browser-close'));
+        assert.deepStrictEqual([...(await p)], []);
+    } finally { h.close(); }
+});
