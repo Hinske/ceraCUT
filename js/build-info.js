@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.22',
-    build: '20261107-camtab',
+    version: '7.23',
+    build: '20261107-efjoin',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '6b077c1',
+        hash: '688e4ee',
         date: '2026-11-07',
-        message: 'fix: CAM-Tools praxistauglich (REP/BT/PJ/VZ/AN/EF) und in Tab CAM verschoben (ca'
+        message: 'feat: Edgefix verbindet zwei offene Konturen (cam-tools V1.8)'
     },
 
     modules: {
@@ -53,7 +53,7 @@ const CERACUT_BUILD = {
         'machine-profiles':   { version: '1.2', build: '20261104-reviewfix' },
         'bridge-cutting':     { version: '1.1', build: '20261104-reviewfix' },
         'quality-zones':      { version: '1.2', build: '20261104-reviewfix' },
-        'cam-tools':          { version: '1.7', build: '20261107-camtab' },
+        'cam-tools':          { version: '1.8', build: '20261107-efjoin' },
         'advanced-tools':     { version: '1.9', build: '20261104-reviewfix' },
         'arc-fitting':        { version: '3.4', build: '20261105-meander' },
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },

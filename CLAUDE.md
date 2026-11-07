@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-11-07
-> **Version:** V7.22
-> **Build:** 20261107-camtab
+> **Version:** V7.23
+> **Build:** 20261107-efjoin
 
 ---
 
@@ -262,7 +262,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Seed** | `lib/seed.js` | **V1.0** | Erststart-Befuellung materials/technologies aus CeraJetEngine (nie ueberschreibend) |
 | **Data-API** | `lib/data-api.js` | **V1.0** | REST: /api/parts,plans,sheets,orders,materials,technologies, /api/technology/resolve; If-Match, Filter, Admin-only fuer Preise/Technologie |
 | **Store** | `lib/store.js` | **V1.0** | JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftraege, Technologie): atomar, Versions-Sperre (If-Match), ID-Validierung |
-| **Build-Info** | `build-info.js` | **V7.22** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V7.23** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.14 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -297,9 +297,9 @@ ceraCUT/
 │   └── auth.js                        ← Cookie/Body-Parsing-Helper V1.0
 ├── data/                               ← users.json (gitignored — Passwort-Hashes)
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V7.22
+│   ├── build-info.js                  ← Versions-Banner V7.23
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
-│   ├── app.js                         ← Hauptanwendung V7.22 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
+│   ├── app.js                         ← Hauptanwendung V7.23 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.20 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.14
 │   ├── geometry-ops.js                ← GeometryOps V2.7 (Intersection, Arabeske, splitAndOverlap)
@@ -566,7 +566,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   machine-profiles: V1.2 (20261104-reviewfix)
   bridge-cutting: V1.1 (20261104-reviewfix)
   quality-zones: V1.2 (20261104-reviewfix)
-  cam-tools: V1.7 (20261107-camtab)
+  cam-tools: V1.8 (20261107-efjoin)
   mosaic-generator: V1.4 (20261106-fliesenrect)
   advanced-tools: V1.9 (20261104-reviewfix)
   arc-fitting: V3.4 (20261105-meander)

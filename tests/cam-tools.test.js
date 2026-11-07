@@ -139,3 +139,22 @@ test('EF: Arc ersetzt Abschnitt, Punkte liegen auf dem Kreis; B vor A wird sorti
     assert.ok(inArc.length > 5);
     for (const p of inArc) assert.ok(Math.abs(Math.hypot(p.x - arc.cx, p.y - arc.cy) - arc.r) < 1e-6);
 });
+
+test('EF: verbindet zwei offene Konturen ueber Arc, Undo', () => {
+    const c1 = new E.CamContour([{ x: 0, y: 0 }, { x: 40, y: 0 }], { isClosed: false });
+    const c2 = new E.CamContour([{ x: 60, y: 20 }, { x: 60, y: 60 }], { isClosed: false });
+    const cs = [c1, c2]; const sc = scene(cs, p => (p.x < 50 ? c1 : c2));
+    const t = new E.EdgefixTool(sc.mgr);
+    t.handleClick({ x: 10, y: 0 });      // Kontur 1
+    t.handleClick({ x: 40, y: 0 });      // A (Ende)
+    t.handleClick({ x: 60, y: 20 });     // B auf Kontur 2
+    assert.strictEqual(t.state, 'pickC');
+    t.handleClick({ x: 55, y: 5 });      // C
+    assert.strictEqual(cs.length, 1);
+    const P = c1.points;
+    assert.deepStrictEqual([P[0].x, P[0].y], [0, 0]);
+    assert.deepStrictEqual([P[P.length - 1].x, P[P.length - 1].y], [60, 60]);
+    assert.ok(P.length > 6);
+    sc.undo.undoStack.pop().undo();
+    assert.strictEqual(cs.length, 2); assert.strictEqual(c1.points.length, 2);
+});

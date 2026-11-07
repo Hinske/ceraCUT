@@ -1,5 +1,5 @@
 /**
- * CeraCUT CAM-Tools V1.7 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
+ * CeraCUT CAM-Tools V1.8 — IGEMS Kap. 6 Geometrie-Vorbereitungstools
  * 7 Tools für Analyse, Optimierung und Vorbereitung der Schnittgeometrie
  *
  * Tools:
@@ -21,7 +21,8 @@
  * V1.1: Hit-Test Scaling — Klick-Threshold skaliert mit Zoom-Level
  * Created: 2026-02-17 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-camtab
+ * Build: 20261107-efjoin
+ * V1.8: Edgefix verbindet zwei offene Konturen (Punkt B auf anderer Kontur), laengeres Stueck bleibt, Arc/Linie ueber C
  * V1.7: Praxis-Check — REP (Flaechenschwerpunkt statt Punktemittel, vorher ~48 mm Versatz), BT (Eckpunkt-/Kantentest statt
  *       Mittelwert; Kreuzende bleiben), PJ (Join: Steg-Flaeche je Drehsinn korrekt; Split: 2 geschlossene Konturen),
  *       VZ (Punktreduktion via Simplify; bulge-Pfad war wirkungslos), AN (BBox-Vorfilter: 97 s -> 32 ms),
@@ -125,10 +126,27 @@ class EdgefixTool extends BaseTool {
             this.segA = this._nearestOnContour(point);
             if (!this.segA) { this.cmd?.log('Punkt nicht auf Kontur', 'error'); return; }
             this.state = 'pickB';
-            this.cmd?.setPrompt('EDGEFIX — Endpunkt B auf Kontur anklicken:');
+            this.cmd?.setPrompt('EDGEFIX — Endpunkt B anklicken (auf derselben Kontur = Abschnitt ersetzen, auf anderer offener Kontur = verbinden):');
             console.log('[CAM-Tools V1.2] Edgefix: Punkt A bei Segment ' + this.segA.segmentIndex);
         }
         else if (this.state === 'pickB') {
+            // V1.8: Punkt B auf einer ANDEREN offenen Kontur -> beide Konturen ueber A-C-B verbinden
+            const other = this.manager.findContourAtPoint(point);
+            this.contour2 = null;
+            if (other && other !== this.contour && !other.isReference) {
+                if (this.contour.isClosed || other.isClosed) {
+                    this.cmd?.log('Zum Verbinden müssen beide Konturen offen sein', 'error');
+                    return;
+                }
+                const sc = this.manager?.app?.renderer?.scale || 1;
+                const near = GeometryOps.findNearestSegment(other.points, point.x, point.y, Math.max(2.0, 5.0 / sc));
+                if (!near) { this.cmd?.log('Punkt nicht auf Kontur', 'error'); return; }
+                this.contour2 = other;
+                this.segB = near;
+                this.state = 'pickC';
+                this.cmd?.setPrompt('EDGEFIX (Verbinden) — Kurvenpunkt C zwischen A und B anklicken (Linie: C auf Gerade A-B):');
+                return;
+            }
             this.segB = this._nearestOnContour(point);
             if (!this.segB) { this.cmd?.log('Punkt nicht auf Kontur', 'error'); return; }
             // V1.7: Reihenfolge egal — A/B werden entlang der Kontur sortiert
@@ -153,6 +171,7 @@ class EdgefixTool extends BaseTool {
             // Zurück zum Anfang für nächste Aktion
             this.state = 'pickContour';
             this.contour = null;
+            this.contour2 = null;
             this.cmd?.setPrompt('EDGEFIX — Kontur anklicken (ESC = Ende):');
         }
         console.log('[CAM-Tools] Edgefix.handleClick: ' + (performance.now() - _t0).toFixed(2) + 'ms');
@@ -165,7 +184,57 @@ class EdgefixTool extends BaseTool {
         return GeometryOps.findNearestSegment(pts, point.x, point.y, threshold);
     }
 
+    /** V1.8: Teil der Kontur behalten, der am Schnittpunkt P endet (atEnd=true) bzw. beginnt (false);
+     *  entfernt wird jeweils das kuerzere Endstueck. Liefert Punkte, deren letzter/erster Punkt P ist. */
+    _keepPiece(pts, seg, P, wantEndAtP) {
+        const lenTo = (a, b) => { let l = 0; for (let i = a; i < b; i++) l += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y); return l; };
+        const head = lenTo(0, seg) + Math.hypot(P.x - pts[seg].x, P.y - pts[seg].y);
+        const tail = lenTo(seg + 1, pts.length - 1) + Math.hypot(P.x - pts[seg + 1].x, P.y - pts[seg + 1].y);
+        const keepHead = head >= tail;     // laengeres Stueck bleibt
+        const copy = q => ({ x: q.x, y: q.y });
+        let kept;
+        if (keepHead) kept = pts.slice(0, seg + 1).map(copy).concat([copy(P)]);        // endet in P
+        else kept = [copy(P)].concat(pts.slice(seg + 1).map(copy));                    // beginnt in P
+        const endsAtP = keepHead;
+        if (endsAtP !== wantEndAtP) kept.reverse();
+        return kept;
+    }
+
+    _executeJoin(pointC) {
+        const c1 = this.contour, c2 = this.contour2;
+        const pA = this.segA.point, pB = this.segB.point;
+        const k1 = this._keepPiece(c1.points, this.segA.segmentIndex, pA, true);    // endet in A
+        const k2 = this._keepPiece(c2.points, this.segB.segmentIndex, pB, false);   // beginnt in B
+        const arc = this._fitArc(pA, pointC, pB);
+        const mid = arc ? this._tessellateArc(arc.cx, arc.cy, arc.r, arc.startAngle, arc.endAngle, arc.ccw) : [];
+        const merged = k1.concat(mid.map(q => ({ x: q.x, y: q.y })), k2);
+        const closes = Math.hypot(merged[0].x - merged[merged.length - 1].x, merged[0].y - merged[merged.length - 1].y) < 0.1;
+        const app = this.manager.app, undoMgr = app?.undoManager;
+        const oldP1 = c1.points.map(p => ({ x: p.x, y: p.y })), oldClosed1 = c1.isClosed;
+        const oldP2 = c2.points.map(p => ({ x: p.x, y: p.y })), idx2 = app.contours.indexOf(c2);
+        const cmd = {
+            execute() {
+                c1.points = merged.map(p => ({ x: p.x, y: p.y }));
+                c1.isClosed = closes;
+                ModificationTool.invalidateCache(c1);
+                const i = app.contours.indexOf(c2); if (i !== -1) app.contours.splice(i, 1);
+            },
+            undo() {
+                c1.points = oldP1; c1.isClosed = oldClosed1; ModificationTool.invalidateCache(c1);
+                c2.points = oldP2; ModificationTool.invalidateCache(c2);
+                if (app.contours.indexOf(c2) === -1) app.contours.splice(idx2, 0, c2);
+            }
+        };
+        cmd.execute();
+        undoMgr?.pushExecuted(cmd);
+        if (undoMgr) { undoMgr.redoStack.length = 0; undoMgr._notifyStateChange(); }
+        this.manager.renderer?.render();
+        app.updateContourPanel?.();
+        this.cmd?.log('✅ Edgefix: 2 Konturen verbunden (' + (arc ? 'Arc' : 'Linie') + (closes ? ', Kontur geschlossen' : '') + ')', 'info');
+    }
+
     _executeEdgefix(pointC) {
+        if (this.contour2) return this._executeJoin(pointC);
         const _t0 = performance.now();
         const pts = this.contour.points;
         const pA = this.segA.point;
@@ -1371,7 +1440,7 @@ if (typeof DrawingToolManager !== 'undefined') {
             this.tools['HULL']       = () => new ConvexHullTool(this);
             this.tools['CONVEXHULL'] = () => new ConvexHullTool(this);
 
-            console.debug('[CAM-Tools V1.7] ✅ 7 CAM-Vorbereitungstools registriert (EF, REP, AN, BT, PJ, VZ, HULL)');
+            console.debug('[CAM-Tools V1.8] ✅ 7 CAM-Vorbereitungstools registriert (EF, REP, AN, BT, PJ, VZ, HULL)');
         }
 
         // Auto-Apply gezeichnete Entities bei Mod-Tool-Start
