@@ -249,6 +249,8 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **User-Store** | `lib/user-store.js` | **V1.0** | Benutzerverwaltung (scrypt-Hashing), Bootstrap erster Admin via Env-Vars |
 | **Session-Store** | `lib/session-store.js` | **V1.0** | In-Memory Session-Map, Sliding Expiry |
 | **Auth-Helper** | `lib/auth.js` | **V1.0** | Cookie-Parsing, Session-Cookie-Helper, JSON-Body-Parsing |
+| **Part Library** | `part-library.js` | **V1.0** | Teileimport-Dialog (Ribbon Datei), PartGeometry (DXF-Konturen -> Teile-Datensatz), API-Client |
+| **Seed** | `lib/seed.js` | **V1.0** | Erststart-Befuellung materials/technologies aus CeraJetEngine (nie ueberschreibend) |
 | **Data-API** | `lib/data-api.js` | **V1.0** | REST: /api/parts,plans,sheets,orders,materials,technologies, /api/technology/resolve; If-Match, Filter, Admin-only fuer Preise/Technologie |
 | **Store** | `lib/store.js` | **V1.0** | JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftraege, Technologie): atomar, Versions-Sperre (If-Match), ID-Validierung |
 | **Build-Info** | `build-info.js` | **V7.16** | Versions-Banner, Modul-Versionen, Changelog |
@@ -558,7 +560,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   advanced-tools: V1.9 (20261104-reviewfix)
   arc-fitting: V3.4 (20261105-meander)
   dxf-browser: V1.3 (20261105-cncsave)
-  server: V1.11 (20261107-dataapi)
+  server: V1.12 (20261107-seed)
   user-store: V1.1 (20261104-reviewfix)
   session-store: V1.1 (20261104-reviewfix)
   auth-helper: V1.1 (20261104-reviewfix)

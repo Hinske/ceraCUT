@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'cc576fd',
+        hash: '2658092',
         date: '2026-11-07',
-        message: 'feat: Lead-Menue - eigener Ausfahr-Typ/-Radius, Hover-Hinweis am Lead-Warnsymbol, OC-an-Ecke im Properties-Panel (app V6.69, renderer V3.63, panel V1.7)'
+        message: 'feat: Teileimport-Dialog (Datei-Tab), Seed Materialien/Technologien, Nesting-Tab'
     },
 
     modules: {
@@ -59,7 +59,7 @@ const CERACUT_BUILD = {
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
         'dimension-tool':     { version: '2.6', build: '20261104-pushexecuted' },
         'dxf-browser':        { version: '1.3', build: '20261105-cncsave' },
-        'server':             { version: '1.11', build: '20261107-dataapi' },
+        'server':             { version: '1.12', build: '20261107-seed' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
         'constants': { version: '2.15', build: '20261105-verband' },
@@ -72,7 +72,9 @@ const CERACUT_BUILD = {
         'session-store':      { version: '1.1', build: '20261104-reviewfix' },
         'auth-helper':        { version: '1.1', build: '20261104-reviewfix' },
         'store':              { version: '1.0', build: '20261107-store' },
-        'data-api':           { version: '1.0', build: '20261107-dataapi' }
+        'data-api':           { version: '1.0', build: '20261107-dataapi' },
+        'seed':               { version: '1.0', build: '20261107-seed' },
+        'part-library':       { version: '1.0', build: '20261107-partimport' }
     },
 
     changes: [
