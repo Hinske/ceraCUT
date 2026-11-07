@@ -1,23 +1,25 @@
 /**
- * CeraCUT Duschboard-Dialog V0.2 (Phase 2b): Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster
+ * CeraCUT Duschboard-Dialog V0.3: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
  * Kern: shower-board-generator.js (ShowerBoardGenerator). Befehl DUSCH, Ribbon CAD -> Zuschnitte -> Duschboard.
  *
  * Bemaßung (zur Kontrolle): Gesamtmaß (Fliesenfeld, bei Außenmaß zusätzlich Außenmaß), Ablaufmaße und -lage,
  * Teilebreiten/-höhen je Fugenspalte/-zeile, Gehrungswinkel, Maße je Teil (bbox) + Nummern, Stückliste.
  * Phase 2b: Vorschau nur lesend; Fugenbild von Hand editieren folgt in 2c.
  *
+ * V0.3 (Phase 2c): Fugenbild bearbeiten — Fugen ziehen/setzen/loeschen in der Zeichnung, Fugenlisten (numerisch), Rueckgaengig/Wiederholen
+ *       (Strg+Z / Strg+Y), Zuruecksetzen; gilt fuer Kreuzfuge/Verband/Zufall ohne Drehung
  * V0.2: Stueckliste entfernt, Zeichnung fuellt den Dialog, Zoom (Mausrad) + Verschieben (Ziehen) + Einpassen, Verlegemuster-Auswahl
  *       (Kreuzfuge, Verbaende, Zufall, Fischgraet, Korbgeflecht), Ausrichtung, Drehwinkel, Anker
  * V0.1: Erstversion
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch3
+ * Build: 20261107-dusch4
  */
 
 const ShowerBoardDialog = (() => {
     'use strict';
 
-    const LOG = '[Duschboard-Dialog V0.2]';
+    const LOG = '[Duschboard-Dialog V0.3]';
     const FIELD_CSS = 'width:100%;padding:5px 8px;background:#2a2a2a;border:1px solid #555;border-radius:4px;color:#fff;font-size:13px;box-sizing:border-box;';
     const LABEL_CSS = 'display:block;font-size:11px;color:#9aa;margin:8px 0 2px;';
 
@@ -60,7 +62,7 @@ const ShowerBoardDialog = (() => {
         return { s, ox: M.l + ((VW - M.l - M.r) - W * s) / 2, oy: M.t + ((VH - M.t - M.b) - H * s) / 2 };
     }
 
-    function previewSVG(r, showDims, view, size) {
+    function previewSVG(r, showDims, view, size, ui) {
         const { W, H, drain: d, fuge } = r.p;
         const VW = size?.w || 900, VH = size?.h || 560;
         const v = view || fitView(r, VW, VH);
@@ -81,6 +83,23 @@ const ShowerBoardDialog = (() => {
         }
         // Ablauf
         g += `<rect x="${f(X(d.x0))}" y="${f(Y(d.y1))}" width="${f((d.x1 - d.x0) * s)}" height="${f((d.y1 - d.y0) * s)}" fill="rgba(255,90,77,0.18)" stroke="#ff5a4d" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+        // Fugen-Bearbeitung: Streifen-Auswahl, Fugenmitten, Hover
+        if (ui && ui.mode && ui.mode !== 'view' && r.layout) {
+            const L = r.layout, rowsL = L.strips === 'rows', bnd = [0, ...L.lines, rowsL ? H : W];
+            if (ui.sel != null && !L.coupled && ui.sel >= 0 && ui.sel < bnd.length - 1) {
+                g += rowsL
+                    ? `<rect x="${f(X(0))}" y="${f(Y(bnd[ui.sel + 1]))}" width="${f(W * s)}" height="${f((bnd[ui.sel + 1] - bnd[ui.sel]) * s)}" fill="rgba(255,210,74,0.10)"/>`
+                    : `<rect x="${f(X(bnd[ui.sel]))}" y="${f(Y(H))}" width="${f((bnd[ui.sel + 1] - bnd[ui.sel]) * s)}" height="${f(H * s)}" fill="rgba(255,210,74,0.10)"/>`;
+            }
+            for (const sg of ShowerBoardGenerator.jointSegments(r.p, L)) {
+                const hot = ui.hover && ui.hover.kind === sg.kind && ui.hover.idx === sg.idx && (sg.kind === 'line' || ui.hover.strip === sg.strip);
+                g += `<line x1="${f(X(sg.x0))}" y1="${f(Y(sg.y0))}" x2="${f(X(sg.x1))}" y2="${f(Y(sg.y1))}" stroke="${hot ? '#ff9d00' : '#ffd24a'}" stroke-width="${hot ? 2.6 : 1}" ${hot ? '' : 'stroke-dasharray="5 4" opacity="0.75"'}/>`;
+                if (hot) {
+                    const horiz = sg.y0 === sg.y1, tx = horiz ? X(sg.x1) + 6 : (X(sg.x0) + X(sg.x1)) / 2, ty = horiz ? Y(sg.y0) + 4 : Y(sg.y1) - 8;
+                    g += `<text x="${f(tx)}" y="${f(ty)}" ${horiz ? '' : 'text-anchor="middle"'} font-size="12" font-weight="600" fill="#ff9d00">${horiz ? 'Y' : 'X'} = ${de(sg.pos, 1)}</text>`;
+                }
+            }
+        }
         // Teilenummern + Maße
         for (const it of items) {
             const px = X(it.cx), py = Y(it.cy), big = it.w * s > 46 && it.h * s > 26;
@@ -115,13 +134,13 @@ const ShowerBoardDialog = (() => {
         }
 
         // Spalten-/Zeilenbreiten (Teile ohne Fuge) — unten bzw. links
-        const xb = [0, ...(r.grid?.xLines || []), W], yb = [0, ...(r.grid?.yLines || []), H], hf = fuge / 2;
+        const ch = r.chains || {}, xb = [0, ...(ch.xLines || []), W], yb = [0, ...(ch.yLines || []), H], hf = fuge / 2;
         const bottom = Y(0) + 16, bottom2 = Y(0) + 40, bottom3 = Y(0) + 62, left = X(0) - 16;
-        if (r.grid) for (let i = 0; i < xb.length - 1; i++) {
+        if (ch.xLines || xb.length === 2) for (let i = 0; i < xb.length - 1; i++) {
             const a = xb[i] + (i > 0 ? hf : 0), b = xb[i + 1] - (i < xb.length - 2 ? hf : 0);
             g += dimH(a, b, bottom, de(b - a));
         }
-        if (r.grid) for (let j = 0; j < yb.length - 1; j++) {
+        if (ch.yLines || yb.length === 2) for (let j = 0; j < yb.length - 1; j++) {
             const a = yb[j] + (j > 0 ? hf : 0), b = yb[j + 1] - (j < yb.length - 2 ? hf : 0);
             g += dimV(a, b, left, de(b - a), COL, -1);
         }
@@ -149,12 +168,14 @@ const ShowerBoardDialog = (() => {
             `<rect x="${f(X(0))}" y="${f(Y(H))}" width="${f(W * s)}" height="${f(H * s)}" fill="none" stroke="#556" stroke-width="1" stroke-dasharray="2 3"/>${g}</svg>`;
     }
 
-    function statusHTML(r) {
+    function statusHTML(r, edited) {
         if (!r.ok) return `<span style="color:#ff6b6b">⚠ ${esc(r.error)}</span>`;
         const { W, H } = r.p;
         let t = `<b style="color:#fff">${r.count} Teile</b> &nbsp;<span style="color:#9aa">Fliesenfeld ${de(W)} × ${de(H)} mm`;
         if (r.grid) t += ` · ${r.grid.xLines.length + 1} Spalten × ${r.grid.yLines.length + 1} Zeilen`;
+        else if (r.layout) t += r.layout.strips === 'rows' ? ` · ${r.layout.lines.length + 1} Reihen` : ` · ${r.layout.lines.length + 1} Spalten`;
         t += `</span>`;
+        if (edited) t += ` &nbsp;<span style="color:#ffd24a">✎ Fugenbild angepasst</span>`;
         if (r.warnings.length) {
             const w = r.warnings.slice(0, 2).map(x => esc(x.text)).join('; ');
             t += ` &nbsp;<span style="color:#f0b429">⚠ ${r.warnings.length} × schmal: ${w}${r.warnings.length > 2 ? ' …' : ''}</span>`;
@@ -193,10 +214,20 @@ const ShowerBoardDialog = (() => {
                 <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
                     <h3 style="margin:0;font-size:15px;color:#00aaff;white-space:nowrap;">Duschboard erzeugen</h3>
                     <div id="ds-status" style="flex:1;font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;"></div>
+                    <span id="ds-modes" style="display:flex;gap:4px;align-items:center;">
+                        <button id="ds-m-view" data-mode="view" style="${BTN}" title="Ansicht: Ziehen = Verschieben">✋ Ansicht</button>
+                        <button id="ds-m-move" data-mode="move" style="${BTN}" title="Fuge anfassen und ziehen">↔ Fuge ziehen</button>
+                        <button id="ds-m-addv" data-mode="addv" style="${BTN}" title="Klick setzt eine senkrechte Fuge">＋ senkrecht</button>
+                        <button id="ds-m-addh" data-mode="addh" style="${BTN}" title="Klick setzt eine waagerechte Fuge">＋ waagerecht</button>
+                        <button id="ds-m-del" data-mode="del" style="${BTN}" title="Fuge anklicken zum Löschen">✕ Fuge löschen</button>
+                        <button id="ds-undo" style="${BTN}" title="Rückgängig (Strg+Z)">↶</button>
+                        <button id="ds-redo" style="${BTN}" title="Wiederholen (Strg+Y)">↷</button>
+                        <button id="ds-reset" style="${BTN}" title="Fugenbild auf Automatik zurücksetzen">Fugenbild zurücksetzen</button>
+                    </span>
                     <button id="ds-zout" style="${BTN}" title="Verkleinern">−</button>
                     <button id="ds-fit" style="${BTN}" title="Einpassen (Doppelklick in die Zeichnung)">Einpassen</button>
                     <button id="ds-zin" style="${BTN}" title="Vergrößern">+</button>
-                    <span style="font-size:11px;color:#778;white-space:nowrap;">Mausrad = Zoom · Ziehen = Verschieben</span>
+                    <span style="font-size:11px;color:#778;white-space:nowrap;">Mausrad = Zoom</span>
                 </div>
                 <div style="flex:1;min-height:0;display:flex;gap:14px;">
                     <div style="flex:0 0 272px;overflow:auto;padding-right:6px;">
@@ -221,6 +252,8 @@ const ShowerBoardDialog = (() => {
                         ${sec('Ablauf (rechteckig)')}
                         ${row2(fld('ds-aw', 'Breite [mm]', '140'), fld('ds-ah', 'Tiefe [mm]', '140'))}
                         ${row2(fld('ds-cx', 'Mitte X (leer = mittig)', ''), fld('ds-cy', 'Mitte Y (leer = mittig)', ''))}
+                        ${sec('Fugen (Fugenmitten, mm)')}
+                        <div id="ds-lists" style="font-size:12px;"></div>
                         ${sec('Anzeige')}
                         ${fld('ds-min', 'Warnung bei Teil schmaler als [mm]', '30')}
                         ${chk('ds-dims', 'Teilemaße in der Vorschau')}
@@ -238,6 +271,9 @@ const ShowerBoardDialog = (() => {
         const $ = id => overlay.querySelector('#' + id);
         $('ds-dims').checked = true;
         let last = null, view = null, fitted = true, sizeKey = '';
+        // Fugenbild-Bearbeitung
+        let override = null, mode = 'view', hover = null, selStrip = 0, hist = [], redoStack = [], editDrag = null;
+        const KEEP_OVERRIDE = new Set(['ds-fuge', 'ds-rf', 'ds-min', 'ds-dims', 'ds-aw', 'ds-ah', 'ds-cx', 'ds-cy']);
 
         const vis = (id, on) => { $(id).style.display = on ? '' : 'none'; };
         function syncControls() {
@@ -277,19 +313,137 @@ const ShowerBoardDialog = (() => {
             const key = `${w}x${h}`;
             if (fitted || !view || key !== sizeKey) { if (fitted || !view) view = fitView(last, w, h); }
             sizeKey = key;
-            prev.innerHTML = previewSVG(last, $('ds-dims').checked, view, { w, h });
+            prev.innerHTML = previewSVG(last, $('ds-dims').checked, view, { w, h }, { mode, hover, sel: selStrip });
         }
         const redraw = () => { if (!raf) raf = requestAnimationFrame(draw); };
 
         function update(keepView) {
             syncControls();
-            last = ShowerBoardGenerator.compute(readParams());
-            $('ds-status').innerHTML = statusHTML(last);
+            last = ShowerBoardGenerator.compute(readParams(), override);
+            if (!last.ok || !last.layout) { if (mode !== 'view') setMode('view'); }
+            if (last.ok && last.layout && selStrip >= last.layout.sub.length) selStrip = 0;
+            $('ds-status').innerHTML = statusHTML(last, !!override);
+            renderLists(); syncModeButtons();
             $('ds-ok').disabled = $('ds-save').disabled = !last.ok;
             $('ds-ok').style.opacity = $('ds-save').style.opacity = last.ok ? '1' : '0.4';
             if (!keepView) fitted = true;
             redraw();
         }
+
+        // ── Fugenbild bearbeiten ────────────────────────────────────────────
+        const GEN = ShowerBoardGenerator;
+        const snap = v => Math.round(v);
+        const canEdit = () => !!(last?.ok && last.layout);
+        const pushHist = () => { hist.push(JSON.stringify(override)); if (hist.length > 80) hist.shift(); redoStack = []; };
+        const commit = (next, keep = true) => { pushHist(); override = next; update(keep); };
+        function undo() { if (!hist.length) return; redoStack.push(JSON.stringify(override)); override = JSON.parse(hist.pop()); update(true); }
+        function redo() { if (!redoStack.length) return; hist.push(JSON.stringify(override)); override = JSON.parse(redoStack.pop()); update(true); }
+
+        function syncModeButtons() {
+            const ok = canEdit();
+            overlay.querySelectorAll('#ds-modes [data-mode]').forEach(b => {
+                const on = b.dataset.mode === mode;
+                b.style.background = on ? '#0a6fa8' : '#2f2f33'; b.style.borderColor = on ? '#00aaff' : '#555';
+                const dis = !ok && b.dataset.mode !== 'view';
+                b.disabled = dis; b.style.opacity = dis ? '0.35' : '1';
+            });
+            $('ds-undo').disabled = !hist.length; $('ds-redo').disabled = !redoStack.length;
+            $('ds-undo').style.opacity = hist.length ? '1' : '0.35'; $('ds-redo').style.opacity = redoStack.length ? '1' : '0.35';
+            $('ds-reset').disabled = !override; $('ds-reset').style.opacity = override ? '1' : '0.35';
+            prev.style.cursor = mode === 'view' ? 'grab' : (mode === 'addv' || mode === 'addh') ? 'crosshair' : 'default';
+        }
+        function setMode(m) { mode = m; hover = null; syncModeButtons(); redraw(); }
+
+        const local = e => { const r = prev.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+        const toField = pt => ({ x: (pt.x - view.ox) / view.s, y: last.p.H - (pt.y - view.oy) / view.s });
+        /** Streifen unter einem Feldpunkt */
+        function stripAt(fp) {
+            const L = last.layout, v = L.strips === 'rows' ? fp.y : fp.x;
+            let k = 0; while (k < L.lines.length && v > L.lines[k]) k++;
+            return k;
+        }
+        function hitTest(pt) {
+            if (!canEdit() || !view) return null;
+            const { s, ox, oy } = view, H = last.p.H;
+            let best = null, bd = 7;
+            for (const sg of GEN.jointSegments(last.p, last.layout)) {
+                const ax = ox + sg.x0 * s, ay = oy + (H - sg.y0) * s, bx = ox + sg.x1 * s, by = oy + (H - sg.y1) * s;
+                const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1;
+                const t = Math.max(0, Math.min(1, ((pt.x - ax) * dx + (pt.y - ay) * dy) / l2));
+                const d = Math.hypot(pt.x - ax - t * dx, pt.y - ay - t * dy);
+                if (d < bd - (sg.kind === 'sub' ? 0.5 : 0)) { bd = d; best = sg; }
+            }
+            return best;
+        }
+        const posOf = (sg, fp) => (sg.kind === 'line' ? last.layout.strips === 'rows' : last.layout.strips !== 'rows') ? fp.y : fp.x;
+
+        function removeSeg(sg) {
+            const P = last.p, L = override || last.layout;
+            commit(sg.kind === 'line' ? GEN.removeLine(P, L, sg.idx) : GEN.removeSub(P, L, sg.strip, sg.idx));
+        }
+        /** Klick im Bearbeitungsmodus; true = verbraucht (kein Verschieben der Ansicht) */
+        function editPointerDown(e) {
+            const pt = local(e), fp = toField(pt), P = last.p, L = override || last.layout, rows = L.strips === 'rows';
+            selStrip = stripAt(fp); renderLists();
+            if (mode === 'move') {
+                const sg = hitTest(pt); if (!sg) return false;
+                pushHist();
+                editDrag = { sg, base: JSON.parse(JSON.stringify(L)), val: sg.pos };
+                return true;
+            }
+            if (mode === 'del') { const sg = hitTest(pt); if (!sg) return false; removeSeg(sg); hover = null; return true; }
+            if (mode === 'addv') {   // senkrechte Fuge
+                commit(rows ? GEN.addSub(P, L, stripAt(fp), snap(fp.x)) : GEN.addLine(P, L, snap(fp.x))); return true;
+            }
+            if (mode === 'addh') {   // waagerechte Fuge
+                commit(rows ? GEN.addLine(P, L, snap(fp.y)) : GEN.addSub(P, L, stripAt(fp), snap(fp.y))); return true;
+            }
+            return false;
+        }
+        let rafEdit = 0;
+        function editDragMove(e) {
+            const fp = toField(local(e)), sg = editDrag.sg;
+            editDrag.val = snap(posOf(sg, fp));
+            if (rafEdit) return;
+            rafEdit = requestAnimationFrame(() => {
+                rafEdit = 0; if (!editDrag) return;
+                applyEditDrag(); hover = sg; update(true);
+            });
+        }
+
+        // Fugenlisten (numerisch)
+        function renderLists() {
+            const box = $('ds-lists');
+            if (!canEdit()) { box.innerHTML = '<div style="color:#778">Für dieses Muster (Fischgrät, Korbgeflecht, gedrehtes Raster, kein Raster) gibt es keine einzelnen Fugen zum Bearbeiten — Änderungen über die Parameter.</div>'; return; }
+            const L = last.layout, rows = L.strips === 'rows', sub = L.sub[Math.min(selStrip, L.sub.length - 1)] || [];
+            const list = (title, arr, kind) => {
+                let h = `<div style="color:#9aa;margin:6px 0 2px">${title}</div>`;
+                if (!arr.length) h += '<div style="color:#667">keine</div>';
+                arr.forEach((v, i) => {
+                    h += `<div style="display:flex;gap:4px;margin-bottom:2px"><input class="ds-lst" data-k="${kind}" data-i="${i}" value="${de(v, 2)}" style="${FIELD_CSS}padding:2px 6px;font-size:12px;"><button class="ds-lstdel" data-k="${kind}" data-i="${i}" style="padding:0 7px;background:#3a2a2a;border:1px solid #664;border-radius:4px;color:#e99;cursor:pointer" title="Fuge löschen">✕</button></div>`;
+                });
+                return h;
+            };
+            const strip = L.coupled ? '' : ` — ${rows ? 'Reihe' : 'Spalte'} ${selStrip + 1} (Klick in der Zeichnung wählt)`;
+            box.innerHTML = list(rows ? 'Waagerechte Fugen (Y)' : 'Senkrechte Fugen (X)', L.lines, 'line') +
+                list((rows ? 'Senkrechte Fugen (X)' : 'Waagerechte Fugen (Y)') + strip, sub, 'sub');
+        }
+        $('ds-lists').addEventListener('change', e => {
+            const t = e.target; if (!t.classList.contains('ds-lst')) return;
+            e.stopPropagation();
+            const v = parseNum(t.value); if (!isFinite(v)) { renderLists(); return; }
+            const i = +t.dataset.i, P = last.p, L = override || last.layout;
+            commit(t.dataset.k === 'line' ? GEN.moveLine(P, L, i, v) : GEN.moveSub(P, L, selStrip, i, v));
+        });
+        $('ds-lists').addEventListener('click', e => {
+            const t = e.target.closest('.ds-lstdel'); if (!t) return;
+            const i = +t.dataset.i, P = last.p, L = override || last.layout;
+            commit(t.dataset.k === 'line' ? GEN.removeLine(P, L, i) : GEN.removeSub(P, L, selStrip, i));
+        });
+        overlay.querySelectorAll('#ds-modes [data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+        $('ds-undo').addEventListener('click', undo);
+        $('ds-redo').addEventListener('click', redo);
+        $('ds-reset').addEventListener('click', () => { if (override) { pushHist(); override = null; update(true); } });
 
         // Zoom / Verschieben
         function zoomAt(k, mx, my) {
@@ -307,17 +461,36 @@ const ShowerBoardDialog = (() => {
         let drag = null;
         prev.addEventListener('pointerdown', e => {
             if (e.button > 1) return;
+            if (e.button === 0 && mode !== 'view' && canEdit() && view && editPointerDown(e)) { prev.setPointerCapture?.(e.pointerId); return; }
             drag = { x: e.clientX, y: e.clientY, ox: view?.ox, oy: view?.oy };
             prev.setPointerCapture?.(e.pointerId); prev.style.cursor = 'grabbing';
         });
         prev.addEventListener('pointermove', e => {
+            if (editDrag) { editDragMove(e); return; }
+            if (!drag && mode !== 'view' && canEdit() && view) {
+                const h = (mode === 'move' || mode === 'del') ? hitTest(local(e)) : null;
+                if (h !== hover && !(h && hover && h.kind === hover.kind && h.idx === hover.idx && h.strip === hover.strip)) { hover = h; redraw(); }
+                prev.style.cursor = h ? (mode === 'del' ? 'pointer' : ((h.y0 === h.y1) ? 'ns-resize' : 'ew-resize')) : (mode === 'addv' || mode === 'addh') ? 'crosshair' : 'default';
+            }
             if (!drag || !view) return;
             view = { ...view, ox: drag.ox + e.clientX - drag.x, oy: drag.oy + e.clientY - drag.y };
             fitted = false; redraw();
         });
-        const endDrag = () => { drag = null; prev.style.cursor = 'grab'; };
+        const applyEditDrag = () => {
+            const sg = editDrag.sg, P = last.p, b = editDrag.base;
+            override = sg.kind === 'line' ? GEN.moveLine(P, b, sg.idx, editDrag.val) : GEN.moveSub(P, b, sg.strip, sg.idx, editDrag.val);
+        };
+        const endDrag = () => {
+            drag = null;
+            if (editDrag) {
+                if (rafEdit) { cancelAnimationFrame(rafEdit); rafEdit = 0; }
+                if (editDrag.val !== editDrag.sg.pos) applyEditDrag(); else hist.pop();   // nichts bewegt -> kein Undo-Eintrag
+                editDrag = null; hover = null; update(true);
+            }
+            if (mode === 'view') prev.style.cursor = 'grab';
+        };
         prev.addEventListener('pointerup', endDrag); prev.addEventListener('pointercancel', endDrag);
-        prev.addEventListener('dblclick', () => { fitted = true; redraw(); });
+        prev.addEventListener('dblclick', () => { if (mode === 'view') { fitted = true; redraw(); } });
         const centerZoom = k => zoomAt(k, prev.clientWidth / 2, prev.clientHeight / 2);
         $('ds-zin').addEventListener('click', () => centerZoom(1.25));
         $('ds-zout').addEventListener('click', () => centerZoom(0.8));
@@ -334,13 +507,22 @@ const ShowerBoardDialog = (() => {
             setTimeout(() => { const cv = app?.renderer?.canvas; if (cv) cv.style.cursor = ''; }, 0);
         };
 
-        overlay.addEventListener('input', e => update(!['ds-b', 'ds-t', 'ds-art'].includes(e.target.id)));
-        overlay.addEventListener('change', e => update(!['ds-b', 'ds-t', 'ds-art'].includes(e.target.id)));
+        const onParam = e => {
+            if (e.target.classList?.contains('ds-lst')) return;   // Fugenlisten haben eigenen Handler
+            if (override && !KEEP_OVERRIDE.has(e.target.id)) { override = null; hist = []; redoStack = []; }   // Parameter geaendert -> Automatik
+            update(!['ds-b', 'ds-t', 'ds-art'].includes(e.target.id));
+        };
+        overlay.addEventListener('input', onParam);
+        overlay.addEventListener('change', onParam);
         $('ds-cancel').addEventListener('click', close);
         overlay.addEventListener('mousedown', e => { overlay._downOnBg = e.target === overlay; });
         overlay.addEventListener('click', e => { if (e.target === overlay && overlay._downOnBg) close(); });
         overlay.addEventListener('keydown', e => {
             if (e.key === 'Escape') close();
+            if ((e.ctrlKey || e.metaKey) && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) {
+                const k = e.key.toLowerCase();
+                if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+            }
             if (e.key === 'Enter' && e.target.tagName !== 'BUTTON' && last?.ok) $('ds-ok').click();
             e.stopPropagation();
         });

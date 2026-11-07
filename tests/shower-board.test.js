@@ -154,3 +154,87 @@ test('Muster: Fliesenformat-Ausrichtung horizontal/vertikal vertauscht die Raste
     assert.ok(near(h.grid.xLines[0], 601) && near(h.grid.yLines[0], 301));
     assert.ok(near(v.grid.xLines[0], 301) && near(v.grid.yLines[0], 601));
 });
+
+// ── Fugen-Layout (Phase 2c) ──────────────────────────────────────────────────
+const r2 = v => (Math.round(v * 100) / 100 || 0);   // -0 vermeiden
+const pieceKeys = pieces => pieces.map(pc => pc.poly.map(q => `${r2(q.x)},${r2(q.y)}`).sort().join('|')).sort();
+const baseIn = { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 300, kurz: 150 } };
+
+test('Layout: Fugen-Layout liefert dieselben Teile wie das allgemeine Muster-Modell (Kreuz, Verbaende, Zufall, Spalten)', () => {
+    const cases = [{ anker: 'ru' }, { anker: 'lu' }, { anker: 'ro' }, { ausrichtung: 'vertikal', anker: 'lo' }, { muster: 'verband', versatz: 1 / 3 }, { muster: 'verband', versatz: 0.5, anker: 'mitte' },
+        { muster: 'verband', verbandAchse: 'spalten', versatz: 0.25, gegenlaeufig: true }, { muster: 'verband', versatzFolge: 'wechsel', versatz: 0.3, startVersetzt: true }, { muster: 'zufall', seed: 5 }, { muster: 'zufall', seed: 5, verbandAchse: 'spalten', anker: 'fuge' }];
+    for (const extra of cases) {
+        const r = G.compute({ ...baseIn, ...extra });
+        assert.ok(r.ok && r.editable, JSON.stringify(extra));
+        const p = r.p;
+        const viaPattern = G.clipPieces(p, G._internals.tilesFromPattern(p).tiles);
+        assert.deepStrictEqual(pieceKeys(r.pieces), pieceKeys(viaPattern), JSON.stringify(extra));
+    }
+});
+
+test('Layout: Fischgraet/Korb/Drehung sind nicht editierbar, Kreuzfuge/Verband schon', () => {
+    assert.strictEqual(G.compute({ ...baseIn, muster: 'fischgraet' }).editable, false);
+    assert.strictEqual(G.compute({ ...baseIn, drehung: 45 }).editable, false);
+    assert.strictEqual(G.compute({ ...baseIn, muster: 'verband' }).editable, true);
+});
+
+test('Layout: Linie ziehen (Kreuzfuge gekoppelt), clamp an Nachbar und Feldkante', () => {
+    const r = G.compute({ ...baseIn, anker: 'lu' }), L = r.layout, p = r.p;
+    const moved = G.moveSub(p, L, 1, 0, 400);
+    assert.ok(moved.sub.every(a => near(a[0], 400)), 'gekoppelt: alle Reihen');
+    const clamped = G.moveSub(p, L, 0, 0, L.sub[0][1] + 500);
+    assert.ok(clamped.sub[0][0] < L.sub[0][1], 'darf Nachbar nicht ueberholen');
+    assert.ok(G.moveLine(p, L, 0, -50).lines[0] >= 1, 'nicht ueber die Feldkante');
+    const r2 = G.compute({ ...baseIn, anker: 'lu' }, moved);
+    checkInvariants(r2, 'nach Ziehen');
+    assert.ok(r2.pieces.some(pc => { const b = G._internals.bboxOf(pc.poly); return near(b.x1, 400 - 1, 1e-6) || near(b.x0, 400 + 1, 1e-6); }));
+});
+
+test('Layout: Verband — Fuge in einer Reihe verschieben beeinflusst nur diese Reihe', () => {
+    const r = G.compute({ ...baseIn, muster: 'verband', versatz: 0.5, anker: 'lu' }), L = r.layout, p = r.p;
+    assert.strictEqual(L.coupled, false);
+    const m = G.moveSub(p, L, 2, 0, L.sub[2][0] + 20);
+    assert.ok(near(m.sub[2][0], L.sub[2][0] + 20));
+    assert.ok(m.sub.every((a, k) => k === 2 || a.every((v, i) => near(v, L.sub[k][i]))));
+    checkInvariants(G.compute({ ...baseIn, muster: 'verband', versatz: 0.5, anker: 'lu' }, m), 'Verband editiert');
+});
+
+test('Layout: Fuge setzen und loeschen sind umkehrbar', () => {
+    const r = G.compute({ ...baseIn, anker: 'lu' }), L = r.layout, p = r.p;
+    const a = G.addLine(p, L, 500);
+    assert.strictEqual(a.lines.length, L.lines.length + 1);
+    assert.strictEqual(a.sub.length, L.sub.length + 1);
+    const b = G.removeLine(p, a, a.lines.indexOf(500));
+    assert.deepStrictEqual(b, L);
+    const c = G.addSub(p, L, 1, 333);
+    assert.ok(c.sub.every(arr => arr.includes(333)), 'gekoppelt: in allen Reihen');
+    assert.deepStrictEqual(G.removeSub(p, c, 0, c.sub[0].indexOf(333)), L);
+    assert.strictEqual(G.addLine(p, L, -5).lines.length, L.lines.length, 'ausserhalb ignoriert');
+    checkInvariants(G.compute({ ...baseIn, anker: 'lu' }, a), 'nach Fuge setzen');
+});
+
+test('Layout: jointSegments liefert Fugen als Strecken', () => {
+    const r = G.compute({ ...baseIn, anker: 'lu' });
+    const segs = G.jointSegments(r.p, r.layout);
+    const nLines = r.layout.lines.length, nSub = r.layout.sub.reduce((s, a) => s + a.length, 0);
+    assert.strictEqual(segs.length, nLines + nSub);
+    const h = segs.find(s => s.kind === 'line');
+    assert.ok(h.x0 === 0 && h.x1 === r.p.W && h.y0 === h.y1);
+});
+
+test('Layout: altes Format {xLines,yLines} wird weiter akzeptiert', () => {
+    const r = G.compute({ ...baseIn, anker: 'lu' }, { xLines: [400], yLines: [300, 600] });
+    assert.ok(r.ok && r.layout.lines.length === 2 && r.layout.sub.length === 3);
+});
+
+test('Dialog: Bearbeitungsansicht zeichnet Fugenmitten und markiert die angefasste Fuge', () => {
+    global.ShowerBoardGenerator = G;
+    const D = require('../js/shower-board-dialog.js');
+    const r = G.compute({ ...baseIn, muster: 'verband', anker: 'lu' });
+    const plain = D._internals.previewSVG(r, true);
+    const edit = D._internals.previewSVG(r, true, null, null, { mode: 'move', hover: { kind: 'sub', strip: 1, idx: 0 }, sel: 1 });
+    assert.ok(!plain.includes('stroke-dasharray="5 4"'));
+    assert.ok(edit.includes('stroke-dasharray="5 4"') && edit.includes('#ff9d00') && edit.includes('X = '));
+    assert.ok(D._internals.statusHTML(r, true).includes('Fugenbild angepasst'));
+    delete global.ShowerBoardGenerator;
+});

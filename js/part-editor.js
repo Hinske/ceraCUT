@@ -159,7 +159,7 @@ class PartLibraryDialog {
         <div class="cldcl-dialog-box" style="width:min(1100px,97vw);max-width:97vw;height:88vh;display:flex;flex-direction:column">
             <div class="cldcl-header"><span>Teilebibliothek</span><button class="cldcl-close" data-act="close">×</button></div>
             <div class="cldcl-row" style="padding:8px 12px;flex-wrap:wrap">
-                <input id="pl-q" type="text" placeholder="Suchen (Name, Auftrag, Kunde, Kommission)" style="width:260px">
+                <input id="pl-q" type="text" placeholder="Suchen (Name, Auftrag, Kunde, Kommission) — * ? erlaubt" style="width:260px">
                 <input id="pl-customer" type="text" placeholder="Kunde" style="width:120px">
                 <select id="pl-material"><option value="">Material: alle</option>${this.materials.map(m => `<option value="${esc(m.materialId)}">${esc(m.name)}</option>`).join('')}</select>
                 <input id="pl-thickness" type="number" placeholder="Dicke" step="0.1" style="width:70px">

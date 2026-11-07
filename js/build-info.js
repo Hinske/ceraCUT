@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '643c9c6',
+        hash: '68bed30',
         date: '2026-11-07',
-        message: 'feat: Duschboard V0.2 - Verlegemuster, Zoom/Pan, grosse Zeichnung, Stueckliste e'
+        message: 'feat: Wildcards (* ?) in allen Filterfeldern (js/wildcard.js)'
     },
 
     modules: {
@@ -46,7 +46,7 @@ const CERACUT_BUILD = {
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.7', build: '20261107-leadmenu' },
-        'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
+        'debug-monitor':      { version: '1.3', build: '20261107-wildcard' },
         'nesting':            { version: '1.5', build: '20261107-group' },
         'toolpath-simulator': { version: '1.6', build: '20261107-simrapid' },
         'cost-calculator':    { version: '1.3', build: '20261104-reviewfix' },
@@ -58,7 +58,8 @@ const CERACUT_BUILD = {
         'arc-fitting':        { version: '3.4', build: '20261105-meander' },
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
         'dimension-tool':     { version: '2.6', build: '20261104-pushexecuted' },
-        'dxf-browser':        { version: '1.7', build: '20261107-filter' },
+        'dxf-browser':        { version: '1.8', build: '20261107-wildcard' },
+        'wildcard':           { version: '1.0', build: '20261107-wildcard' },
         'server':             { version: '1.15', build: '20261107-cnclist' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
@@ -74,7 +75,7 @@ const CERACUT_BUILD = {
         'session-store':      { version: '1.1', build: '20261104-reviewfix' },
         'auth-helper':        { version: '1.1', build: '20261104-reviewfix' },
         'store':              { version: '1.0', build: '20261107-store' },
-        'data-api':           { version: '1.5', build: '20261107-group' },
+        'data-api':           { version: '1.6', build: '20261107-wildcard' },
         'seed':               { version: '1.1', build: '20261107-techdb' },
         'part-library':       { version: '1.8', build: '20261107-group' },
         'nesting-plan':       { version: '1.7', build: '20261107-group' },

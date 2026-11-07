@@ -1,7 +1,7 @@
 /**
- * CeraCUT Debug Monitor V1.2
- * Last Modified: 2026-06-30 MEZ
- * Build: 20260630-consolelog
+ * CeraCUT Debug Monitor V1.3 (Log-Suche mit Wildcards * ?)
+ * Last Modified: 2026-11-07 MEZ
+ * Build: 20261107-wildcard
  * ════════════════════════════════════════════════════════════
  * Automatisches Fehler-Monitoring für CeraCUT / CeraCUT
  *
@@ -421,8 +421,8 @@
         if (_levelFilter === 'error') entries = entries.filter(l => l.level === 'error');
         if (_moduleFilter) entries = entries.filter(l => (l.module || '(other)') === _moduleFilter);
         if (_logSearch) {
-            const q = _logSearch.toLowerCase();
-            entries = entries.filter(l => l.text.toLowerCase().includes(q));
+            const m = (typeof Wildcard !== 'undefined') ? Wildcard.compile(_logSearch) : (t => t.toLowerCase().includes(_logSearch.toLowerCase()));
+            entries = entries.filter(l => m(l.text));
         }
         const displayEntries = entries.slice(0, 400);
 

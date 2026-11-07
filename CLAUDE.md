@@ -29,6 +29,10 @@ Diese Regeln sind NICHT optional. Sie MUESSEN bei jeder Aenderung vollstaendig a
 - [ ] **3. Maus/Trackpad** → `MOUSE_SHORTCUTS` in `constants.js`
 - [ ] Das genuegt — Tooltip und F1-Dialog werden automatisch generiert
 
+### Checkliste: Bei neuem Filter-/Suchfeld
+
+- [ ] **Wildcards `*` und `?` sind Pflicht** (User-Vorgabe 2026-11-07, gilt fuer ALLE Filterfunktionen): `Wildcard.compile(query)(...felder)` aus `js/wildcard.js` nutzen (Browser: `window.Wildcard`, Server: `require('../js/wildcard')`), kein eigenes `includes()`. Leerzeichen = UND.
+
 ### Checkliste: Bei User-Korrektur
 
 - [ ] **1. `tasks/lessons.md`** — Fehler, Root Cause, Regel dokumentieren
@@ -238,7 +242,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Document Manager** | `document-manager.js` | **V1.0** | Multi-Dokument-Tabs (Document/DocumentManager), Swap-Pattern, IndexedDB-Persistenz ('ceracut-tabs') |
 | **Dimension Tool** | `dimension-tool.js` | **V2.4** | Bemaßung, Selektion, Grip-Editing, Text-Override, Einzeln-Löschen, Undo/Redo |
 | **Measure Tool** | `measure-tool.js` | — | Messmodus |
-| **Debug Monitor** | `debug-monitor.js` | **V1.2** | Error-Catcher, Fallen-Erkennung, Strg+Shift+D Overlay |
+| **Debug Monitor** | `debug-monitor.js` | **V1.3** | Error-Catcher, Fallen-Erkennung, Strg+Shift+D Overlay |
 | **Nesting** | `nesting.js` | **V1.5** | BLF-Algorithmus, Multi-Rotation, Multi-Sheet |
 | **Toolpath Simulator** | `toolpath-simulator.js` | **V1.6** | Pfad-Verifikation, Animation, Kollisionsmatrix |
 | **Cost Calculator** | `cost-calculator.js` | **V1.3** | Kosten-/Zeitkalkulation mit CeraJet-Integration |
@@ -561,7 +565,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   document-manager: V1.6 (20261106-fliesenrect)
   project-manager: V1.2 (20261104-pushexecuted)
   properties-panel: V1.7 (20261107-leadmenu)
-  debug-monitor: V1.2 (20260630-consolelog)
+  debug-monitor: V1.3 (20261107-wildcard)
   nesting: V1.5 (20261107-group)
   toolpath-simulator: V1.6 (20261107-simrapid)
   cost-calculator: V1.3 (20261104-reviewfix)
@@ -572,7 +576,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   mosaic-generator: V1.4 (20261106-fliesenrect)
   advanced-tools: V1.9 (20261104-reviewfix)
   arc-fitting: V3.4 (20261105-meander)
-  dxf-browser: V1.7 (20261107-filter)
+  dxf-browser: V1.8 (20261107-wildcard)
   server: V1.15 (20261107-cnclist)
   user-store: V1.1 (20261104-reviewfix)
   session-store: V1.1 (20261104-reviewfix)

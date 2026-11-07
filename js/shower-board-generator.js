@@ -1,5 +1,5 @@
 /**
- * CeraCUT Duschboard-Generator V0.2 (Kern, ohne Dialog)
+ * CeraCUT Duschboard-Generator V0.3 (Kern, ohne Dialog)
  * Erzeugt die Zuschnitt-Teile eines Duschboards (Fliesen mit Gehrung zum Ablauf) aus Maßen, Ablauf und Fugenbild.
  *
  * Regeln (aus Kochhan_Duschboard_1000x1000.dxf, Ablauf 140x140 mittig):
@@ -12,19 +12,21 @@
  * Phase 2a: nur rechteckiger Punktablauf. Rinne (2d), runder/aussermittiger Sonderfall-Check (2e) folgen.
  * Rein (kein DOM) — laeuft in Node (tests/shower-board.test.js).
  *
+ * V0.3: Fugen-Layout (Reihen/Spalten + Fugenlisten je Reihe) fuer Kreuzfuge/Verband/Zufall ohne Drehung; Bearbeitungsfunktionen
+ *       (moveLine/moveSub/addLine/addSub/removeLine/removeSub), jointSegments fuer Anzeige/Hit-Test
  * V0.2: Verlegemuster (Kreuzfuge, Verband 1/2 1/3 1/4 frei, Zufall, Fischgraet, Korbgeflecht), Ausrichtung horizontal/vertikal,
  *       Drehwinkel (z. B. 45 Grad), Anker (Ecken, Mitte, Fuge), Reihen-/Spaltenversatz; Teile = Fliese (Zelle - Fuge/2) ∩ Sektor
  * V0.1: Erstversion (Raster, Sektoren, Clipping, DXF)
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch3
+ * Build: 20261107-dusch4
  */
 
 const ShowerBoardGenerator = (() => {
     'use strict';
 
-    const VERSION = '0.2';
-    const LOG = '[Duschboard V0.2]';
+    const VERSION = '0.3';
+    const LOG = '[Duschboard V0.3]';
     const LAYER_FLIESE = 'Fliesen';
     const LAYER_COLOR = 160;
     const EPS = 1e-6;
@@ -182,20 +184,131 @@ const ShowerBoardGenerator = (() => {
         };
     }
 
-    const isGridPattern = p => p.muster === 'keins' || (p.muster === 'kreuz' && Math.abs(p.drehung % 360) < 1e-9);
+    /** Seitlicher Versatz (mm, vorzeichenbehaftet) der Reihe j; pu = Fliesenzelle in Reihenrichtung */
+    function rowShift(p, j, pu) {
+        if (p.muster !== 'verband' && p.muster !== 'zufall') return 0;
+        const jj = j + (p.startVersetzt ? 1 : 0);
+        const frac = p.muster === 'verband'
+            ? (p.versatzFolge === 'wechsel' ? ((((jj % 2) + 2) % 2) * p.versatz) : ((((jj * p.versatz) % 1) + 1) % 1))
+            : 0.2 + 0.6 * hash01(p.seed, jj);
+        return (p.gegenlaeufig ? -1 : 1) * frac * pu;
+    }
+
+    /** Muster, die als Fugen-Layout (Reihen + Fugenlisten) darstellbar und damit editierbar sind */
+    const isGridPattern = p => Math.abs(p.drehung % 360) < 1e-9 && ['keins', 'kreuz', 'verband', 'zufall'].includes(p.muster);
 
     /** Rechteckige Fliese -> Polygon (CCW) */
     const rectCCW = (x0, y0, x1, y1) => rectPoly(x0, y0, x1, y1);
 
-    /** Fliesen (Zellen um Fuge/2 verkleinert) aus Fugenlinien — Kreuzfuge ohne Drehung */
-    function tilesFromGrid(p, grid) {
+    // ── Fugen-Layout ────────────────────────────────────────────────────────
+    // layout = { strips: 'rows'|'cols', lines: [Fugenmitten quer zu den Streifen], sub: [[Fugenmitten entlang]...] (lines.length+1 Listen), coupled }
+    //   rows: Streifen = waagerechte Reihen (lines = Y-Fugen, sub[k] = X-Fugen der Reihe k)
+    //   cols: Streifen = senkrechte Spalten (lines = X-Fugen, sub[k] = Y-Fugen der Spalte k)
+    //   coupled: alle Streifen haben dieselben Fugen (Kreuzfuge) -> Aenderungen gelten fuer alle
+    const MIN_GAP = 1;   // mm Mindestabstand benachbarter Fugenmitten / zur Feldkante bei Bearbeitung
+
+    function buildLayout(p) {
+        if (p.muster === 'keins') return { strips: 'rows', lines: [], sub: [[]], coupled: true };
+        const { W, H, drain: d, fuge } = p;
+        const px = p.tx + fuge, py = p.ty + fuge;
+        const O = anchorPoint(p, px, py);
+        const cols = (p.muster === 'verband' || p.muster === 'zufall') && p.verbandAchse === 'spalten';
+        const [Op, Os, Lp, Ls, pv, pu, tP, tS, lo, hi, loS, hiS] = cols
+            ? [O.x, O.y, W, H, px, py, p.tx, p.ty, d.x0, d.x1, d.y0, d.y1]
+            : [O.y, O.x, H, W, py, px, p.ty, p.tx, d.y0, d.y1, d.x0, d.x1];
+        const mode = p.muster === 'kreuz' ? p.anker : 'lu';
+        const lines = autoLinesAnchored(Op, Lp, pv, lo, hi, mode, tP, fuge);
+        const bnd = [0, ...lines, Lp], sub = [];
+        for (let k = 0; k < bnd.length - 1; k++) {
+            const mid = (bnd[k] + bnd[k + 1]) / 2;
+            const j = Math.floor((mid - Op) / pv);
+            sub.push(p.muster === 'kreuz'
+                ? autoLinesAnchored(Os, Ls, pu, loS, hiS, p.anker, tS, fuge)
+                : autoLinesAnchored(Os + rowShift(p, j, pu), Ls, pu, loS, hiS, 'lu', tS, fuge));
+        }
+        return { strips: cols ? 'cols' : 'rows', lines, sub, coupled: p.muster === 'kreuz' };
+    }
+
+    function layoutFromGrid(grid) {
+        const lines = (grid.yLines || []).slice().sort((a, b) => a - b), xs = (grid.xLines || []).slice().sort((a, b) => a - b);
+        return { strips: 'rows', lines, sub: Array.from({ length: lines.length + 1 }, () => xs.slice()), coupled: true };
+    }
+
+    const cloneLayout = L => ({ strips: L.strips, coupled: L.coupled, lines: L.lines.slice(), sub: L.sub.map(a => a.slice()) });
+
+    /** Fugenlinien fuer Bemassungsketten: {xLines,yLines}; null wenn nicht fuer alle Streifen gleich */
+    function chainsOf(L) {
+        if (L.strips === 'rows') return { yLines: L.lines, xLines: L.coupled ? L.sub[0] : null };
+        return { xLines: L.lines, yLines: L.coupled ? L.sub[0] : null };
+    }
+
+    const clampBetween = (arr, i, v, L) => {
+        const lo = (i > 0 ? arr[i - 1] : 0) + MIN_GAP, hi = (i < arr.length - 1 ? arr[i + 1] : L) - MIN_GAP;
+        return Math.min(Math.max(v, lo), Math.max(lo, hi));
+    };
+    const fieldLens = (p, L) => L.strips === 'rows' ? { P: p.H, S: p.W } : { P: p.W, S: p.H };
+
+    function moveLine(p, L, idx, v) { const n = cloneLayout(L), { P } = fieldLens(p, n); n.lines[idx] = clampBetween(n.lines, idx, v, P); return n; }
+    function moveSub(p, L, strip, idx, v) {
+        const n = cloneLayout(L), { S } = fieldLens(p, n);
+        const targets = n.coupled ? n.sub.map((_, i) => i) : [strip];
+        const val = clampBetween(n.sub[strip], idx, v, S);
+        for (const k of targets) if (n.sub[k].length > idx) n.sub[k][idx] = val;
+        return n;
+    }
+    function addLine(p, L, v) {
+        const n = cloneLayout(L), { P } = fieldLens(p, n);
+        if (!(v > MIN_GAP && v < P - MIN_GAP) || n.lines.some(x => Math.abs(x - v) < MIN_GAP)) return n;
+        let k = n.lines.findIndex(x => x > v); if (k < 0) k = n.lines.length;   // Streifen k wird geteilt
+        n.lines.splice(k, 0, v); n.sub.splice(k, 0, n.sub[k].slice());
+        return n;
+    }
+    function addSub(p, L, strip, v) {
+        const n = cloneLayout(L), { S } = fieldLens(p, n);
+        if (!(v > MIN_GAP && v < S - MIN_GAP)) return n;
+        for (const k of n.coupled ? n.sub.keys() : [strip]) {
+            if (n.sub[k].some(x => Math.abs(x - v) < MIN_GAP)) continue;
+            n.sub[k].push(v); n.sub[k].sort((a, b) => a - b);
+        }
+        return n;
+    }
+    function removeLine(p, L, idx) {
+        const n = cloneLayout(L);
+        if (idx < 0 || idx >= n.lines.length) return n;
+        n.lines.splice(idx, 1); n.sub.splice(idx + 1, 1);   // Streifen idx und idx+1 verschmelzen, Fugen des unteren/linken bleiben
+        return n;
+    }
+    function removeSub(p, L, strip, idx) {
+        const n = cloneLayout(L);
+        for (const k of n.coupled ? n.sub.keys() : [strip]) if (idx >= 0 && idx < n.sub[k].length) n.sub[k].splice(idx, 1);
+        return n;
+    }
+
+    /** Fugenmitten als Strecken im Feld (fuer Anzeige und Hit-Test) */
+    function jointSegments(p, L) {
+        const rows = L.strips === 'rows', { P, S } = fieldLens(p, L);
+        const out = [], b = [0, ...L.lines, P];
+        L.lines.forEach((v, idx) => out.push(rows
+            ? { kind: 'line', idx, pos: v, x0: 0, y0: v, x1: p.W, y1: v }
+            : { kind: 'line', idx, pos: v, x0: v, y0: 0, x1: v, y1: p.H }));
+        L.sub.forEach((arr, k) => arr.forEach((v, idx) => out.push(rows
+            ? { kind: 'sub', strip: k, idx, pos: v, x0: v, y0: b[k], x1: v, y1: b[k + 1] }
+            : { kind: 'sub', strip: k, idx, pos: v, x0: b[k], y0: v, x1: b[k + 1], y1: v })));
+        return out;
+    }
+
+    /** Fliesen (Zellen um Fuge/2 verkleinert) aus dem Fugen-Layout */
+    function tilesFromLayout(p, L) {
+        const rows = L.strips === 'rows', { P, S } = fieldLens(p, L);
         const BIG = 4 * (p.W + p.H) + 2000, h = p.fuge / 2;
-        const bx = [-BIG, ...grid.xLines.slice().sort((a, b) => a - b), p.W + BIG];
-        const by = [-BIG, ...grid.yLines.slice().sort((a, b) => a - b), p.H + BIG];
-        const out = [];
-        for (let i = 0; i < bx.length - 1; i++) for (let j = 0; j < by.length - 1; j++) {
-            const x0 = bx[i] + h, x1 = bx[i + 1] - h, y0 = by[j] + h, y1 = by[j + 1] - h;
-            if (x1 - x0 > 1e-6 && y1 - y0 > 1e-6) out.push(rectCCW(x0, y0, x1, y1));
+        const bp = [-BIG, ...L.lines.slice().sort((a, b) => a - b), P + BIG], out = [];
+        for (let k = 0; k < bp.length - 1; k++) {
+            const bs = [-BIG, ...(L.sub[k] || []).slice().sort((a, b) => a - b), S + BIG];
+            for (let i = 0; i < bs.length - 1; i++) {
+                const a0 = bs[i] + h, a1 = bs[i + 1] - h, c0 = bp[k] + h, c1 = bp[k + 1] - h;
+                if (a1 - a0 < 1e-6 || c1 - c0 < 1e-6) continue;
+                out.push(rows ? rectCCW(a0, c0, a1, c1) : rectCCW(c0, a0, c1, a1));
+            }
         }
         return out;
     }
@@ -237,22 +350,13 @@ const ShowerBoardGenerator = (() => {
         const rects = [];   // Musterraum-Rechtecke [u0,v0,u1,v1] = Fugenmitten-Zellen
         const jRange = [Math.floor(vmin / pv) - 2, Math.ceil(vmax / pv) + 2];
         const iRange = [Math.floor(umin / pu) - 2, Math.ceil(umax / pu) + 2];
-        const sgn = p.gegenlaeufig && !mirror ? -1 : 1;
         const cap = p.maxTeile * 4;
         const est = (iRange[1] - iRange[0] + 1) * (jRange[1] - jRange[0] + 1);
         if (est > cap * 8) return { error: 'Zu viele Fliesen für dieses Format — bitte Maße prüfen.' };
 
         if (p.muster === 'kreuz' || p.muster === 'verband' || p.muster === 'zufall') {
-            const v = p.muster === 'verband' ? p.versatz : 0;
             for (let j = jRange[0]; j <= jRange[1]; j++) {
-                const jj = j + (p.startVersetzt ? 1 : 0);
-                let frac = 0;
-                if (p.muster === 'verband') {
-                    frac = p.versatzFolge === 'wechsel' ? ((((jj % 2) + 2) % 2) * v) : (((jj * v) % 1) + 1) % 1;
-                } else if (p.muster === 'zufall') {
-                    frac = 0.2 + 0.6 * hash01(p.seed, jj);
-                }
-                const shift = sgn * frac * pu;
+                const shift = rowShift(p, j, pu);
                 for (let i = iRange[0] - 1; i <= iRange[1] + 1; i++) rects.push([i * pu + shift, j * pv, (i + 1) * pu + shift, (j + 1) * pv]);
             }
         } else if (p.muster === 'fischgraet') {
@@ -389,15 +493,16 @@ const ShowerBoardGenerator = (() => {
     /**
      * Hauptfunktion. grid optional (manuell editiertes Fugenbild: { xLines, yLines }); sonst Automatik.
      */
-    function compute(input, grid) {
+    /** override: Fugen-Layout (editiert) oder altes {xLines,yLines}; wird nur verwendet, wenn das Muster layout-faehig ist */
+    function compute(input, override) {
         const n = normalize(input);
         if (!n.ok) return n;
         const p = n.p;
         if (p.W * p.H / ((p.tx + p.fuge) * (p.ty + p.fuge)) > p.maxTeile) return { ok: false, error: `Mehr als ${p.maxTeile} Fliesen — Fliesenformat prüfen.` };
-        let g = null, tiles;
+        let layout = null, tiles;
         if (isGridPattern(p)) {
-            g = grid || buildGrid(p);
-            tiles = tilesFromGrid(p, g);
+            layout = override ? (override.strips ? override : layoutFromGrid(override)) : buildLayout(p);
+            tiles = tilesFromLayout(p, layout);
         } else {
             const r = tilesFromPattern(p);
             if (r.error) return { ok: false, error: r.error };
@@ -406,10 +511,12 @@ const ShowerBoardGenerator = (() => {
         const pieces = clipPieces(p, tiles);
         if (pieces.length > p.maxTeile) return { ok: false, error: `Mehr als ${p.maxTeile} Teile — Fliesenformat prüfen.` };
         const fileName = `Duschboard_${Math.round(input.breite)}x${Math.round(input.tiefe)}_Ablauf${Math.round(input.ablauf.w)}x${Math.round(input.ablauf.h)}.dxf`;
-        return { ok: true, p, grid: g, pieces, warnings: validate(p, pieces), count: pieces.length, fileName, dxf: buildDXF(pieces) };
+        const chains = layout ? chainsOf(layout) : null;
+        const grid = chains && chains.xLines && chains.yLines ? chains : null;
+        return { ok: true, p, layout, chains, grid, editable: !!layout, pieces, warnings: validate(p, pieces), count: pieces.length, fileName, dxf: buildDXF(pieces) };
     }
 
-    return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, bboxOf, tilesFromPattern, hash01 } };
+    return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, moveLine, moveSub, addLine, addSub, removeLine, removeSub, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, bboxOf, tilesFromPattern, hash01 } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = ShowerBoardGenerator;

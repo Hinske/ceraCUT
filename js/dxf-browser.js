@@ -4,7 +4,8 @@
  * Ermöglicht das Browsen und Laden von DXF-Dateien vom Server-Netzlaufwerk
  * über die /api/dxf/* Endpunkte von server.js.
  *
- * Version: V1.7
+ * Version: V1.8
+ * V1.8: Feat — Filter mit Wildcards (* ?) über js/wildcard.js
  * V1.7: Feat — Filterfeld + max. 400 Zeilen (CNC-Ordner hat ~10.000 Dateien); CNC: kein Datum-Sortierknopf
  * V1.6: Feat — kind 'cnc': gleicher Browser für den CNC-Ordner (/api/cnc/*, CNCReader-Vorschau, onLoad-Callback); Titel „DXF Server"/„CNC Server"
  * V1.5: Feat — Vorschau-Panel (Canvas) rechts: Einfachklick = Vorschau, Doppelklick/Button = Laden
@@ -12,7 +13,7 @@
  * V1.3: Sortierung (Name/Datum, auf-/absteigend, Ordner immer oben, pro User gemerkt)
  * V1.1: Zuletzt-Pfad pro User (_userKey(), Login/User-Management V6.32)
  * Last Modified: 2026-11-07
- * Build: 20261107-filter
+ * Build: 20261107-wildcard
  */
 
 /** Pro-User-Namespacing für localStorage-Keys (V6.32 Login/User-Management). */
@@ -82,13 +83,13 @@ class DXFBrowser {
             bar.appendChild(b);
         }
         const f = document.createElement('input');
-        f.type = 'search'; f.placeholder = 'Filter…'; f.value = this._filter || '';
+        f.type = 'search'; f.placeholder = 'Filter (* ? erlaubt)…'; f.title = '* = beliebig viele Zeichen, ? = ein Zeichen, Leerzeichen = UND'; f.value = this._filter || '';
         f.style.cssText = 'margin-left:auto; width:200px; padding:3px 8px; background:#111; color:#ddd; border:1px solid #444; border-radius:3px; font-size:12px;';
         let tm = null;
         f.addEventListener('input', () => {
             clearTimeout(tm);
             tm = setTimeout(() => {
-                this._filter = f.value.trim().toLowerCase();
+                this._filter = f.value.trim();
                 const listEl = this.overlay?.querySelector('.dxf-browser-list');
                 if (listEl) this._renderList(this.items, listEl);
             }, 150);
@@ -378,7 +379,7 @@ class DXFBrowser {
 
         const flt = this._filter || '';
         let all = this._sortItems(items);
-        if (flt) all = all.filter(i => i.name.toLowerCase().includes(flt));
+        if (flt) { const m = Wildcard.compile(flt); all = all.filter(i => m(i.name)); }
         const MAX = 400;   // 10.000 DOM-Zeilen waren der zweite Flaschenhals
         const shown = all.length > MAX ? all.slice(0, MAX) : all;
         for (const item of shown) {
