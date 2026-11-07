@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.24',
-    build: '20261107-camcad',
+    version: '7.25',
+    build: '20261107-cadgrp',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'b343d3c',
+        hash: '1cf239f',
         date: '2026-11-07',
-        message: 'refactor: CAM-Tools wieder im Tab CAD (drawing-tools V2.24)'
+        message: 'refactor: CAM-Tools in die CAD-Tools-Gruppe integriert'
     },
 
     modules: {
