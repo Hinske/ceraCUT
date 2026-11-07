@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.36',
-    build: '20261107-obext',
+    version: '7.37',
+    build: '20261107-dusch9',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '247fcc8',
+        hash: 'd3071c1',
         date: '2026-11-07',
-        message: 'feat: Overlap Break - aussenliegende Enden automatisch um 5 mm verlaengert'
+        message: 'feat: Duschboard V0.5 - Projekte und Kunden-PDF mit waehlbaren Varianten und Angaben'
     },
 
     modules: {
@@ -67,8 +67,10 @@ const CERACUT_BUILD = {
         'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
-        'shower-board-generator': { version: '0.4', build: '20261107-obext' },
-        'shower-board-dialog': { version: '0.4', build: '20261107-obext' },
+        'shower-board-generator': { version: '0.5', build: '20261107-dusch9' },
+        'shower-board-dialog': { version: '0.5', build: '20261107-dusch9' },
+        'shower-api': { version: '0.1', build: '20261107-showerapi' },
+        'shower-pdf': { version: '0.1', build: '20261107-showerpdf' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },

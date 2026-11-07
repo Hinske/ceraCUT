@@ -62,6 +62,7 @@ const { execSync } = require('child_process');
 const userStore = require('./lib/user-store');
 const { createStores } = require('./lib/store');
 const { handleDataApi } = require('./lib/data-api');
+const { handleShowerApi } = require('./lib/shower-api');
 const dataStores = createStores(path.join(__dirname, 'data'));
 require('./lib/seed').seedIfEmpty(dataStores)
     .then(r => { if (r.materials || r.technologies) console.log(`[CeraCUT Server] Seed: ${r.materials} Materialien, ${r.technologies} Technologien angelegt`); })
@@ -673,6 +674,11 @@ function requestHandler(req, res) {
     if (pathname === '/api/dxf/save' && req.method === 'POST') {
         if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
         return handleDXFSave(req, res);
+    }
+
+    // ── Duschboard-API (Projekte, Kunden-PDF): Login in handleShowerApi ──
+    if (pathname.startsWith('/api/shower/') && handleShowerApi(req, res, pathname, parsed.query, currentUser, path.join(__dirname, 'data'))) {
+        return;
     }
 
     // ── Daten-API (Teile, Pläne, Bleche, Aufträge, Technologie): Login in handleDataApi ──

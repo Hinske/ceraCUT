@@ -620,7 +620,79 @@ const ShowerBoardGenerator = (() => {
         return { ok: true, p, layout, chains, grid, editable: !!layout, pieces, warnings: validate(p, pieces), count: pieces.length, full: st.full, cutTiles: st.cutTiles, tilesUsed: st.tilesUsed, autoInfo, fileName, dxf: buildDXF(pieces) };
     }
 
-    return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, moveLine, moveSub, addLine, addSub, fitInfo, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, fitInfo, bboxOf, tilesFromPattern, hash01 } };
+    // ── Teilenummern (Dialog + PDF) ─────────────────────────────────────────
+    function centroid(poly) {
+        let a = 0, x = 0, y = 0;
+        for (let i = 0; i < poly.length; i++) {
+            const p = poly[i], q = poly[(i + 1) % poly.length], k = p.x * q.y - q.x * p.y;
+            a += k; x += (p.x + q.x) * k; y += (p.y + q.y) * k;
+        }
+        return a ? { x: x / (3 * a), y: y / (3 * a) } : poly[0];
+    }
+
+    /** Teile nummerieren: zeilenweise von unten links nach oben rechts (Schwerpunkt) */
+    function numberPieces(pieces) {
+        const list = pieces.map(pc => {
+            const b = bboxOf(pc.poly), c = centroid(pc.poly);
+            return { pc, b, w: b.x1 - b.x0, h: b.y1 - b.y0, cx: c.x, cy: c.y };
+        });
+        list.sort((a, c) => (Math.abs(a.cy - c.cy) > 1 ? a.cy - c.cy : a.cx - c.cx));
+        list.forEach((it, i) => { it.nr = i + 1; });
+        return list;
+    }
+
+    // ── Verlegevarianten (Katalog fuer PDF/Kundenauswahl) ───────────────────
+    /** Varianten-Definitionen ohne Berechnung: [{id,label,group,overrides}] — Rasterlage immer 'auto' */
+    function variantDefs(input) {
+        const n = normalize(input);
+        if (!n.ok) return [];
+        const sq = Math.abs(n.p.fliese.lang - n.p.fliese.kurz) < 1;
+        const defs = [];
+        const add = (id, label, group, overrides) => defs.push({ id, label, group, overrides: { ...overrides, anker: 'auto', drehung: overrides.drehung || 0 } });
+        if (sq) add('kreuz', 'Kreuzfuge', 'Kreuzfuge', { muster: 'kreuz' });
+        else {
+            add('kreuz', 'Kreuzfuge (Fliese liegend)', 'Kreuzfuge', { muster: 'kreuz', ausrichtung: 'horizontal' });
+            add('kreuz-hoch', 'Kreuzfuge (Fliese hochkant)', 'Kreuzfuge', { muster: 'kreuz', ausrichtung: 'vertikal' });
+        }
+        add('kreuz-45', 'Kreuzfuge diagonal (45°)', 'Diagonal', { muster: 'kreuz', drehung: 45 });
+        for (const [key, v, name] of [['50', 0.5, 'Halbverband'], ['33', 1 / 3, 'Drittelverband'], ['25', 0.25, 'Viertelverband']]) {
+            const ov = { muster: 'verband', versatz: v };
+            if (sq) {
+                add(`verband${key}-reihen`, `${name}, Reihen versetzt`, 'Verband', { ...ov, verbandAchse: 'reihen' });
+                add(`verband${key}-spalten`, `${name}, Spalten versetzt`, 'Verband', { ...ov, verbandAchse: 'spalten' });
+            } else {
+                add(`verband${key}`, `${name} (Fliese liegend)`, 'Verband', { ...ov, ausrichtung: 'horizontal', verbandAchse: 'reihen' });
+                add(`verband${key}-hoch`, `${name} (Fliese hochkant)`, 'Verband', { ...ov, ausrichtung: 'vertikal', verbandAchse: 'spalten' });
+            }
+        }
+        add('verband-45', 'Halbverband diagonal (45°)', 'Diagonal', { muster: 'verband', versatz: 0.5, drehung: 45 });
+        if (sq) add('zufall', 'Wilder Verband', 'Verband', { muster: 'zufall', seed: 1 });
+        else {
+            add('zufall', 'Wilder Verband (Fliese liegend)', 'Verband', { muster: 'zufall', seed: 1, ausrichtung: 'horizontal' });
+            add('zufall-hoch', 'Wilder Verband (Fliese hochkant)', 'Verband', { muster: 'zufall', seed: 1, ausrichtung: 'vertikal', verbandAchse: 'spalten' });
+            add('fischgraet', 'Fischgrät', 'Fischgrät', { muster: 'fischgraet' });
+            add('fischgraet-45', 'Fischgrät diagonal (45°)', 'Fischgrät', { muster: 'fischgraet', drehung: 45 });
+            add('korb', 'Korbgeflecht', 'Korbgeflecht', { muster: 'korb' });
+        }
+        return defs;
+    }
+
+    /** Katalog mit Berechnung: nur Varianten, die funktionieren und sich sichtbar unterscheiden. stats je Variante. */
+    function variantCatalog(input, opts = {}) {
+        const seen = new Set(), out = [];
+        for (const d of variantDefs(input)) {
+            const r = compute({ ...input, ...d.overrides });
+            if (!r.ok) continue;
+            const key = r.pieces.map(pc => pc.poly.map(q => `${Math.round(q.x * 10)},${Math.round(q.y * 10)}`).sort().join('|')).sort().join('#');
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push({ ...d, ...(opts.pieces ? { W: r.p.W, H: r.p.H, drain: r.p.drain, polys: r.pieces.map(pc => pc.poly) } : {}), stats: { tilesUsed: r.tilesUsed, full: r.full, cutTiles: r.cutTiles, count: r.count,
+                narrow: r.warnings.filter(w => w.type === 'narrow').length, noFit: r.warnings.filter(w => w.type === 'fit').length } });
+        }
+        return out;
+    }
+
+    return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, numberPieces, variantDefs, variantCatalog, moveLine, moveSub, addLine, addSub, fitInfo, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, fitInfo, bboxOf, tilesFromPattern, hash01 } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = ShowerBoardGenerator;

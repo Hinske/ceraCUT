@@ -1,5 +1,5 @@
 /**
- * CeraCUT Duschboard-Dialog V0.3.3: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
+ * CeraCUT Duschboard-Dialog V0.5: Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster, Fugenbild bearbeiten
  * Kern: shower-board-generator.js (ShowerBoardGenerator). Befehl DUSCH, Ribbon CAD -> Zuschnitte -> Duschboard.
  *
  * Bemaßung (zur Kontrolle): Gesamtmaß (Fliesenfeld, bei Außenmaß zusätzlich Außenmaß), Ablaufmaße und -lage,
@@ -7,6 +7,7 @@
  * Phase 2b: Vorschau nur lesend; Fugenbild von Hand editieren folgt in 2c.
  *
  * V0.3.3: Fugenliste nur auf Wunsch (Checkbox, Standard aus)
+ * V0.5: Projekte (Server /api/shower/projects: Oeffnen/Speichern/Kopie/Loeschen, Standard-Duschboards als Vorlage) + Kunden-PDF-Dialog (Varianten + Angaben waehlen, /api/shower/pdf)
  * V0.4: Standardfliese 597x597, Raster 'Automatisch' (Standard), Statuszeile mit Fliesenbedarf (ganz/geschnitten) und gewaehlter Rasterlage
  * V0.3.2: Passpruefung Teil -> Fliese (Drehung, laengste Kante): rote Markierung, Teilemass = kleinste Box, Nummern in der Statuszeile; Fuge-loeschen entfernt
  * V0.3 (Phase 2c): Fugenbild bearbeiten — Fugen ziehen/setzen in der Zeichnung, Fugenlisten (numerisch), Rueckgaengig/Wiederholen
@@ -16,7 +17,7 @@
  * V0.1: Erstversion
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch8
+ * Build: 20261107-dusch9
  */
 
 const ShowerBoardDialog = (() => {
@@ -30,31 +31,9 @@ const ShowerBoardDialog = (() => {
     const de = (v, d = 1) => (+v.toFixed(d)).toString().replace('.', ',');
     const parseNum = s => { const t = String(s).trim().replace(',', '.'); return t === '' ? NaN : Number(t); };
 
-    const bbox = poly => {
-        const xs = poly.map(q => q.x), ys = poly.map(q => q.y);
-        return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
-    };
-
-    function centroid(poly) {
-        let a = 0, x = 0, y = 0;
-        for (let i = 0; i < poly.length; i++) {
-            const p = poly[i], q = poly[(i + 1) % poly.length], k = p.x * q.y - q.x * p.y;
-            a += k; x += (p.x + q.x) * k; y += (p.y + q.y) * k;
-        }
-        return a ? { x: x / (3 * a), y: y / (3 * a) } : poly[0];
-    }
-
-    /** Teile nummerieren: zeilenweise von unten links nach oben rechts (Schwerpunkt). */
-    function numbered(pieces) {
-        const list = pieces.map(pc => {
-            const b = bbox(pc.poly);
-            const c = centroid(pc.poly);   // Schwerpunkt: Beschriftung liegt auch bei Dreiecken/Trapezen im Teil
-            return { pc, b, w: b.x1 - b.x0, h: b.y1 - b.y0, cx: c.x, cy: c.y };
-        });
-        list.sort((a, c) => (Math.abs(a.cy - c.cy) > 1 ? a.cy - c.cy : a.cx - c.cx));
-        list.forEach((it, i) => { it.nr = i + 1; });
-        return list;
-    }
+    /** Teile nummerieren (zeilenweise von unten links) — gemeinsame Logik mit dem PDF in shower-board-generator.js */
+    const GENr = () => (typeof ShowerBoardGenerator !== 'undefined' ? ShowerBoardGenerator : require('./shower-board-generator.js'));
+    const numbered = pieces => GENr().numberPieces(pieces);
 
     // ── Vorschau (SVG) ──────────────────────────────────────────────────────
     /** Ansicht einpassen: Zeichenfeld VW x VH (px) fuellen, Platz fuer Bemassungsketten lassen */
@@ -231,6 +210,7 @@ const ShowerBoardDialog = (() => {
                         <button id="ds-redo" style="${BTN}" title="Wiederholen (Strg+Y)">↷</button>
                         <button id="ds-reset" style="${BTN}" title="Fugenbild auf Automatik zurücksetzen">Fugenbild zurücksetzen</button>
                     </span>
+                    <button id="ds-pdf" style="${BTN}border-color:#2d7a4b;" title="PDF für den Kunden: Varianten und Angaben auswählen">📄 Kunden-PDF</button>
                     <button id="ds-zout" style="${BTN}" title="Verkleinern">−</button>
                     <button id="ds-fit" style="${BTN}" title="Einpassen (Doppelklick in die Zeichnung)">Einpassen</button>
                     <button id="ds-zin" style="${BTN}" title="Vergrößern">+</button>
@@ -238,6 +218,13 @@ const ShowerBoardDialog = (() => {
                 </div>
                 <div style="flex:1;min-height:0;display:flex;gap:14px;">
                     <div style="flex:0 0 272px;overflow:auto;padding-right:6px;">
+                        <div style="font-size:12px;color:#00aaff;">Projekt</div>
+                        <input id="ds-pname" placeholder="Projektname" style="${FIELD_CSS}margin-top:3px;">
+                        <input id="ds-pkunde" placeholder="Kunde" style="${FIELD_CSS}margin-top:4px;">
+                        <textarea id="ds-pnotiz" rows="2" placeholder="Notiz (erscheint auf dem Deckblatt des Kunden-PDF)" style="${FIELD_CSS}margin-top:4px;resize:vertical;font-family:inherit;"></textarea>
+                        <label style="display:block;font-size:12px;margin-top:4px;"><input type="checkbox" id="ds-pvorlage"> Standard-Duschboard (Vorlage)</label>
+                        <div style="display:flex;gap:4px;margin-top:5px;"><button id="ds-popen" style="${BTN}flex:1;padding:3px 4px;" title="Gespeichertes Projekt oder Standard-Duschboard öffnen">Öffnen…</button><button id="ds-psave" style="${BTN}flex:1;padding:3px 4px;" title="Projekt speichern">Speichern</button><button id="ds-psavenew" style="${BTN}flex:1;padding:3px 4px;" title="Als neues Projekt speichern (Kopie)">Als Kopie</button></div>
+                        <div id="ds-pstat" style="font-size:11px;color:#778;min-height:14px;margin:3px 0 6px;"></div>
                         ${sel('ds-art', 'Maßangabe bezieht sich auf', [['fliesenfeld', 'Fliesenfeld (reine Fliesenfläche)'], ['aussen', 'Außenmaß (inkl. Randfuge)']])}
                         ${row2(fld('ds-b', 'Breite X [mm]', '1300'), fld('ds-t', 'Tiefe Y [mm]', '1000'))}
                         ${sec('Fliese und Fuge')}
@@ -541,6 +528,194 @@ const ShowerBoardDialog = (() => {
             if (!last?.ok) return;
             app.promptSaveToServer({ defaultName: last.fileName, content: last.dxf, title: 'DXF speichern', bind: false });
         });
+
+        // ── Projekte (Server: /api/shower/projects) ─────────────────────────
+        let project = null;   // { id, version } des geladenen/gespeicherten Projekts
+        const META_IDS = new Set(['ds-pname', 'ds-pkunde', 'ds-pnotiz', 'ds-pvorlage']);
+        const STATE_SELECTOR = 'input[id^="ds-"],select[id^="ds-"],textarea[id^="ds-"]';
+        const stateEls = () => [...overlay.querySelectorAll(STATE_SELECTOR)].filter(e => !META_IDS.has(e.id) && !e.classList.contains('ds-lst') && !/^ds-(showlist|pf-|pq)/.test(e.id));
+        function getState() {
+            const fields = {}, checks = {};
+            for (const e of stateEls()) { if (e.type === 'checkbox') checks[e.id] = e.checked; else fields[e.id] = e.value; }
+            return { fields, checks, override: override ? JSON.parse(JSON.stringify(override)) : null };
+        }
+        function setState(st) {
+            for (const e of stateEls()) {
+                if (e.type === 'checkbox') { if (st.checks && e.id in st.checks) e.checked = !!st.checks[e.id]; }
+                else if (st.fields && e.id in st.fields) e.value = st.fields[e.id];
+            }
+            override = st.override || null; hist = []; redoStack = []; selStrip = 0; mode = 'view'; hover = null;
+            update(false);
+        }
+        const pstat = (t, bad) => { $('ds-pstat').textContent = t; $('ds-pstat').style.color = bad ? '#ff6b6b' : '#778'; };
+        const api = async (method, url, body, headers = {}) => {
+            const r = await fetch(url, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+            const ct = r.headers.get('content-type') || '';
+            const data = ct.includes('json') ? await r.json() : await r.blob();
+            if (!r.ok) throw Object.assign(new Error(data?.error || `Fehler ${r.status}`), { status: r.status });
+            return { data, headers: r.headers };
+        };
+        const projectDoc = () => ({ name: $('ds-pname').value.trim(), kunde: $('ds-pkunde').value.trim(), notiz: $('ds-pnotiz').value, vorlage: $('ds-pvorlage').checked, state: getState(), pdf: pdfPrefs() });
+        async function saveProject(asNew) {
+            const doc = projectDoc();
+            if (!doc.name) { pstat('Bitte einen Projektnamen eingeben.', true); $('ds-pname').focus(); return; }
+            try {
+                const r = (project && !asNew)
+                    ? await api('PUT', `/api/shower/projects/${project.id}`, doc, { 'If-Match': String(project.version) })
+                    : await api('POST', '/api/shower/projects', doc);
+                project = { id: r.data.id, version: r.data.version };
+                pstat(`Gespeichert: ${r.data.id} (Version ${r.data.version})`);
+                app?.showToast?.(`Duschboard-Projekt „${doc.name}“ gespeichert`, 'success');
+            } catch (e) {
+                pstat(e.status === 409 && project && !asNew ? 'Zwischenzeitlich von jemand anderem geändert — „Als Kopie“ speichert als neues Projekt.' : e.message, true);
+            }
+        }
+        async function openProject(id) {
+            try {
+                const { data } = await api('GET', `/api/shower/projects/${encodeURIComponent(id)}`);
+                $('ds-pname').value = data.name || ''; $('ds-pkunde').value = data.kunde || ''; $('ds-pnotiz').value = data.notiz || ''; $('ds-pvorlage').checked = !!data.vorlage;
+                project = { id: data.id, version: data.version };
+                if (data.pdf) { try { localStorage.setItem('ceracut.showerPdf', JSON.stringify(data.pdf)); } catch { /* ohne Speicher */ } }
+                setState(data.state || {});
+                pstat(`Geöffnet: ${data.id} (Version ${data.version}, ${data.updatedBy || '?'})`);
+            } catch (e) { pstat(e.message, true); }
+        }
+        function projectList() {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:absolute;inset:0;z-index:5;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;border-radius:8px;';
+            box.innerHTML = `<div style="background:#252526;border:1px solid #555;border-radius:8px;width:min(720px,94%);max-height:80%;display:flex;flex-direction:column;padding:14px 16px;">
+                <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;"><b style="color:#00aaff;font-size:14px;">Duschboard-Projekte</b>
+                    <input id="pq" placeholder="Filter (Name, Kunde, Notiz; * und ? möglich)" style="${FIELD_CSS}flex:1;">
+                    <button id="pq-close" style="${BTN}">Schließen</button></div>
+                <div id="pq-list" style="overflow:auto;flex:1;font-size:13px;"></div></div>`;
+            overlay.firstElementChild.appendChild(box);
+            const list = box.querySelector('#pq-list'), q = box.querySelector('#pq');
+            let timer = 0;
+            const load = async () => {
+                try {
+                    const { data } = await api('GET', `/api/shower/projects?q=${encodeURIComponent(q.value)}`);
+                    list.innerHTML = data.items.length ? `<table style="width:100%;border-collapse:collapse;">` + data.items.map(it =>
+                        `<tr data-id="${esc(it.id)}" style="border-top:1px solid #333;cursor:pointer;"><td style="padding:5px 6px;">${it.vorlage ? '⭐ ' : ''}<b>${esc(it.name)}</b></td><td style="color:#9aa;padding:5px 6px;">${esc(it.kunde || '')}</td>` +
+                        `<td style="color:#9aa;padding:5px 6px;white-space:nowrap;">${esc(it.breite || '')} × ${esc(it.tiefe || '')}</td><td style="color:#778;padding:5px 6px;white-space:nowrap;">${esc((it.updatedAt || '').slice(0, 10))} ${esc(it.updatedBy || '')}</td>` +
+                        `<td style="padding:5px 6px;text-align:right;"><button data-del="${esc(it.id)}" style="${BTN}padding:1px 7px;color:#e99;" title="Projekt löschen">✕</button></td></tr>`).join('') + '</table>'
+                        : '<div style="color:#778;padding:8px;">Keine Projekte gefunden.</div>';
+                } catch (e) { list.innerHTML = `<div style="color:#ff6b6b">${esc(e.message)}</div>`; }
+            };
+            q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(load, 180); });
+            box.querySelector('#pq-close').addEventListener('click', () => box.remove());
+            list.addEventListener('click', async e => {
+                const del = e.target.closest('[data-del]');
+                if (del) {
+                    if (!confirm(`Projekt „${del.dataset.del}“ wirklich löschen?`)) return;
+                    try { await api('DELETE', `/api/shower/projects/${encodeURIComponent(del.dataset.del)}`); if (project?.id === del.dataset.del) project = null; await load(); }
+                    catch (er) { pstat(er.message, true); }
+                    return;
+                }
+                const tr = e.target.closest('tr[data-id]');
+                if (tr) { box.remove(); openProject(tr.dataset.id); }
+            });
+            box.addEventListener('keydown', e => { if (e.key === 'Escape') { box.remove(); e.stopPropagation(); } });
+            load(); q.focus();
+        }
+        $('ds-popen').addEventListener('click', projectList);
+        $('ds-psave').addEventListener('click', () => saveProject(false));
+        $('ds-psavenew').addEventListener('click', () => saveProject(true));
+        overlay.addEventListener('input', e => { if (META_IDS.has(e.target.id) && project) pstat('Geändert — „Speichern“ übernimmt die Änderungen.'); });
+
+        // ── Kunden-PDF: Varianten + Angaben waehlen ─────────────────────────
+        const PDF_DEFAULT = {
+            variantIds: ['current'],
+            options: { cover: true, orientation: 'landscape', perPage: 1, color: true, totals: true, drain: true, gridDims: true, pieceNumbers: false, pieceDims: false, angles: false, stats: false, warnings: false, footer: true }
+        };
+        function pdfPrefs() {
+            try { const v = JSON.parse(localStorage.getItem('ceracut.showerPdf') || 'null'); if (v && v.options) return { variantIds: v.variantIds || ['current'], options: { ...PDF_DEFAULT.options, ...v.options } }; } catch { /* ohne Speicher */ }
+            return JSON.parse(JSON.stringify(PDF_DEFAULT));
+        }
+        const thumb = v => {
+            if (!v.polys) return '';
+            const w = 118, h = Math.round(118 * v.H / v.W), k = w / v.W;
+            const pl = v.polys.map(pg => `<polygon points="${pg.map(q => `${(q.x * k).toFixed(1)},${((v.H - q.y) * k).toFixed(1)}`).join(' ')}" fill="rgba(74,163,255,0.25)" stroke="#4aa3ff" stroke-width="0.7"/>`).join('');
+            const d = v.drain;
+            return `<svg width="${w}" height="${h}" style="background:#12161c;border:1px solid #333;flex:none"><rect x="${(d.x0 * k).toFixed(1)}" y="${((v.H - d.y1) * k).toFixed(1)}" width="${((d.x1 - d.x0) * k).toFixed(1)}" height="${((d.y1 - d.y0) * k).toFixed(1)}" fill="rgba(255,90,77,0.4)"/>${pl}</svg>`;
+        };
+        function openPdfDialog() {
+            const params = readParams();
+            const prefs = pdfPrefs();
+            const box = document.createElement('div');
+            box.style.cssText = 'position:absolute;inset:0;z-index:6;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;border-radius:8px;';
+            const o = prefs.options;
+            const cb = (id, label, on, hint = '') => `<label style="display:block;font-size:12.5px;margin:3px 0;"><input type="checkbox" id="pf-${id}" ${on ? 'checked' : ''}> ${label}${hint ? ` <span style="color:#778">${hint}</span>` : ''}</label>`;
+            const opt = (id, label, opts, val) => `<label style="${LABEL_CSS}">${label}</label><select id="pf-${id}" style="${FIELD_CSS}">${opts.map(([v, t]) => `<option value="${v}" ${String(v) === String(val) ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+            box.innerHTML = `<div style="background:#252526;border:1px solid #555;border-radius:8px;width:min(1000px,96%);height:min(86%,760px);display:flex;flex-direction:column;padding:14px 16px;">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;"><b style="color:#00aaff;font-size:14px;">Kunden-PDF: Verlegevarianten</b><span style="color:#778;font-size:12px;flex:1;">Wählen Sie, welche Varianten und Angaben der Kunde sieht.</span></div>
+                <div style="flex:1;min-height:0;display:flex;gap:18px;">
+                    <div style="flex:1 1 55%;min-width:0;display:flex;flex-direction:column;">
+                        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:12.5px;"><b>Varianten</b><span id="pf-count" style="color:#9aa;flex:1;"></span><button id="pf-all" style="${BTN}padding:1px 8px;">Alle</button><button id="pf-none" style="${BTN}padding:1px 8px;">Keine</button></div>
+                        <div id="pf-vars" style="overflow:auto;flex:1;border:1px solid #333;border-radius:4px;padding:6px;font-size:12.5px;color:#9aa;">Berechne Varianten …</div>
+                    </div>
+                    <div style="flex:0 0 300px;overflow:auto;padding-right:4px;">
+                        <b style="font-size:12.5px;">Angaben für den Kunden</b>
+                        ${cb('totals', 'Gesamtmaße', o.totals)}${cb('drain', 'Ablaufmaße und -lage', o.drain)}${cb('gridDims', 'Fugenraster-Maße (Breite je Spalte/Zeile)', o.gridDims)}
+                        <b style="font-size:12.5px;display:block;margin-top:10px;">Intern (Standard: aus)</b>
+                        ${cb('pieceNumbers', 'Teilenummern', o.pieceNumbers)}${cb('pieceDims', 'Teilemaße (kleinste Box)', o.pieceDims)}${cb('angles', 'Gehrungswinkel', o.angles)}${cb('stats', 'Fliesenbedarf (ganz/geschnitten)', o.stats)}${cb('warnings', 'Hinweise (schmale Teile, passt nicht auf Fliese)', o.warnings)}
+                        <b style="font-size:12.5px;display:block;margin-top:10px;">Seite</b>
+                        ${opt('perPage', 'Varianten je Seite', [[1, '1 (groß)'], [2, '2'], [4, '4 (Übersicht)']], o.perPage)}
+                        ${opt('orientation', 'Format', [['landscape', 'A4 quer'], ['portrait', 'A4 hoch']], o.orientation)}
+                        ${opt('color', 'Farbe', [['true', 'Farbe'], ['false', 'Schwarz-Weiß (Druck)']], String(o.color))}
+                        ${cb('cover', 'Deckblatt mit Projektdaten', o.cover)}${cb('footer', 'Fußzeile (Datum, Seite)', o.footer)}
+                        <div style="font-size:11.5px;color:#778;margin-top:10px;">Kunde/Projekt/Notiz stammen aus dem Projektfeld links im Dialog.</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:10px;"><span id="pf-msg" style="flex:1;font-size:12px;color:#ff6b6b;"></span>
+                    <button id="pf-cancel" style="${BTN}">Abbrechen</button><button id="pf-go" style="${BTN}background:#2d7a4b;border-color:#2d7a4b;color:#fff;font-weight:600;">PDF erzeugen</button></div></div>`;
+            overlay.firstElementChild.appendChild(box);
+            const B = id => box.querySelector('#' + id);
+            const close = () => box.remove();
+            B('pf-cancel').addEventListener('click', close);
+            box.addEventListener('keydown', e => { if (e.key === 'Escape') { close(); e.stopPropagation(); } });
+            const checked = () => [...box.querySelectorAll('.pf-var:checked')].map(e => e.value);
+            const count = () => { B('pf-count').textContent = `${checked().length} gewählt`; };
+            B('pf-all').addEventListener('click', () => { box.querySelectorAll('.pf-var').forEach(e => { e.checked = true; }); count(); });
+            B('pf-none').addEventListener('click', () => { box.querySelectorAll('.pf-var').forEach(e => { e.checked = false; }); count(); });
+            setTimeout(() => {
+                let cat = [];
+                try { cat = GEN.variantCatalog(params, { pieces: true }); } catch (e) { B('pf-vars').textContent = 'Varianten nicht berechenbar: ' + e.message; return; }
+                if (!last?.ok) { B('pf-vars').innerHTML = `<span style="color:#ff6b6b">Eingaben korrigieren: ${esc(last?.error || '')}</span>`; return; }
+                const row = (id, label, st, th, on) => `<label style="display:flex;gap:10px;align-items:center;padding:4px 2px;border-bottom:1px solid #2c2c2c;cursor:pointer;color:#ddd;"><input type="checkbox" class="pf-var" value="${esc(id)}" ${on ? 'checked' : ''}>${th}<span style="flex:1;"><b>${esc(label)}</b><br><span style="color:#9aa;font-size:12px;">${st}</span></span></label>`;
+                const stTxt = s => `${s.tilesUsed} Fliesen · ${s.count} Teile${s.full ? ` · ${s.full} ganz` : ''}${s.narrow ? ` · <span style="color:#f0b429">${s.narrow} schmal</span>` : ''}${s.noFit ? ` · <span style="color:#ff6b6b">${s.noFit} passt nicht</span>` : ''}`;
+                const curThumb = { W: last.p.W, H: last.p.H, drain: last.p.drain, polys: last.pieces.map(pc => pc.poly) };
+                let html = row('current', 'Aktuelle Auswahl (wie im Dialog' + (override ? ', Fugenbild angepasst' : '') + ')', stTxt({ tilesUsed: last.tilesUsed, count: last.count, full: last.full, narrow: last.warnings.filter(w => w.type === 'narrow').length, noFit: last.warnings.filter(w => w.type === 'fit').length }), thumb(curThumb), prefs.variantIds.includes('current'));
+                let group = '';
+                for (const v of cat) {
+                    if (v.group !== group) { group = v.group; html += `<div style="margin:8px 0 2px;color:#00aaff;font-size:12px;">${esc(group)}</div>`; }
+                    html += row(v.id, v.label, stTxt(v.stats), thumb(v), prefs.variantIds.includes(v.id));
+                }
+                B('pf-vars').innerHTML = html; B('pf-vars').style.color = '';
+                box.querySelectorAll('.pf-var').forEach(e => e.addEventListener('change', count)); count();
+            }, 30);
+            B('pf-go').addEventListener('click', async () => {
+                const ids = checked();
+                if (!ids.length) { B('pf-msg').textContent = 'Bitte mindestens eine Variante wählen.'; return; }
+                const options = {
+                    cover: B('pf-cover').checked, footer: B('pf-footer').checked, totals: B('pf-totals').checked, drain: B('pf-drain').checked, gridDims: B('pf-gridDims').checked,
+                    pieceNumbers: B('pf-pieceNumbers').checked, pieceDims: B('pf-pieceDims').checked, angles: B('pf-angles').checked, stats: B('pf-stats').checked, warnings: B('pf-warnings').checked,
+                    perPage: +B('pf-perPage').value, orientation: B('pf-orientation').value, color: B('pf-color').value === 'true'
+                };
+                try { localStorage.setItem('ceracut.showerPdf', JSON.stringify({ variantIds: ids, options })); } catch { /* ohne Speicher */ }
+                B('pf-go').disabled = true; B('pf-msg').style.color = '#9aa'; B('pf-msg').textContent = 'PDF wird erzeugt …';
+                try {
+                    const { data, headers } = await api('POST', '/api/shower/pdf', { input: params, override, variantIds: ids, options,
+                        meta: { projekt: $('ds-pname').value, kunde: $('ds-pkunde').value, notiz: $('ds-pnotiz').value } });
+                    const a = document.createElement('a'), url = URL.createObjectURL(data);
+                    const m = /filename="([^"]+)"/.exec(headers.get('content-disposition') || '');
+                    a.href = url; a.download = m ? m[1] : 'Duschboard_Verlegevarianten.pdf'; document.body.appendChild(a); a.click(); a.remove();
+                    setTimeout(() => URL.revokeObjectURL(url), 5000);
+                    app?.showToast?.(`PDF mit ${ids.length} Variante${ids.length > 1 ? 'n' : ''} erzeugt`, 'success');
+                    close();
+                } catch (e) { B('pf-go').disabled = false; B('pf-msg').style.color = '#ff6b6b'; B('pf-msg').textContent = e.message; }
+            });
+        }
+        $('ds-pdf').addEventListener('click', openPdfDialog);
 
         update();
         setTimeout(() => { const f = $('ds-b'); f.focus(); f.select(); }, 50);
