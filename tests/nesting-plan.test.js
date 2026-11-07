@@ -136,3 +136,32 @@ test('Reale Testdatei HEIDED856000W-115V1: Import (REFERENZ aus, Aufteilen) + 30
     const polys = plan.instances.map(i => NestingPlan.placePart(parts[i.partId], i.rot, i.tx, i.ty));
     assert.strictEqual(brute.overlaps(polys, plan.instances.map(i => i.sheetIndex)), 0);
 });
+
+test('instanceMatrix (Canvas-Vorschau) entspricht placePart für alle Drehungen', () => {
+    const part = twoDiscPart();
+    const cache = {};
+    for (const rot of [0, 45, 90, 135, 180, 270, 315]) {
+        const m = NestingPlan.instanceMatrix(part, rot, 120.5, 33.25, cache);
+        const placed = NestingPlan.placePart(part, rot, 120.5, 33.25);
+        const src = part.geometry.contours.filter(c => !/referenz/i.test(c.layer));
+        assert.strictEqual(placed.length, src.length);
+        placed.forEach((pc, ci) => pc.points.forEach((p, k) => {
+            const [x, y] = [src[ci].points[k][0], -src[ci].points[k][1]];               // Teilpunkt im (x,−y)-Raum
+            const X = m[0] * x + m[2] * y + m[4], Y = m[1] * x + m[3] * y + m[5];
+            assert.ok(Math.abs(X - p.x) < 1e-6 && Math.abs(Y - (-p.y)) < 1e-6, `rot ${rot}: (${X},${Y}) ≠ (${p.x},${-p.y})`);
+        }));
+    }
+});
+
+test('sheetScene: ein Typ, je Instanz eine Matrix; Referenz-Konturen fehlen; svgInner erst bei Zugriff', () => {
+    const part = twoDiscPart();
+    const { plan } = quiet(() => NestingPlan.run([{ partId: 'P-2', qty: 40 }], { 'P-2': part }, { width: 1500, length: 1000, partToPart: 5, partToEdge: 5 }));
+    const c = NestingPlan.sheetContent(plan, { 'P-2@1': part }, 0);
+    const onSheet = plan.instances.filter(i => (i.sheetIndex || 0) === 0).length;
+    assert.strictEqual(c.scene.types.length, 1);
+    assert.strictEqual(c.scene.items.length, onSheet);
+    assert.ok(c.scene.items.every(i => i.m.length === 6 && i.m.every(Number.isFinite)));
+    assert.ok(!c.scene.types[0].contours.some(k => k.role === 'open'));
+    assert.deepStrictEqual(c.box, { x: 0, y: -1000, w: 1500, h: 1000 });
+    assert.strictEqual((c.svgInner.match(/<path/g) || []).length, onSheet * 4);               // 2 Außen + 2 Löcher je Teil
+});

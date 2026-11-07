@@ -12,7 +12,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-multidisc
+ * Build: 20261107-canvasprev
+ * V1.7: Perf — Vorschau über sheetScene (Canvas), Rückfrage beim Öffnen sehr großer Bleche im Editor (>400 Konturen)
  * V1.6: Fix — Teile mit mehreren Außenkonturen werden als starre Einheit (konvexe Hülle) genestet, REFERENZ-Layer-Konturen wandern nicht mehr mit (Überlagerungen)
  * V1.5: Feat — Schachtelplan als PDF (Autonest-Dialog, Planliste) über /api/reports/plan-pdf
  * V1.4: Feat — Autonest im Web Worker (Fortschritt, Abbrechen), Vorschau mit Zoom/Verschieben + Große Ansicht, runAsync/prepare/finish
@@ -267,6 +268,52 @@ const NestingPlan = (() => {
         return out.join('\n') + '\n';
     }
 
+    /**
+     * Platzierung als SVG-Matrix [a,b,c,d,e,f] im Raum (x, -y) — identisch zu placePart (Drehung um die Mitte des
+     * Nest-Umrisses, Umriss-BBox auf (0,0), dann (tx,ty)); Teilkonturen werden dafür nur einmal je Typ in (x,-y) abgelegt.
+     */
+    function instanceMatrix(part, rot, tx, ty, cache = {}) {
+        const poly = nestPolygon(part);
+        if (!poly) return null;
+        const key = `${part.partId}@${part.revision}|${rot}`;
+        let g = cache[key];
+        if (!g) {
+            const ob = bbox(poly), cx = (ob.minX + ob.maxX) / 2, cy = (ob.minY + ob.maxY) / 2;
+            const rb = bbox(rotate(poly, rot, cx, cy));
+            const rad = (rot || 0) * Math.PI / 180;
+            g = cache[key] = { cx, cy, rbx: rb.minX, rby: rb.minY, cos: Math.cos(rad), sin: Math.sin(rad) };
+        }
+        const { cx, cy, rbx, rby, cos, sin } = g;
+        // Modellraum: x' = cos·x − sin·y + e0 ; y' = sin·x + cos·y + f0
+        const e0 = -cos * cx + sin * cy + cx - rbx + tx, f0 = -sin * cx - cos * cy + cy - rby + ty;
+        // Konjugiert mit der Spiegelung y → −y: (a, −b, −c, d, e0, −f0)
+        return [cos, -sin, sin, cos, e0, -f0];
+    }
+
+    /**
+     * Zeichenliste eines Blechs für die Canvas-Vorschau: je Teiletyp die Konturen einmal (in (x,−y)), je Instanz nur
+     * eine Matrix → 200 Teile ≈ 200 Matrizen statt 1000 Pfade mit allen Punkten.
+     */
+    function sheetScene(plan, partsMap, sheetIndex = 0) {
+        const partIds = Object.keys(plan.demand);
+        const typeIdx = new Map(), types = [], items = [], cache = {};
+        for (const inst of plan.instances) {
+            if ((inst.sheetIndex || 0) !== sheetIndex) continue;
+            const part = partFor(partsMap, inst);
+            if (!part) continue;
+            const m = instanceMatrix(part, inst.rot, inst.tx, inst.ty, cache);
+            if (!m) continue;
+            const tk = `${part.partId}@${part.revision}`;
+            if (!typeIdx.has(tk)) {
+                typeIdx.set(tk, types.length);
+                types.push({ color: COLORS[partIds.indexOf(inst.partId) % COLORS.length],
+                    contours: partContours(part).map(c => ({ role: c.role, closed: c.closed, points: c.points.map(p => [p[0], -p[1]]) })) });
+            }
+            items.push({ t: typeIdx.get(tk), m });
+        }
+        return { types, items, sheet: { w: plan.sheet.width, l: plan.sheet.length } };
+    }
+
     const COLORS = ['#0078d4', '#22c55e', '#e8a020', '#a855f7', '#ef4444', '#14b8a6', '#f97316', '#64748b'];
 
     /** Blech als SVG-Inhalt für ZoomPane/PartViewer: Koordinaten (x, -y) (y nach oben), Konturstärke konstant, Farbe je Teil. */
@@ -274,13 +321,23 @@ const NestingPlan = (() => {
         const W = plan.sheet.width, L = plan.sheet.length;
         const partIds = Object.keys(plan.demand);
         const r2 = v => Math.round(v * 100) / 100;
-        const paths = sheetPolylines(plan, partsMap, sheetIndex).map(c => {
-            const d = c.points.map((p, k) => `${k ? 'L' : 'M'}${r2(p.x)} ${r2(-p.y)}`).join('') + (c.closed ? 'Z' : '');
-            const col = COLORS[partIds.indexOf(c.partId) % COLORS.length];
-            return `<path d="${d}" stroke="${col}" ${c.role === 'disc' ? `fill="${col}" fill-opacity="0.15"` : 'fill="#fff"'} stroke-width="1.2" vector-effect="non-scaling-stroke"/>`;
-        }).join('');
-        const outline = `<rect x="0" y="${-L}" width="${W}" height="${L}" fill="#fff" stroke="#888" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
-        return { svgInner: outline + paths, box: { x: 0, y: -L, w: W, h: L } };
+        let svg = null;
+        return {
+            box: { x: 0, y: -L, w: W, h: L },
+            scene: sheetScene(plan, partsMap, sheetIndex),               // Canvas-Vorschau (schnell, auch bei hunderten Teilen)
+            // SVG nur bei Bedarf (Fallback ohne Canvas, Tests): groß, daher erst beim Zugriff aufgebaut
+            get svgInner() {
+                if (svg === null) {
+                    const paths = sheetPolylines(plan, partsMap, sheetIndex).map(c => {
+                        const d = c.points.map((p, k) => `${k ? 'L' : 'M'}${r2(p.x)} ${r2(-p.y)}`).join('') + (c.closed ? 'Z' : '');
+                        const col = COLORS[partIds.indexOf(c.partId) % COLORS.length];
+                        return `<path d="${d}" stroke="${col}" ${c.role === 'disc' ? `fill="${col}" fill-opacity="0.15"` : 'fill="#fff"'} stroke-width="1.2" vector-effect="non-scaling-stroke"/>`;
+                    }).join('');
+                    svg = `<rect x="0" y="${-L}" width="${W}" height="${L}" fill="#fff" stroke="#888" stroke-width="1.5" vector-effect="non-scaling-stroke"/>` + paths;
+                }
+                return svg;
+            }
+        };
     }
 
     /** Legende (Teil → Farbe, Menge auf diesem Blech) als HTML für den Vorschau-Dialog. */
@@ -309,7 +366,7 @@ const NestingPlan = (() => {
              + `<g transform="translate(0 ${L}) scale(1 -1)"><rect x="0" y="0" width="${W}" height="${L}" fill="#fff" stroke="#888" stroke-width="${Math.max(W, L) / 400}"/>${paths}</g></svg>`;
     }
 
-    return { run, runAsync, prepare, finish, sheetContent, sheetLegend, placePart, nestPolygon, partFor, sheetPolylines, toDXF, previewSvg, outerContour, ROTATIONS, PRIORITY };
+    return { run, runAsync, prepare, finish, sheetContent, sheetScene, instanceMatrix, sheetLegend, placePart, nestPolygon, partFor, sheetPolylines, toDXF, previewSvg, outerContour, ROTATIONS, PRIORITY };
 })();
 
 /** Alle Teile eines Plans in exakter Revision laden → Map `partId@rev`. */
@@ -326,6 +383,10 @@ async function loadPlanParts(plan) {
 
 /** Sheet eines Plans in neuem Tab öffnen (wie eine geladene DXF-Datei). */
 function openPlanSheet(app, plan, partsMap, sheetIndex = 0) {
+    // Der Editor rechnet für jede Kontur Schnittfuge, Leads und Kollisionen — bei hunderten Teilen dauert das Sekunden
+    const count = NestingPlan.sheetPolylines(plan, partsMap, sheetIndex).length;
+    if (count > 400 && typeof confirm === 'function' &&
+        !confirm(`Dieses Blech hat ${count} Konturen.\nDas Öffnen im Editor (Schnittfugen, Leads, Kollisionsprüfung) kann bei dieser Größe einige Sekunden dauern, der Browser reagiert dabei kurz nicht.\n\nTrotzdem öffnen?`)) return null;
     const dxf = NestingPlan.toDXF(plan, partsMap, sheetIndex);
     const sheets = plan.stats?.sheets || 1;
     const name = `${plan.planId || 'PLAN'}${sheets > 1 ? '_B' + (sheetIndex + 1) : ''}.dxf`;
@@ -553,7 +614,7 @@ class AutoNestDialog {
         host.style.display = ''; bar.style.display = 'flex';
         const content = NestingPlan.sheetContent(this.result.plan, this.partsMap, this.sheetIndex);
         if (this.pane) this.pane.setContent(content);
-        else this.pane = new ZoomPane(host, { ...content, onZoom: pct => { const z = this.overlay?.querySelector('#an-zoom'); if (z) z.textContent = `Zoom ${pct} %`; } });
+        else this.pane = new ZoomPane(host, { content, onZoom: pct => { const z = this.overlay?.querySelector('#an-zoom'); if (z) z.textContent = `Zoom ${pct} %`; } });
     }
 
     _bigView() {
@@ -584,8 +645,7 @@ class AutoNestDialog {
         if (!this.result) return this._toast('Bitte zuerst Nesting starten', 'warning');
         try {
             const name = this.overlay.querySelector('#an-name').value.trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '_') || 'NESTING';
-            openPlanSheet(this.app, { ...this.result.plan, planId: name }, this.partsMap, this.sheetIndex);
-            this.close();
+            if (openPlanSheet(this.app, { ...this.result.plan, planId: name }, this.partsMap, this.sheetIndex)) this.close();
         } catch (e) { this._toast(`Öffnen fehlgeschlagen: ${e.message}`, 'error'); }
     }
 
@@ -694,8 +754,8 @@ class PlanOpenDialog {
             const plan = await r.json(); if (!r.ok) throw new Error(plan.error || `HTTP ${r.status}`);
             const { map, warn } = await loadPlanParts(plan);
             if (warn.length) this._toast(`Teile fehlen, Plan unvollständig: ${warn.join('; ')}`, 'warning');
-            openPlanSheet(this.app, plan, map, sheetIndex);
-            this.close();
+            if (openPlanSheet(this.app, plan, map, sheetIndex)) this.close();
+            else st.textContent = '';
         } catch (e) { st.textContent = ''; this._toast(`Plan öffnen fehlgeschlagen: ${e.message}`, 'error'); }
     }
 }

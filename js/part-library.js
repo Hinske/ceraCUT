@@ -12,7 +12,8 @@
  *
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
- * Build: 20261107-multidisc
+ * Build: 20261107-canvasprev
+ * V1.7: Perf — ZoomPane zeichnet große Szenen (Schachtelplan) auf Canvas statt SVG (hunderte Teile hingen beim Zoomen), nur sichtbare Instanzen
  * V1.6: Fix — Mehrere Außenkonturen je DXF werden als eigene Teile importiert (analyzeSplit, identische zusammengefasst), REFERENZ-Layer standardmäßig ausgeschlossen (isReferenceLayer)
  * V1.5: Feat — ZoomPane (wiederverwendbare Zoom-/Verschiebefläche, auch im Autonest), PartViewer akzeptiert fertigen SVG-Inhalt
  * V1.4: Perf — Importtabelle rendert beim Mehrfachimport einmal statt je Datei (200 Dateien: 26 s → s. Test), Fortschritt „Lese Dateien …"
@@ -650,19 +651,39 @@ class PartImportDialog {
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * Zoom-/Verschiebe-Fläche für SVG-Inhalt (Modell-Koordinaten, y bereits nach oben gespiegelt):
+ * Zoom-/Verschiebe-Fläche (Modell-Koordinaten, y bereits nach oben gespiegelt):
  * Mausrad = Zoom um den Cursor, Ziehen = Verschieben, Doppelklick = Einpassen, Zoom 50 %…300×.
- * Wird im Vorschau-Fenster (PartViewer) und eingebettet im Autonest-Dialog verwendet.
+ * Zwei Darstellungen: SVG (kleine Inhalte, z. B. ein Teil) und Canvas (große Szenen wie ein Schachtelplan mit
+ * hunderten Teilen: `scene` = Teiletypen einmal + eine Matrix je Instanz; SVG mit tausenden Pfaden ließ den Browser
+ * beim Zoomen hängen). Ohne Canvas/Path2D (alte Umgebungen, Tests) fällt eine Szene auf SVG zurück.
  */
 class ZoomPane {
-    /** @param {HTMLElement} stage  @param {{svgInner:string, box:{x,y,w,h}, svgId?:string, onZoom?:(pct:number)=>void}} o */
+    /**
+     * @param {HTMLElement} stage
+     * @param {{content?:object, svgInner?:string, box?:{x,y,w,h}, scene?:object, svgId?:string, onZoom?:(pct:number)=>void}} o
+     *   Inhalt entweder direkt in o oder als o.content (nötig, wenn `svgInner` ein Getter ist: Spread würde ihn auswerten)
+     */
     constructor(stage, o) {
-        this.stage = stage; this.onZoom = o.onZoom || (() => {}); this.drag = null;
-        this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        if (o.svgId) this.svg.id = o.svgId;
-        this.svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        this.svg.style.cssText = 'width:100%;height:100%;display:block';
-        stage.appendChild(this.svg);
+        const content = o.content || o;
+        this.stage = stage; this.onZoom = o.onZoom || (() => {}); this.drag = null; this.scene = null; this.raf = 0;
+        let ctx = null, canvas = null;
+        if (content.scene && typeof Path2D !== 'undefined') {
+            canvas = document.createElement('canvas');
+            try { ctx = canvas.getContext && canvas.getContext('2d'); } catch { ctx = null; }
+        }
+        if (ctx) {
+            this.mode = 'canvas'; this.view = canvas; this.ctx = ctx;
+            canvas.style.cssText = 'width:100%;height:100%;display:block';
+            if (typeof ResizeObserver !== 'undefined') { this._ro = new ResizeObserver(() => this._schedule()); this._ro.observe(stage); }
+        } else {
+            this.mode = 'svg';
+            this.view = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            this.view.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+            this.view.style.cssText = 'width:100%;height:100%;display:block';
+        }
+        this.svg = this.mode === 'svg' ? this.view : null;       // Kompatibilität (Tests, bestehender Code)
+        if (o.svgId) this.view.id = o.svgId;
+        stage.appendChild(this.view);
         stage.style.cursor = 'grab'; stage.style.touchAction = 'none'; stage.style.overflow = 'hidden';
         this._wheel = e => { e.preventDefault(); e.stopPropagation(); this.zoomAt(Math.pow(1.0018, -e.deltaY), e.clientX, e.clientY); };
         this._dbl = () => this.reset();
@@ -681,14 +702,15 @@ class ZoomPane {
         stage.addEventListener('pointermove', this._move);
         stage.addEventListener('pointerup', this._up);
         stage.addEventListener('pointercancel', this._up);
-        this.setContent(o);
+        this.setContent(content);
     }
 
-    setContent({ svgInner, box }) {
-        const pad = Math.max(box.w, box.h) * 0.05;
+    setContent(o) {
+        const box = o.box, pad = Math.max(box.w, box.h) * 0.05;
         this.fit = { x: box.x - pad, y: box.y - pad, w: box.w + 2 * pad, h: box.h + 2 * pad };
         this.vb = { ...this.fit };
-        this.svg.innerHTML = svgInner;
+        if (this.mode === 'canvas') this._setScene(o.scene);
+        else this.view.innerHTML = o.svgInner;                    // bei Szenen: Getter baut das SVG erst jetzt
         this._apply();
     }
 
@@ -697,7 +719,9 @@ class ZoomPane {
         st.removeEventListener('wheel', this._wheel); st.removeEventListener('dblclick', this._dbl);
         st.removeEventListener('pointerdown', this._down); st.removeEventListener('pointermove', this._move);
         st.removeEventListener('pointerup', this._up); st.removeEventListener('pointercancel', this._up);
-        this.svg.remove();
+        if (this.raf) (typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : clearTimeout)(this.raf);
+        this._ro?.disconnect();
+        this.view.remove();
     }
 
     reset() { this.vb = { ...this.fit }; this._apply(); }
@@ -705,7 +729,7 @@ class ZoomPane {
 
     /** Pixel pro Modelleinheit und Versatz des zentrierten Ausschnitts (preserveAspectRatio=meet). */
     _scale() {
-        const r = this.svg.getBoundingClientRect();
+        const r = this.view.getBoundingClientRect();
         if (!r || !r.width || !r.height) return null;
         const k = Math.min(r.width / this.vb.w, r.height / this.vb.h);
         return { k, r, ox: (r.width - this.vb.w * k) / 2, oy: (r.height - this.vb.h * k) / 2 };
@@ -725,8 +749,77 @@ class ZoomPane {
     }
 
     _apply() {
-        this.svg.setAttribute('viewBox', `${this.vb.x} ${this.vb.y} ${this.vb.w} ${this.vb.h}`);
+        if (this.mode === 'svg') this.view.setAttribute('viewBox', `${this.vb.x} ${this.vb.y} ${this.vb.w} ${this.vb.h}`);
+        else this._schedule();
         this.onZoom(this.percent());
+    }
+
+    // ── Canvas-Darstellung ──────────────────────────────────────────
+
+    /** Teiletypen einmal als Path2D (Außen/Löcher/offene Konturen) + lokale BBox für das Ausblenden außerhalb des Bildes. */
+    _setScene(scene) {
+        for (const t of scene.types) {
+            if (t._built) continue;
+            t._disc = new Path2D(); t._hole = new Path2D(); t._open = new Path2D();
+            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            for (const c of t.contours) {
+                const path = c.role === 'disc' ? t._disc : c.role === 'hole' ? t._hole : t._open;
+                c.points.forEach((p, i) => {
+                    if (i) path.lineTo(p[0], p[1]); else path.moveTo(p[0], p[1]);
+                    if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+                });
+                if (c.closed) path.closePath();
+            }
+            t._bb = { x0, y0, x1, y1 }; t._built = true;
+        }
+        this.scene = scene;
+    }
+
+    _schedule() {
+        if (this.raf || !this.scene) return;
+        const run = () => { this.raf = 0; this.draw(); };
+        this.raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame(run) : setTimeout(run, 16);
+    }
+
+    /** Zeichnet die Szene (nur sichtbare Instanzen); wird per requestAnimationFrame gebündelt. */
+    draw() {
+        if (this.mode !== 'canvas' || !this.scene) return 0;
+        const c = this.view, ctx = this.ctx, dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+        const r = c.getBoundingClientRect();
+        const w = r.width || 800, h = r.height || 400;
+        if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+        const vb = this.vb, k = Math.min(w / vb.w, h / vb.h) * dpr;
+        const ox = (w * dpr - vb.w * k) / 2 - vb.x * k, oy = (h * dpr - vb.h * k) / 2 - vb.y * k;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, c.width, c.height);
+        const { sheet, types, items } = this.scene;
+        ctx.setTransform(k, 0, 0, k, ox, oy);
+        ctx.lineWidth = 1.5 * dpr / k; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#888';
+        ctx.fillRect(0, -sheet.l, sheet.w, sheet.l); ctx.strokeRect(0, -sheet.l, sheet.w, sheet.l);
+        // sichtbarer Bereich in Modellkoordinaten (mit Rand) zum Ausblenden
+        const vx0 = vb.x - vb.w * 0.05, vx1 = vb.x + vb.w * 1.05, vy0 = vb.y - vb.h * 0.05, vy1 = vb.y + vb.h * 1.05;
+        let drawn = 0;
+        for (let ti = 0; ti < types.length; ti++) {
+            const t = types[ti], bb = t._bb;
+            ctx.lineJoin = 'round'; ctx.strokeStyle = t.color;
+            for (const it of items) {
+                if (it.t !== ti) continue;
+                const [a, b, cc, d, e, f] = it.m;
+                // Instanz-BBox (4 Ecken der lokalen BBox transformiert)
+                const xs = [a * bb.x0 + cc * bb.y0 + e, a * bb.x1 + cc * bb.y0 + e, a * bb.x0 + cc * bb.y1 + e, a * bb.x1 + cc * bb.y1 + e];
+                const ys = [b * bb.x0 + d * bb.y0 + f, b * bb.x1 + d * bb.y0 + f, b * bb.x0 + d * bb.y1 + f, b * bb.x1 + d * bb.y1 + f];
+                if (Math.max(...xs) < vx0 || Math.min(...xs) > vx1 || Math.max(...ys) < vy0 || Math.min(...ys) > vy1) continue;
+                ctx.setTransform(k * a, k * b, k * cc, k * d, k * e + ox, k * f + oy);
+                ctx.lineWidth = 1.2 * dpr / k;
+                ctx.globalAlpha = 0.15; ctx.fillStyle = t.color; ctx.fill(t._disc); ctx.globalAlpha = 1;
+                ctx.fillStyle = '#fff'; ctx.fill(t._hole);
+                ctx.stroke(t._disc); ctx.stroke(t._hole); ctx.stroke(t._open);
+                drawn++;
+            }
+        }
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.lastDrawn = drawn;
+        return drawn;
     }
 }
 
@@ -764,7 +857,7 @@ class PartViewer {
         </div>`;
         document.body.appendChild(ov);
         this.overlay = ov;
-        this.pane = new ZoomPane(ov.querySelector('#pv-stage'), { ...content, svgId: 'pv-svg',
+        this.pane = new ZoomPane(ov.querySelector('#pv-stage'), { content, svgId: 'pv-svg',
             onZoom: pct => { const z = ov.querySelector('#pv-zoom'); if (z) z.textContent = `Zoom ${pct} %`; } });
         ov.addEventListener('click', e => {
             if (e.target === ov) return this.close();

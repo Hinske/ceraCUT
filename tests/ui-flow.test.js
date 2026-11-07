@@ -554,3 +554,83 @@ test('Import: DXF mit zwei identischen Stücken + REFERENZ-Layer → ein Teil, M
         imp.close();
     } finally { h.close(); }
 });
+
+test('Große Pläne: Vorschau zeichnet auf Canvas (kein SVG mit tausenden Pfaden), blendet unsichtbare Teile aus, SVG wird nie gebaut', async () => {
+    const fs = require('fs'), vm = require('vm'), path = require('path');
+    const h = await start();
+    try {
+        await quiet(async () => {
+            h.w.CeraJetEngine = CeraJetEngine; await seedIfEmpty(h.stores);
+            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer', 'ZoomPane']);
+            h.load('nesting.js', ['NestingEngine']);
+            h.load('cost-plan.js', ['PlanCost']);
+            h.load('cost-dialog.js', ['PlanCostDialog']);
+            h.load('nesting-plan.js', ['NestingPlan', 'AutoNestDialog', 'PlanOpenDialog']);
+        });
+        // Canvas-/Path2D-Attrappen (jsdom hat keinen 2D-Kontext)
+        const calls = { fill: 0, stroke: 0, setTransform: 0, clear: 0 };
+        const ctx = { setTransform() { calls.setTransform++; }, clearRect() { calls.clear++; }, fillRect() {}, strokeRect() {}, fill() { calls.fill++; }, stroke() { calls.stroke++; } };
+        h.w.HTMLCanvasElement.prototype.getContext = () => ctx;
+        h.w.Path2D = class { moveTo() {} lineTo() {} closePath() {} };
+        let svgBuilt = 0;
+        const origContent = h.w.NestingPlan.sheetContent;
+        h.w.NestingPlan.sheetContent = (...a) => { const c = origContent(...a); const getter = Object.getOwnPropertyDescriptor(c, 'svgInner').get; Object.defineProperty(c, 'svgInner', { get() { svgBuilt++; return getter(); } }); return c; };
+        const { FakeWorker } = makeFakeWorker(fs, vm, path); h.w.Worker = FakeWorker;
+
+        const $ = s => h.doc.querySelector(s);
+        const an0 = await quiet(() => h.w.PartGeometry.analyze([
+            { points: [{ x: 0, y: 0 }, { x: 140, y: 0 }, { x: 140, y: 140 }, { x: 0, y: 140 }], isClosed: true, layer: 'T' },
+            { points: [{ x: 50, y: 50 }, { x: 90, y: 50 }, { x: 90, y: 90 }, { x: 50, y: 90 }], isClosed: true, layer: 'L' }]));
+        await h.stores.parts.put(JSON.parse(JSON.stringify(h.w.PartGeometry.toRecord(an0, { partId: 'P-C', fileName: 'c.dxf', name: 'CANVASTEIL', orderId: 'O', customer: 'X', qty: 200,
+            techRef: { machineId: null, materialId: 21, thickness: 10 } }))));
+        const an = new h.w.AutoNestDialog(h.app);
+        an.open();
+        await h.waitFor(() => $('#an-hits [data-pid]'));
+        await an._addPart('P-C'); an.rows[0].qty = 300;
+        $('#an-w').value = '6000'; $('#an-l').value = '3000';
+        click($('[data-act="run"]'));
+        await h.waitFor(() => an.result);
+        const total = an.result.plan.instances.filter(i => (i.sheetIndex || 0) === 0).length;
+        assert.ok(total > 100, `viele Teile auf Blech 1 (${total})`);
+
+        assert.ok($('#an-preview canvas'), 'Canvas statt SVG');
+        assert.ok(!$('#an-preview svg'), 'kein SVG im DOM');
+        assert.strictEqual(an.pane.mode, 'canvas');
+        const drawn = an.pane.draw();
+        assert.strictEqual(drawn, total, 'beim Einpassen sind alle Instanzen sichtbar');
+        const f0 = calls.fill; an.pane.draw(); assert.strictEqual(calls.fill - f0, total * 2);
+        assert.strictEqual(svgBuilt, 0, 'der große SVG-String wird im Canvas-Modus nie gebaut');
+
+        // Hineinzoomen → nur noch Instanzen im Bild werden gezeichnet
+        for (let i = 0; i < 12; i++) an.pane.zoomAt(1.4);
+        assert.match($('#an-zoom').textContent, /\d{4,} %/);
+        const it0 = an.pane.scene.items[0];                                        // Ausschnitt auf das erste Teil legen (die Mitte des Blechs ist leer)
+        an.pane.vb = { x: it0.m[4] - 80, y: it0.m[5] - 80, w: 160, h: 160 * an.pane.fit.h / an.pane.fit.w };
+        const zoomed = an.pane.draw();
+        assert.ok(zoomed > 0 && zoomed < total / 4, `Ausblenden außerhalb des Bildes: ${zoomed} von ${total}`);
+        // Mausrad/Einpassen laufen über requestAnimationFrame (gebündelt) und zeichnen neu
+        const c0 = calls.clear;
+        $('#an-preview').dispatchEvent(new h.w.WheelEvent('wheel', { deltaY: 300, bubbles: true, cancelable: true }));
+        click($('[data-act="fit"]'));
+        await h.waitFor(() => calls.clear > c0, 2000);
+        assert.strictEqual(an.pane.lastDrawn, total);
+        // Große Ansicht nutzt ebenfalls Canvas
+        click($('[data-act="big"]'));
+        await h.waitFor(() => $('.part-viewer-overlay canvas'));
+        assert.ok(!$('.part-viewer-overlay svg'));
+        click($('.part-viewer-overlay [data-act="close"]'));
+        assert.strictEqual(svgBuilt, 0);
+
+        // Sehr großes Blech im Editor öffnen: Rückfrage, Abbruch lässt den Dialog offen
+        const opened = []; h.app.loadDXFContent = (n) => opened.push(n);
+        let asked = null; h.w.confirm = msg => { asked = msg; return false; };
+        click($('[data-act="edit"]'));
+        assert.match(asked, /Konturen/);
+        assert.strictEqual(opened.length, 0, 'bei Abbruch wird nichts geöffnet');
+        assert.ok($('.autonest-overlay'), 'Dialog bleibt offen');
+        h.w.confirm = () => true;
+        click($('[data-act="edit"]'));
+        assert.strictEqual(opened.length, 1);
+        assert.ok(!$('.autonest-overlay'), 'nach dem Öffnen schließt der Dialog');
+    } finally { h.close(); }
+});

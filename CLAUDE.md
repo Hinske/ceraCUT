@@ -249,8 +249,8 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **User-Store** | `lib/user-store.js` | **V1.0** | Benutzerverwaltung (scrypt-Hashing), Bootstrap erster Admin via Env-Vars |
 | **Session-Store** | `lib/session-store.js` | **V1.0** | In-Memory Session-Map, Sliding Expiry |
 | **Auth-Helper** | `lib/auth.js` | **V1.0** | Cookie-Parsing, Session-Cookie-Helper, JSON-Body-Parsing |
-| **Part Library** | `part-library.js` | **V1.6** | Teileimport-Dialog (Ribbon Datei), PartGeometry (DXF-Konturen -> Teile-Datensatz), API-Client |
-| **Nesting Plan** | `nesting-plan.js` | **V1.6** | Autonest aus Teilebibliothek (Bedarf -> Plan), Dialog im Tab Nesting; Blech vorerst manuell, sheetId spaeter aus Blechbibliothek (tasks/todo-finest-phase2a.md) |
+| **Part Library** | `part-library.js` | **V1.7** | Teileimport-Dialog (Ribbon Datei), PartGeometry (DXF-Konturen -> Teile-Datensatz), API-Client |
+| **Nesting Plan** | `nesting-plan.js` | **V1.7** | Autonest aus Teilebibliothek (Bedarf -> Plan), Dialog im Tab Nesting; Blech vorerst manuell, sheetId spaeter aus Blechbibliothek (tasks/todo-finest-phase2a.md) |
 | **NC Tools** | `nc-tools.js` | **V1.0** | NC erstellen (Ribbon Export): NCCheck (Sinumerik-Parser/Pruefung), NC-Editor, Werkstattbericht (Druck/PDF), nur Einzelplan (Fliesenbogen -> CNC Export) |
 | **Plan Cost** | `cost-plan.js` | **V1.0** | Plan-Kalkulation (Fertigung/Material/Verbrauch/Zusatz, Teilepreise); Browser + Node; Richtwerte werden gemeldet |
 | **Cost Dialog** | `cost-dialog.js` | **V1.0** | Kostenkalkulation-Dialog (Autonest, Planliste), PDF-Export |

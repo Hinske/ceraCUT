@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '17e8aa3',
+        hash: '9a38730',
         date: '2026-11-07',
-        message: 'feat: Richtungspfeile klein und rot, max. 4 je Kontur (canvas-renderer V3.66)'
+        message: 'perf: Plan-Vorschau auf Canvas (Szene statt tausender SVG-Pfade), Rueckfrage bei'
     },
 
     modules: {
@@ -74,8 +74,8 @@ const CERACUT_BUILD = {
         'store':              { version: '1.0', build: '20261107-store' },
         'data-api':           { version: '1.4', build: '20261107-nestperf' },
         'seed':               { version: '1.1', build: '20261107-techdb' },
-        'part-library':       { version: '1.6', build: '20261107-multidisc' },
-        'nesting-plan':       { version: '1.6', build: '20261107-multidisc' },
+        'part-library':       { version: '1.7', build: '20261107-canvasprev' },
+        'nesting-plan':       { version: '1.7', build: '20261107-canvasprev' },
         'nc-tools':           { version: '1.1', build: '20261107-techdb' },
         'cost-plan':          { version: '1.0', build: '20261107-plancost' },
         'cost-dialog':        { version: '1.0', build: '20261107-costdialog' },
