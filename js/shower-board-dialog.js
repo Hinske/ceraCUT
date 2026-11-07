@@ -1,21 +1,23 @@
 /**
- * CeraCUT Duschboard-Dialog V0.1 (Phase 2b): Eingabe + Live-Vorschau mit Bemaßung + Stückliste
+ * CeraCUT Duschboard-Dialog V0.2 (Phase 2b): Eingabe + Live-Vorschau mit Bemaßung, Zoom/Pan, Verlegemuster
  * Kern: shower-board-generator.js (ShowerBoardGenerator). Befehl DUSCH, Ribbon CAD -> Zuschnitte -> Duschboard.
  *
  * Bemaßung (zur Kontrolle): Gesamtmaß (Fliesenfeld, bei Außenmaß zusätzlich Außenmaß), Ablaufmaße und -lage,
  * Teilebreiten/-höhen je Fugenspalte/-zeile, Gehrungswinkel, Maße je Teil (bbox) + Nummern, Stückliste.
  * Phase 2b: Vorschau nur lesend; Fugenbild von Hand editieren folgt in 2c.
  *
+ * V0.2: Stueckliste entfernt, Zeichnung fuellt den Dialog, Zoom (Mausrad) + Verschieben (Ziehen) + Einpassen, Verlegemuster-Auswahl
+ *       (Kreuzfuge, Verbaende, Zufall, Fischgraet, Korbgeflecht), Ausrichtung, Drehwinkel, Anker
  * V0.1: Erstversion
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch2
+ * Build: 20261107-dusch3
  */
 
 const ShowerBoardDialog = (() => {
     'use strict';
 
-    const LOG = '[Duschboard-Dialog V0.1]';
+    const LOG = '[Duschboard-Dialog V0.2]';
     const FIELD_CSS = 'width:100%;padding:5px 8px;background:#2a2a2a;border:1px solid #555;border-radius:4px;color:#fff;font-size:13px;box-sizing:border-box;';
     const LABEL_CSS = 'display:block;font-size:11px;color:#9aa;margin:8px 0 2px;';
 
@@ -50,16 +52,25 @@ const ShowerBoardDialog = (() => {
     }
 
     // ── Vorschau (SVG) ──────────────────────────────────────────────────────
-    function previewSVG(r, showDims) {
+    /** Ansicht einpassen: Zeichenfeld VW x VH (px) fuellen, Platz fuer Bemassungsketten lassen */
+    function fitView(r, VW, VH) {
+        const { W, H } = r.p;
+        const M = { l: 62, r: 96, t: 34, b: 92 };
+        const s = Math.max(1e-6, Math.min((VW - M.l - M.r) / W, (VH - M.t - M.b) / H));
+        return { s, ox: M.l + ((VW - M.l - M.r) - W * s) / 2, oy: M.t + ((VH - M.t - M.b) - H * s) / 2 };
+    }
+
+    function previewSVG(r, showDims, view, size) {
         const { W, H, drain: d, fuge } = r.p;
-        const VW = 900, VH = 560, M = { l: 70, r: 70, t: 46, b: 78 };
-        const s = Math.min((VW - M.l - M.r) / W, (VH - M.t - M.b) / H);
-        const ox = M.l + ((VW - M.l - M.r) - W * s) / 2, oy = M.t + ((VH - M.t - M.b) - H * s) / 2;
+        const VW = size?.w || 900, VH = size?.h || 560;
+        const v = view || fitView(r, VW, VH);
+        const s = v.s, ox = v.ox, oy = v.oy, M = { l: 62, t: 34 };
         const X = x => ox + x * s, Y = y => oy + (H - y) * s;
         const items = numbered(r.pieces);
         const warnSet = new Set(r.warnings.map(w => w.piece));
         const f = v => v.toFixed(1);
         const COL = '#ffd24a', COLD = '#9fd0ff';
+        const axisAligned = Math.abs(r.p.drehung % 90) < 1e-9;   // Teilemasse (bbox) nur bei achsparallelem Muster sinnvoll
         let g = '';
 
         // Teile
@@ -73,7 +84,7 @@ const ShowerBoardDialog = (() => {
         // Teilenummern + Maße
         for (const it of items) {
             const px = X(it.cx), py = Y(it.cy), big = it.w * s > 46 && it.h * s > 26;
-            if (showDims && big) {
+            if (showDims && big && axisAligned) {
                 g += `<text x="${f(px)}" y="${f(py - 2)}" text-anchor="middle" font-size="10" fill="#cfe6ff">${it.nr}</text>`;
                 g += `<text x="${f(px)}" y="${f(py + 10)}" text-anchor="middle" font-size="9" fill="#8fb4d8">${de(it.w)}×${de(it.h)}</text>`;
             } else if (it.w * s > 26 && it.h * s > 18) {
@@ -104,13 +115,13 @@ const ShowerBoardDialog = (() => {
         }
 
         // Spalten-/Zeilenbreiten (Teile ohne Fuge) — unten bzw. links
-        const xb = [0, ...r.grid.xLines, W], yb = [0, ...r.grid.yLines, H], hf = fuge / 2;
+        const xb = [0, ...(r.grid?.xLines || []), W], yb = [0, ...(r.grid?.yLines || []), H], hf = fuge / 2;
         const bottom = Y(0) + 16, bottom2 = Y(0) + 40, bottom3 = Y(0) + 62, left = X(0) - 16;
-        for (let i = 0; i < xb.length - 1; i++) {
+        if (r.grid) for (let i = 0; i < xb.length - 1; i++) {
             const a = xb[i] + (i > 0 ? hf : 0), b = xb[i + 1] - (i < xb.length - 2 ? hf : 0);
             g += dimH(a, b, bottom, de(b - a));
         }
-        for (let j = 0; j < yb.length - 1; j++) {
+        if (r.grid) for (let j = 0; j < yb.length - 1; j++) {
             const a = yb[j] + (j > 0 ? hf : 0), b = yb[j + 1] - (j < yb.length - 2 ? hf : 0);
             g += dimV(a, b, left, de(b - a), COL, -1);
         }
@@ -132,73 +143,91 @@ const ShowerBoardDialog = (() => {
         g += lab(d.x1 + (W - d.x1) * 0.55, d.y0 - d.y0 * 0.45 - 4, `${de(angBR)}°`);
         g += lab(d.x0 - d.x0 * 0.55, d.y0 - d.y0 * 0.45 - 4, `${de(angBL)}°`);
         // Legende
-        g += `<text x="${M.l}" y="20" font-size="11" fill="#9aa">Gelb: Teilemaße (ohne Fuge) · Blau: Ablauflage · Rot: Gehrungswinkel · Orange Fläche: Teil &lt; Mindestmaß</text>`;
+        g += `<text x="${M.l}" y="20" font-size="11" fill="#9aa">Gelb: Teilemaße (ohne Fuge) · Blau: Ablauflage · Rot: Gehrungswinkel · Orange: Teil schmaler als Warnschwelle</text>`;
 
-        return `<svg viewBox="0 0 ${VW} ${VH}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" font-family="Segoe UI,sans-serif">` +
+        return `<svg width="${VW}" height="${VH}" viewBox="0 0 ${VW} ${VH}" style="display:block" font-family="Segoe UI,sans-serif">` +
             `<rect x="${f(X(0))}" y="${f(Y(H))}" width="${f(W * s)}" height="${f(H * s)}" fill="none" stroke="#556" stroke-width="1" stroke-dasharray="2 3"/>${g}</svg>`;
     }
 
-    function resultHTML(r) {
-        if (!r.ok) return `<div style="color:#ff6b6b;font-size:13px;">⚠ ${esc(r.error)}</div>`;
-        const { W, H, drain: d } = r.p;
-        let h = `<div style="font-size:15px;color:#fff;font-weight:600;margin-bottom:4px">${r.count} Teile &nbsp;<span style="font-weight:400;color:#9aa;font-size:12px">Fliesenfeld ${de(W)} × ${de(H)} mm · ${r.grid.xLines.length + 1} Spalten × ${r.grid.yLines.length + 1} Zeilen</span></div>`;
-        h += `<div style="font-size:12px;color:#9aa;margin-bottom:6px">Datei: ${esc(r.fileName)}</div>`;
-        for (const w of r.warnings) h += `<div style="font-size:12px;color:#f0b429">⚠ ${esc(w.text)}</div>`;
-        const items = numbered(r.pieces);
-        // Stückliste: gleiche Teile (Eckenzahl + Maße auf 0,1 mm) zusammenfassen
-        const groups = new Map();
-        for (const it of items) {
-            const k = `${it.pc.poly.length}|${de(it.w)}|${de(it.h)}`;
-            const g = groups.get(k) || { n: 0, nrs: [], it };
-            g.n++; g.nrs.push(it.nr); groups.set(k, g);
+    function statusHTML(r) {
+        if (!r.ok) return `<span style="color:#ff6b6b">⚠ ${esc(r.error)}</span>`;
+        const { W, H } = r.p;
+        let t = `<b style="color:#fff">${r.count} Teile</b> &nbsp;<span style="color:#9aa">Fliesenfeld ${de(W)} × ${de(H)} mm`;
+        if (r.grid) t += ` · ${r.grid.xLines.length + 1} Spalten × ${r.grid.yLines.length + 1} Zeilen`;
+        t += `</span>`;
+        if (r.warnings.length) {
+            const w = r.warnings.slice(0, 2).map(x => esc(x.text)).join('; ');
+            t += ` &nbsp;<span style="color:#f0b429">⚠ ${r.warnings.length} × schmal: ${w}${r.warnings.length > 2 ? ' …' : ''}</span>`;
         }
-        h += '<table style="font-size:12px;color:#ddd;border-collapse:collapse;margin-top:6px"><tr style="color:#9aa"><td style="padding:1px 12px 1px 0">Anz.</td><td style="padding-right:12px">Maß (bbox)</td><td style="padding-right:12px">Form</td><td>Nr.</td></tr>';
-        const shape = n => n === 3 ? 'Dreieck' : n === 4 ? 'Rechteck/Trapez' : n + '-Eck';
-        for (const g of groups.values()) {
-            h += `<tr><td>${g.n}×</td><td style="padding-right:12px">${de(g.it.w)} × ${de(g.it.h)}</td><td style="padding-right:12px">${shape(g.it.pc.poly.length)}</td><td style="color:#9aa">${g.nrs.join(', ')}</td></tr>`;
-        }
-        return h + '</table>';
+        return t;
     }
 
     // ── Dialog ──────────────────────────────────────────────────────────────
+    const MUSTER = [
+        ['kreuz', 'Kreuzfuge (gestapelt)'],
+        ['verband-50', 'Halbverband (1/2)'], ['verband-33', 'Drittelverband (1/3)'], ['verband-25', 'Viertelverband (1/4)'],
+        ['verband-frei', 'Verband mit freiem Versatz'], ['zufall', 'Wilder Verband (Zufallsversatz)'],
+        ['fischgraet', 'Fischgrät (90°)'], ['korb', 'Korbgeflecht (Parkett-Block)'], ['keins', 'Kein Raster (nur Gehrung)']
+    ];
+    const ANKER = [
+        ['ablauf', 'Ab Ablaufkante (nur Kreuzfuge)'], ['lu', 'Ecke links unten'], ['ru', 'Ecke rechts unten'], ['lo', 'Ecke links oben'], ['ro', 'Ecke rechts oben'],
+        ['mitte', 'Fliese mittig auf Ablauf'], ['fuge', 'Fugenkreuz auf Ablaufmitte']
+    ];
+
     function openDialog(options = {}) {
         const app = options.app || (typeof window !== 'undefined' ? window.app : null);
         if (typeof document === 'undefined') return;
         document.getElementById('dusch-overlay')?.remove();
 
-        const row2 = (a, b) => `<div style="display:flex;gap:10px;"><div style="flex:1">${a}</div><div style="flex:1">${b}</div></div>`;
+        const row2 = (a, b) => `<div style="display:flex;gap:8px;"><div style="flex:1;min-width:0">${a}</div><div style="flex:1;min-width:0">${b}</div></div>`;
         const fld = (id, label, val) => `<label style="${LABEL_CSS}">${label}</label><input id="${id}" style="${FIELD_CSS}" value="${val}" inputmode="decimal">`;
+        const sel = (id, label, opts) => `<label style="${LABEL_CSS}">${label}</label><select id="${id}" style="${FIELD_CSS}">${opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`;
+        const chk = (id, label) => `<label style="display:block;font-size:12px;margin-top:6px;"><input type="checkbox" id="${id}"> ${label}</label>`;
+        const sec = t => `<div style="margin-top:12px;padding-top:6px;border-top:1px solid #333;font-size:12px;color:#00aaff;">${t}</div>`;
+        const BTN = 'padding:3px 10px;background:#2f2f33;border:1px solid #555;border-radius:4px;color:#ddd;cursor:pointer;font-size:13px;';
         const overlay = document.createElement('div');
         overlay.id = 'dusch-overlay';
         overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;';
         overlay.innerHTML = `
-            <div style="background:#1e1e1e;border:1px solid #555;border-radius:8px;width:min(1280px,98vw);max-height:96vh;overflow:auto;padding:16px 20px;color:#ddd;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:'Segoe UI',sans-serif;">
-                <h3 style="margin:0 0 8px;font-size:15px;color:#00aaff;">Duschboard erzeugen</h3>
-                <div style="display:flex;gap:20px;flex-wrap:wrap;">
-                    <div style="flex:0 0 290px;min-width:260px;">
-                        <label style="${LABEL_CSS}">Maßangabe bezieht sich auf</label>
-                        <select id="ds-art" style="${FIELD_CSS}"><option value="fliesenfeld">Fliesenfeld (reine Fliesenfläche)</option><option value="aussen">Außenmaß (inkl. Randfuge)</option></select>
-                        ${row2(fld('ds-b', 'Breite X [mm]', '1300'), fld('ds-t', 'Tiefe Y [mm]', '1000'))}
-                        ${row2(fld('ds-fx', 'Fliese X [mm]', '600'), fld('ds-fy', 'Fliese Y [mm]', '300'))}
-                        ${row2(fld('ds-fuge', 'Fuge [mm]', '2'), fld('ds-rf', 'Randfuge [mm]', '2'))}
-                        <div style="margin-top:10px;font-size:12px;color:#00aaff;">Ablauf (rechteckig)</div>
-                        ${row2(fld('ds-aw', 'Breite [mm]', '140'), fld('ds-ah', 'Tiefe [mm]', '140'))}
-                        ${row2(fld('ds-cx', 'Mitte X [mm] (leer = mittig)', ''), fld('ds-cy', 'Mitte Y [mm] (leer = mittig)', ''))}
-                        <label style="${LABEL_CSS}">Fugenbild (Raster)</label>
-                        <select id="ds-mode" style="${FIELD_CSS}">
-                            <option value="ablauf">Ab Ablaufkante</option>
-                            <option value="ecke">Ab Ecke links unten</option>
-                            <option value="keins">Kein Raster (nur Gehrung)</option>
-                        </select>
-                        ${fld('ds-min', 'Warnung bei Teil schmaler als [mm]', '30')}
-                        <label style="display:block;font-size:12px;margin-top:10px;"><input type="checkbox" id="ds-dims" checked> Teilemaße in der Vorschau</label>
-                    </div>
-                    <div style="flex:1 1 560px;min-width:320px;display:flex;flex-direction:column;gap:10px;">
-                        <div id="ds-prev" style="height:520px;background:#12161c;border:1px solid #333;border-radius:4px;padding:6px;box-sizing:border-box;"></div>
-                    </div>
-                    <div id="ds-res" style="flex:0 0 250px;min-width:220px;max-height:520px;overflow:auto;"></div>
+            <div style="background:#1e1e1e;border:1px solid #555;border-radius:8px;width:99vw;height:97vh;display:flex;flex-direction:column;padding:10px 14px;box-sizing:border-box;color:#ddd;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:'Segoe UI',sans-serif;">
+                <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
+                    <h3 style="margin:0;font-size:15px;color:#00aaff;white-space:nowrap;">Duschboard erzeugen</h3>
+                    <div id="ds-status" style="flex:1;font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;"></div>
+                    <button id="ds-zout" style="${BTN}" title="Verkleinern">−</button>
+                    <button id="ds-fit" style="${BTN}" title="Einpassen (Doppelklick in die Zeichnung)">Einpassen</button>
+                    <button id="ds-zin" style="${BTN}" title="Vergrößern">+</button>
+                    <span style="font-size:11px;color:#778;white-space:nowrap;">Mausrad = Zoom · Ziehen = Verschieben</span>
                 </div>
-                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+                <div style="flex:1;min-height:0;display:flex;gap:14px;">
+                    <div style="flex:0 0 272px;overflow:auto;padding-right:6px;">
+                        ${sel('ds-art', 'Maßangabe bezieht sich auf', [['fliesenfeld', 'Fliesenfeld (reine Fliesenfläche)'], ['aussen', 'Außenmaß (inkl. Randfuge)']])}
+                        ${row2(fld('ds-b', 'Breite X [mm]', '1300'), fld('ds-t', 'Tiefe Y [mm]', '1000'))}
+                        ${sec('Fliese und Fuge')}
+                        ${row2(fld('ds-fl', 'Lange Seite [mm]', '600'), fld('ds-fk', 'Kurze Seite [mm]', '300'))}
+                        ${sel('ds-ausr', 'Lange Seite verläuft', [['horizontal', 'horizontal (entlang X)'], ['vertikal', 'vertikal (entlang Y)']])}
+                        ${row2(fld('ds-fuge', 'Fuge [mm]', '2'), fld('ds-rf', 'Randfuge [mm]', '2'))}
+                        ${sec('Verlegeraster')}
+                        ${sel('ds-muster', 'Verlegemuster', MUSTER)}
+                        <div id="ds-g-vfrei">${fld('ds-vp', 'Versatz [% der Fliesenlänge]', '30')}</div>
+                        <div id="ds-g-achse">${sel('ds-achse', 'Versatz', [['reihen', 'Reihen seitlich versetzt'], ['spalten', 'Spalten in der Höhe versetzt']])}</div>
+                        <div id="ds-g-folge">${sel('ds-folge', 'Versatzfolge', [['treppe', 'Treppe (0, v, 2v, …)'], ['wechsel', 'Wechselnd (0, v, 0, v, …)']])}</div>
+                        <div id="ds-g-start">${chk('ds-start', 'Erste Reihe bereits versetzt beginnen')}</div>
+                        <div id="ds-g-gegen">${chk('ds-gegen', '<span id="ds-gegen-t">Gegenläufig</span>')}</div>
+                        <div id="ds-g-seed">${fld('ds-seed', 'Zufallswert (Seed)', '1')}</div>
+                        <label style="${LABEL_CSS}">Drehwinkel des Rasters [°] (45 = diagonal)</label>
+                        <input id="ds-rot" list="ds-rot-l" style="${FIELD_CSS}" value="0" inputmode="decimal">
+                        <datalist id="ds-rot-l"><option value="0"><option value="15"><option value="22,5"><option value="30"><option value="45"><option value="60"><option value="75"><option value="-45"></datalist>
+                        ${sel('ds-anker', 'Raster beginnt', ANKER)}
+                        ${sec('Ablauf (rechteckig)')}
+                        ${row2(fld('ds-aw', 'Breite [mm]', '140'), fld('ds-ah', 'Tiefe [mm]', '140'))}
+                        ${row2(fld('ds-cx', 'Mitte X (leer = mittig)', ''), fld('ds-cy', 'Mitte Y (leer = mittig)', ''))}
+                        ${sec('Anzeige')}
+                        ${fld('ds-min', 'Warnung bei Teil schmaler als [mm]', '30')}
+                        ${chk('ds-dims', 'Teilemaße in der Vorschau')}
+                    </div>
+                    <div id="ds-prev" style="flex:1;min-width:0;position:relative;overflow:hidden;background:#12161c;border:1px solid #333;border-radius:4px;cursor:grab;touch-action:none;"></div>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
                     <button id="ds-cancel" style="padding:6px 16px;background:#555;border:none;border-radius:4px;color:#ddd;cursor:pointer;">Abbrechen</button>
                     <button id="ds-save" style="padding:6px 16px;background:#3a3a3a;border:1px solid #666;border-radius:4px;color:#ddd;cursor:pointer;">DXF speichern</button>
                     <button id="ds-ok" style="padding:6px 16px;background:#00aaff;border:none;border-radius:4px;color:#000;cursor:pointer;font-weight:600;">Erzeugen</button>
@@ -207,35 +236,106 @@ const ShowerBoardDialog = (() => {
         document.body.appendChild(overlay);
 
         const $ = id => overlay.querySelector('#' + id);
-        let last = null;
+        $('ds-dims').checked = true;
+        let last = null, view = null, fitted = true, sizeKey = '';
 
-        function update() {
+        const vis = (id, on) => { $(id).style.display = on ? '' : 'none'; };
+        function syncControls() {
+            const m = $('ds-muster').value;
+            const verband = m.startsWith('verband');
+            vis('ds-g-vfrei', m === 'verband-frei'); vis('ds-g-achse', verband || m === 'zufall'); vis('ds-g-folge', verband);
+            vis('ds-g-start', verband); vis('ds-g-gegen', verband || m === 'fischgraet'); vis('ds-g-seed', m === 'zufall');
+            $('ds-gegen-t').textContent = m === 'fischgraet' ? 'Spiegeln (Staffelung gegenläufig)' : 'Versatzrichtung umkehren';
+            const opt = $('ds-anker').querySelector('option[value="ablauf"]');
+            if (opt) { opt.disabled = m !== 'kreuz'; if (m !== 'kreuz' && $('ds-anker').value === 'ablauf') $('ds-anker').value = 'lu'; }
+        }
+
+        function readParams() {
+            const m = $('ds-muster').value, verband = m.startsWith('verband');
             const cx = parseNum($('ds-cx').value), cy = parseNum($('ds-cy').value);
             const ablauf = { w: parseNum($('ds-aw').value), h: parseNum($('ds-ah').value) };
             if (isFinite(cx)) ablauf.cx = cx;
             if (isFinite(cy)) ablauf.cy = cy;
-            last = ShowerBoardGenerator.compute({
+            const versatz = m === 'verband-50' ? 0.5 : m === 'verband-33' ? 1 / 3 : m === 'verband-25' ? 0.25 : parseNum($('ds-vp').value) / 100;
+            return {
                 breite: parseNum($('ds-b').value), tiefe: parseNum($('ds-t').value), masseArt: $('ds-art').value,
-                fliese: { x: parseNum($('ds-fx').value), y: parseNum($('ds-fy').value) },
+                fliese: { lang: parseNum($('ds-fl').value), kurz: parseNum($('ds-fk').value) }, ausrichtung: $('ds-ausr').value,
                 fuge: parseNum($('ds-fuge').value), randfuge: parseNum($('ds-rf').value),
-                gridMode: $('ds-mode').value, minTeil: parseNum($('ds-min').value) || 0, ablauf
-            });
-            $('ds-res').innerHTML = resultHTML(last);
-            $('ds-prev').innerHTML = last.ok ? previewSVG(last, $('ds-dims').checked) : '';
+                muster: verband ? 'verband' : m, versatz, versatzFolge: $('ds-folge').value, verbandAchse: $('ds-achse').value,
+                startVersetzt: $('ds-start').checked, gegenlaeufig: $('ds-gegen').checked, seed: Math.round(parseNum($('ds-seed').value)) || 1,
+                drehung: parseNum($('ds-rot').value) || 0, anker: $('ds-anker').value,
+                minTeil: parseNum($('ds-min').value) || 0, ablauf
+            };
+        }
+
+        const prev = $('ds-prev');
+        let raf = 0;
+        function draw() {
+            raf = 0;
+            if (!last?.ok) { prev.innerHTML = ''; return; }
+            const w = Math.max(200, prev.clientWidth), h = Math.max(200, prev.clientHeight);
+            const key = `${w}x${h}`;
+            if (fitted || !view || key !== sizeKey) { if (fitted || !view) view = fitView(last, w, h); }
+            sizeKey = key;
+            prev.innerHTML = previewSVG(last, $('ds-dims').checked, view, { w, h });
+        }
+        const redraw = () => { if (!raf) raf = requestAnimationFrame(draw); };
+
+        function update(keepView) {
+            syncControls();
+            last = ShowerBoardGenerator.compute(readParams());
+            $('ds-status').innerHTML = statusHTML(last);
             $('ds-ok').disabled = $('ds-save').disabled = !last.ok;
             $('ds-ok').style.opacity = $('ds-save').style.opacity = last.ok ? '1' : '0.4';
+            if (!keepView) fitted = true;
+            redraw();
         }
+
+        // Zoom / Verschieben
+        function zoomAt(k, mx, my) {
+            if (!view) return;
+            const ns = Math.min(Math.max(view.s * k, 0.02), 80);
+            k = ns / view.s;
+            view = { s: ns, ox: mx - (mx - view.ox) * k, oy: my - (my - view.oy) * k };
+            fitted = false; redraw();
+        }
+        prev.addEventListener('wheel', e => {
+            e.preventDefault();
+            const r = prev.getBoundingClientRect();
+            zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
+        }, { passive: false });
+        let drag = null;
+        prev.addEventListener('pointerdown', e => {
+            if (e.button > 1) return;
+            drag = { x: e.clientX, y: e.clientY, ox: view?.ox, oy: view?.oy };
+            prev.setPointerCapture?.(e.pointerId); prev.style.cursor = 'grabbing';
+        });
+        prev.addEventListener('pointermove', e => {
+            if (!drag || !view) return;
+            view = { ...view, ox: drag.ox + e.clientX - drag.x, oy: drag.oy + e.clientY - drag.y };
+            fitted = false; redraw();
+        });
+        const endDrag = () => { drag = null; prev.style.cursor = 'grab'; };
+        prev.addEventListener('pointerup', endDrag); prev.addEventListener('pointercancel', endDrag);
+        prev.addEventListener('dblclick', () => { fitted = true; redraw(); });
+        const centerZoom = k => zoomAt(k, prev.clientWidth / 2, prev.clientHeight / 2);
+        $('ds-zin').addEventListener('click', () => centerZoom(1.25));
+        $('ds-zout').addEventListener('click', () => centerZoom(0.8));
+        $('ds-fit').addEventListener('click', () => { fitted = true; redraw(); });
+        const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => redraw()) : null;
+        ro?.observe(prev);
 
         const onDocKey = e => { if (e.key === 'Escape') close(); };
         document.addEventListener('keydown', onDocKey, true);
         const close = () => {
             document.removeEventListener('keydown', onDocKey, true);
+            ro?.disconnect();
             overlay.remove();
             setTimeout(() => { const cv = app?.renderer?.canvas; if (cv) cv.style.cursor = ''; }, 0);
         };
 
-        overlay.addEventListener('input', update);
-        overlay.addEventListener('change', update);
+        overlay.addEventListener('input', e => update(!['ds-b', 'ds-t', 'ds-art'].includes(e.target.id)));
+        overlay.addEventListener('change', e => update(!['ds-b', 'ds-t', 'ds-art'].includes(e.target.id)));
         $('ds-cancel').addEventListener('click', close);
         overlay.addEventListener('mousedown', e => { overlay._downOnBg = e.target === overlay; });
         overlay.addEventListener('click', e => { if (e.target === overlay && overlay._downOnBg) close(); });
@@ -263,7 +363,7 @@ const ShowerBoardDialog = (() => {
         setTimeout(() => { const f = $('ds-b'); f.focus(); f.select(); }, 50);
     }
 
-    return { openDialog, _internals: { previewSVG, resultHTML, numbered } };
+    return { openDialog, _internals: { previewSVG, statusHTML, fitView, numbered } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = ShowerBoardDialog;

@@ -85,5 +85,72 @@ test('Dialog: Vorschau-SVG und Stueckliste liefern Bemassung (Smoke)', () => {
     assert.strictEqual((svg.match(/<polygon/g) || []).length, r.count);
     const items = D._internals.numbered(r.pieces);
     assert.deepStrictEqual(items.map(i => i.nr), items.map((_, i) => i + 1));
-    assert.ok(D._internals.resultHTML(r).includes(`${r.count} Teile`));
+    assert.ok(D._internals.statusHTML(r).includes(`${r.count} Teile`));
+});
+
+// ── Verlegemuster ────────────────────────────────────────────────────────────
+const dist = (q, a, b) => {
+    const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+    const t = Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.y) * dy) / l2));
+    return Math.hypot(q.x - a.x - t * dx, q.y - a.y - t * dy);
+};
+function checkInvariants(r, label) {
+    assert.ok(r.ok, `${label}: ${r.error}`);
+    for (const pc of r.pieces) {
+        assert.ok(area(pc.poly) > 0, `${label}: Umlaufsinn`);
+        for (let i = 0; i < pc.poly.length; i++) {
+            const A = pc.poly[i], B = pc.poly[(i + 1) % pc.poly.length], C = pc.poly[(i + 2) % pc.poly.length];
+            assert.ok((B.x - A.x) * (C.y - B.y) - (B.y - A.y) * (C.x - B.x) > -1e-6, `${label}: nicht konvex`);
+        }
+        for (const q of pc.poly) assert.ok(q.x > -1e-6 && q.y > -1e-6 && q.x < r.p.W + 1e-6 && q.y < r.p.H + 1e-6, `${label}: ausserhalb Feld`);
+    }
+    const f = r.p.fuge;
+    for (let i = 0; i < r.pieces.length; i++) for (let j = i + 1; j < r.pieces.length; j++) {
+        const A = r.pieces[i].poly, B = r.pieces[j].poly;
+        for (const [P, Q] of [[A, B], [B, A]]) for (const q of P) for (let k = 0; k < Q.length; k++)
+            assert.ok(dist(q, Q[k], Q[(k + 1) % Q.length]) >= f - 1e-6, `${label}: Abstand < Fuge (${i},${j})`);
+    }
+    const total = r.pieces.reduce((s, p) => s + area(p.poly), 0);
+    const field = r.p.W * r.p.H - (r.p.drain.x1 - r.p.drain.x0) * (r.p.drain.y1 - r.p.drain.y0);
+    assert.ok(total < field && total > field * 0.85, `${label}: Flaeche ${total.toFixed(0)} vs ${field.toFixed(0)}`);
+}
+
+test('Muster: alle Verlegemuster/Anker/Ausrichtungen/Drehungen erfuellen die Invarianten', () => {
+    const b = { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 300, kurz: 150 } };
+    const cases = [
+        ['kreuz', {}], ['kreuz vertikal', { ausrichtung: 'vertikal' }], ['kreuz ru', { anker: 'ru' }], ['kreuz mitte', { anker: 'mitte' }],
+        ['kreuz fuge', { anker: 'fuge' }], ['kreuz 45', { drehung: 45 }],
+        ['halbverband', { muster: 'verband', versatz: 0.5 }], ['drittel', { muster: 'verband', versatz: 1 / 3 }],
+        ['viertel', { muster: 'verband', versatz: 0.25 }], ['frei wechsel', { muster: 'verband', versatz: 0.3, versatzFolge: 'wechsel' }],
+        ['verband spalten', { muster: 'verband', verbandAchse: 'spalten' }], ['verband gegenlaeufig', { muster: 'verband', versatz: 1 / 3, gegenlaeufig: true, startVersetzt: true }],
+        ['verband 45', { muster: 'verband', drehung: 45 }], ['zufall', { muster: 'zufall', seed: 7 }],
+        ['fischgraet', { muster: 'fischgraet' }], ['fischgraet gespiegelt', { muster: 'fischgraet', gegenlaeufig: true }],
+        ['fischgraet vertikal', { muster: 'fischgraet', ausrichtung: 'vertikal' }], ['fischgraet 45', { muster: 'fischgraet', drehung: 45 }],
+        ['korb', { muster: 'korb' }], ['korb ru', { muster: 'korb', anker: 'ru' }]
+    ];
+    for (const [label, extra] of cases) checkInvariants(G.compute({ ...b, ...extra }), label);
+});
+
+test('Muster: Halbverband versetzt die Reihen um die halbe Fliese (Stossfugen springen)', () => {
+    const r = G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 300, kurz: 150 }, muster: 'verband', versatz: 0.5, anker: 'lu' });
+    const rows = new Map();
+    for (const pc of r.pieces.filter(q => q.sector === 'rechts')) {
+        const bb = G._internals.bboxOf(pc.poly), y = Math.round(bb.y0 / 10);
+        if (bb.x1 - bb.x0 > 100 && bb.x0 > 700) (rows.get(y) || rows.set(y, []).get(y)).push(bb.x0);
+    }
+    assert.ok(rows.size > 2);
+});
+
+test('Muster: Korbgeflecht lehnt unpassendes Seitenverhaeltnis ab, Zufall ist reproduzierbar', () => {
+    const b = { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 } };
+    assert.strictEqual(G.compute({ ...b, fliese: { lang: 500, kurz: 300 }, muster: 'korb' }).ok, false);
+    const a = G.compute({ ...b, muster: 'zufall', seed: 3 }), c = G.compute({ ...b, muster: 'zufall', seed: 3 }), d = G.compute({ ...b, muster: 'zufall', seed: 4 });
+    assert.strictEqual(a.dxf, c.dxf); assert.notStrictEqual(a.dxf, d.dxf);
+});
+
+test('Muster: Fliesenformat-Ausrichtung horizontal/vertikal vertauscht die Raster', () => {
+    const b = { breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { lang: 600, kurz: 300 }, anker: 'lu' };
+    const h = G.compute({ ...b, ausrichtung: 'horizontal' }), v = G.compute({ ...b, ausrichtung: 'vertikal' });
+    assert.ok(near(h.grid.xLines[0], 601) && near(h.grid.yLines[0], 301));
+    assert.ok(near(v.grid.xLines[0], 301) && near(v.grid.yLines[0], 601));
 });

@@ -98,3 +98,9 @@ FugenModell = { xLines: [x0, x1, ...],   // Fugenmitten in Board-Koordinaten
 1. Rinnen-Gehrung: Diagonalen von den Rinnenenden zu den Boardecken der Rinnenseite (siehe 3.2) – stimmt das? Ein Kochhan-Rinnenbeispiel würde es klären.
 2. Sind „Fuge“ und „Fliesenabstand“ zwei getrennte Werte (Einbau-Fuge vs. Lücke im DXF) oder derselbe Wert?
 3. Fliesenformate für Voreinstellungen.
+
+## 10. Verlegemuster (V0.2, 2026-11-07)
+
+Muster: Kreuzfuge, Verband (1/2, 1/3, 1/4, frei; Reihen- oder Spaltenversatz; Treppe oder wechselnd; gegenläufig; Startreihe), Wilder Verband (Seed), Fischgrät 90°, Korbgeflecht (ganzzahliges Seitenverhältnis), kein Raster. Dazu Ausrichtung horizontal/vertikal, Drehwinkel (45° = diagonal) und Anker (Ecken, Fliese mittig auf Ablauf, Fugenkreuz auf Ablauf, Kreuzfuge zusätzlich „ab Ablaufkante“).
+Modell: Fliese = Zelle − Fuge/2 an allen Seiten, Teil = Fliese ∩ Sektor (Gehrung). Nur die achsparallele Kreuzfuge hat editierbare Fugenlinien (2c); für Verbände/Fischgrät folgt Editieren auf Reihen-/Fliesenebene.
+Nicht umgesetzt: Römischer Verband (Mischformate), Fischgrät 45°-Gehrungs-Variante mit Eckfliese, Kreis-/Bogenmuster.
