@@ -13,6 +13,7 @@
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
  * Build: 20261107-partedit
+ * V1.4: Perf — Importtabelle rendert beim Mehrfachimport einmal statt je Datei (200 Dateien: 26 s → s. Test), Fortschritt „Lese Dateien …"
  * V1.3: Feat — PartViewer (große Vorschau mit Zoom/Verschieben), PartGeometry.previewSvg; größere Vorschau in der Importtabelle
  * V1.2: Feat — „Vom Server…" (DXFBrowser.pickMany), PartGeometry.decodeDXF (UTF-8/ISO-8859-1 wie app.js)
  * V1.1: Feat — PartGeometry.toDXF / fromAppContours (Teil bearbeiten, part-editor.js)
@@ -277,6 +278,8 @@ class PartImportDialog {
         this.items = [];       // {file, fileName, text, layers, analysis, name, orderId, qty, status, error}
         this.layerSel = new Map(); // Layername → true/false
         this.materials = [];
+        this.maxBatchBytes = 6 * 1024 * 1024;   // je Anfrage
+        this.maxBatchCount = 200;
     }
 
     async open() {
@@ -434,16 +437,23 @@ class PartImportDialog {
     }
 
     async _addFiles(files) {
+        // Erst alle Zeilen anlegen und EINMAL rendern; pro Datei neu zu rendern wäre quadratisch (200 Dateien: 26 s)
+        const added = [];
         for (const f of files) {
             if (!/\.dxf$/i.test(f.name)) continue;
             if (this.items.some(i => i.fileName === f.name && i.size === f.size)) continue;
             const { name, orderId } = PartGeometry.namesFromFile(f.name);
-            const it = { fileName: f.name, size: f.size, name, orderId, qty: 1, status: 'parsing', checked: false, layers: [], raw: null, analysis: null };
-            this.items.push(it);
-            this._render();
+            const it = { fileName: f.name, size: f.size, name, orderId, qty: 1, status: 'parsing', checked: false, layers: [], raw: null, analysis: null, _file: f };
+            this.items.push(it); added.push(it);
+        }
+        this._render();
+        const tol = parseFloat(document.getElementById('chaining-tolerance')?.value) || 0.1;
+        const sum = this.overlay?.querySelector('#pi-summary');
+        for (let n = 0; n < added.length; n++) {
+            const it = added[n];
             try {
-                const text = PartGeometry.decodeDXF(await f.arrayBuffer());
-                const res = DXFParser.parse(text, { chainingTolerance: parseFloat(document.getElementById('chaining-tolerance')?.value) || 0.1, applyInsUnits: true });
+                const text = PartGeometry.decodeDXF(await it._file.arrayBuffer());
+                const res = DXFParser.parse(text, { chainingTolerance: tol, applyInsUnits: true });
                 if (!res || !res.success) throw new Error('DXF-Parse-Fehler');
                 it.raw = res.contours || [];
                 it.layers = [...new Set(it.raw.map(c => c.layer || ''))];
@@ -451,6 +461,8 @@ class PartImportDialog {
             } catch (e) {
                 it.status = 'error'; it.error = e.message;
             }
+            delete it._file;
+            if (sum && n % 5 === 4) { sum.textContent = `Lese Dateien … ${n + 1}/${added.length}`; await new Promise(r => setTimeout(r, 0)); }   // UI atmen lassen
         }
         this._rebuildLayers();
         this._revalidate();
@@ -532,11 +544,34 @@ class PartImportDialog {
             customer, qty: it.qty, techRef, layers: [...this.layerSel.entries()].filter(([, on]) => on).map(([l]) => l)
         }));
         try {
-            const res = await PartLibrary.importBatch(records);
-            res.results.forEach((r, i) => {
-                if (r.ok) { todo[i].status = 'saved'; todo[i].error = ''; }
-                else { todo[i].status = 'error'; todo[i].error = r.error; }
-            });
+            // In Paketen senden (Server begrenzt den Body auf 30 MB; komplexe Kunstteile haben >100 KB je Datensatz)
+            const chunks = []; let cur = [], bytes = 0;
+            for (const r of records) {
+                const size = JSON.stringify(r).length;
+                if (cur.length && (bytes + size > this.maxBatchBytes || cur.length >= this.maxBatchCount)) { chunks.push(cur); cur = []; bytes = 0; }
+                cur.push(r); bytes += size;
+            }
+            if (cur.length) chunks.push(cur);
+            const res = { total: 0, saved: 0, failed: 0 };
+            const sum = this.overlay.querySelector('#pi-summary');
+            let offset = 0;
+            try {
+                for (let c = 0; c < chunks.length; c++) {
+                    if (chunks.length > 1 && sum) sum.textContent = `Speichere … Paket ${c + 1}/${chunks.length}`;
+                    const r = await PartLibrary.importBatch(chunks[c]);
+                    res.total += r.total; res.saved += r.saved; res.failed += r.failed;
+                    // Status je Paket sofort setzen: bei späterem Fehler gelten bereits gespeicherte Teile nicht erneut als "bereit"
+                    r.results.forEach((x, i) => {
+                        const it = todo[offset + i];
+                        if (x.ok) { it.status = 'saved'; it.error = ''; } else { it.status = 'error'; it.error = x.error; }
+                    });
+                    offset += chunks[c].length;
+                }
+            } catch (e) {
+                this._render();
+                this.app?.showToast?.(`Speichern nach ${res.saved} von ${todo.length} Teilen abgebrochen: ${e.message} — gespeicherte Teile sind markiert, bitte erneut speichern`, 'error');
+                return;
+            }
             this._render();
             this.app?.showToast?.(`${res.saved} von ${res.total} Teil(en) gespeichert`, res.failed ? 'warning' : 'success');
         } catch (e) {

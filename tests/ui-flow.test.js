@@ -348,3 +348,41 @@ test('Große Vorschau: Teilebibliothek-Klick öffnet Viewer, Zoom ±/Rad/Einpass
         imp.close();
     } finally { h.close(); }
 });
+
+test('Mehrfachimport: viele Dateien in Paketen speichern; Abbruch mitten drin markiert Gespeichertes', async () => {
+    const h = await start();
+    try {
+        await quiet(async () => {
+            h.w.CeraJetEngine = CeraJetEngine; await seedIfEmpty(h.stores);
+            h.load('dxf-parser.js', ['DXFParser']);
+            h.load('part-library.js', ['PartGeometry', 'PartLibrary', 'PartImportDialog', 'PartViewer']);
+        });
+        const $ = s => h.doc.querySelector(s);
+        const imp = new h.w.PartImportDialog(h.app);
+        imp.maxBatchCount = 7;                                           // 30 Teile → 5 Pakete
+        await imp.open();
+        $('#pi-material').value = '21';
+        const t0 = Date.now();
+        await quiet(() => imp._addFiles(Array.from({ length: 30 }, (_, i) => new h.w.File([dxfRect(100 + i, 50, true)], `B${String(i).padStart(2, '0')}.dxf`))));
+        assert.strictEqual(imp.items.length, 30);
+        assert.ok(imp.items.every(i => i.status === 'ready'));
+        assert.ok(Date.now() - t0 < 5000, 'Einlesen 30 Dateien in unter 5 s');
+        // Zählen der Anfragen + 3. Paket scheitert
+        let posts = 0; const real = h.w.fetch;
+        h.w.__fetchHook = (u, o) => { if (String(u).includes('/api/parts/import') && o?.method === 'POST') { posts++; if (posts === 3) return Promise.resolve(new Response('{"error":"Testfehler"}', { status: 500 })); } return null; };
+        click($('[data-act="save"]'));
+        await h.waitFor(() => h.toasts.some(t => /abgebrochen/.test(t[0])));
+        assert.strictEqual(posts, 3);
+        assert.strictEqual(h.stores.parts.list().length, 14);             // 2 Pakete à 7 gespeichert
+        assert.strictEqual(imp.items.filter(i => i.status === 'saved').length, 14);
+        assert.match(h.toasts.at(-1)[0], /nach 14 von 30/);
+        // Erneut speichern: nur die 16 offenen, keine Duplikate
+        h.w.__fetchHook = null;
+        click($('[data-act="save"]'));
+        await h.waitFor(() => h.stores.parts.list().length === 30);
+        assert.strictEqual(new Set(h.stores.parts.list().map(p => p.name)).size, 30);
+        assert.ok(imp.items.every(i => i.status === 'saved'));
+        assert.match(h.toasts.at(-1)[0], /16 von 16/);
+        imp.close();
+    } finally { h.close(); }
+});

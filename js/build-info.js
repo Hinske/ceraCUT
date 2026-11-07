@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '2f9a101',
+        hash: '98fe523',
         date: '2026-11-07',
-        message: 'feat: Teilebibliothek — groessere Vorschau + PartViewer mit Zoom/Verschieben (pa'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
+        message: 'perf: Mehrfachimport — einmal rendern statt je Datei, Speichern in Paketen (part'Vom Server' — DXFBrowser.pickMany (Mehrfachauswahl), DXF-Deko'
     },
 
     modules: {
@@ -74,7 +74,7 @@ const CERACUT_BUILD = {
         'store':              { version: '1.0', build: '20261107-store' },
         'data-api':           { version: '1.3', build: '20261107-partedit' },
         'seed':               { version: '1.1', build: '20261107-techdb' },
-        'part-library':       { version: '1.3', build: '20261107-viewer' },
+        'part-library':       { version: '1.4', build: '20261107-bulk' },
         'nesting-plan':       { version: '1.3', build: '20261107-partedit' },
         'nc-tools':           { version: '1.1', build: '20261107-techdb' },
         'cost-plan':          { version: '1.0', build: '20261107-plancost' },

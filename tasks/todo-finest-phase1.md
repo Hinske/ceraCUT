@@ -38,3 +38,5 @@
 
 ## Nachtrag 2026-11-07
 - [x] „Vom Server…" im Teileimport: `DXFBrowser.pickMany()` (Checkboxen, Auswahl über Ordner hinweg, „Alle im Ordner", 4 parallele Downloads, Rohbytes als File); Dekodierung wie beim normalen Öffnen (`PartGeometry.decodeDXF`: AC1021+ UTF-8, sonst ISO-8859-1)
+- [x] Mehrfachimport skaliert (part-library V1.4): Tabelle wird beim Einlesen einmal statt je Datei gerendert (200 Dateien 26 s → 3 s, 500 → 6 s im jsdom-Test), Fortschritt „Lese Dateien …"; Speichern in Paketen (≤ 6 MB / 200 Teile je Anfrage, Server-Limit 30 MB), Status je Paket → bei Abbruch keine Duplikate beim erneuten Speichern
+- Richtwerte: Datensatz je Teil ≈ 10–15 KB (einfach) bis ≈ 110 KB (feine Kunstmotive mit >5000 Punkten); Speichern ≈ 5 ms/Teil; Speicherbedarf im Browser durch die gemerkten Rohkonturen ≈ 0,05–0,3 MB je Datei
