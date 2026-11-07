@@ -2550,6 +2550,30 @@ html, body {
 #btn-lead-adv-toggle { white-space: nowrap; }
 .ribbon-panel[data-ribbon="bearbeitung"].lead-adv-open #btn-lead-adv-toggle { color: #f0a030; font-weight: 600; }
 
+/* V7.28: CAM-Tab kompakter — Mehr-Gruppen (Schnitte manuell, Fliesen) eingeklappt, engere Gruppen */
+.ribbon-panel[data-ribbon="bearbeitung"]:not(.cam-more-open) .cam-more { display: none !important; }
+.ribbon-panel[data-ribbon="bearbeitung"].cam-more-open #btn-cam-more { color: #f0a030; font-weight: 600; }
+.ribbon-panel[data-ribbon="bearbeitung"] .ribbon-group { padding-left: 5px; padding-right: 5px; }
+.ribbon-panel[data-ribbon="bearbeitung"] .ribbon-stats { gap: 6px; font-size: 10px; }
+
+/* V7.29: Einheitliches Raster im CAM-Tab — feste Label-Breite, Segmented Buttons, Spaltenkoepfe */
+.ribbon-panel[data-ribbon="bearbeitung"] .ribbon-group:nth-child(n+3) .ribbon-inline-row > .ribbon-field-label:first-child { min-width: 54px; }
+.ribbon-panel[data-ribbon="bearbeitung"] .lead-group .ribbon-inline-row > .ribbon-field-label:first-child { min-width: 62px; }
+.ribbon-panel[data-ribbon="bearbeitung"] .lead-col-header { height: 11px; font-size: 9px; padding: 0 2px; margin-bottom: 1px; }
+.ribbon-panel[data-ribbon="bearbeitung"] .lead-group .ribbon-inline-row { height: 21px; }
+.ribbon-panel[data-ribbon="bearbeitung"].lead-adv-open { height: auto; min-height: 94px; }
+.ribbon-panel[data-ribbon="bearbeitung"] .lead-group .ribbon-input,
+.ribbon-panel[data-ribbon="bearbeitung"] .lead-group .ribbon-select,
+.ribbon-panel[data-ribbon="bearbeitung"] .lead-group .stepper-btn { height: 21px; }
+.ribbon-panel[data-ribbon="bearbeitung"] .lead-group .ribbon-select { width: 92px !important; }
+.seg { display: inline-flex; }
+.seg .ribbon-btn-mini { border-radius: 0; margin-left: -1px; }
+.seg .ribbon-btn-mini:first-child { margin-left: 0; }
+.seg .ribbon-btn-mini.active { position: relative; z-index: 1; }
+.ribbon-vsep { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--ribbon-separator); }
+.ribbon-panel[data-ribbon="bearbeitung"] .preset-grid-ribbon { margin-left: 0; padding: 0; align-self: center; }
+.ribbon-panel[data-ribbon="bearbeitung"] .preset-btn-sm { width: 20px; height: 20px; }
+
 /* V6.47: Setup/Technologie — Düse, Druck, Optimierung eingeklappt */
 .ribbon-panel:not(.tech-adv-open) .tech-adv { display: none !important; }
 .ribbon-panel.tech-adv-open #btn-tech-adv-toggle { color: #f0a030; font-weight: 600; }

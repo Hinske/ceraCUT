@@ -13,6 +13,7 @@
  * Created: 2026-11-07
  * Last Modified: 2026-11-07
  * Build: 20261107-group
+ * V1.8: Feat — Common-Line je Teil (demand.commonLine / part.nesting.commonLine) → Engine V1.6
  * V1.7: Perf — Vorschau über sheetScene (Canvas), Rückfrage beim Öffnen sehr großer Bleche im Editor (>400 Konturen)
  * V1.6: Fix — Teile mit mehreren Außenkonturen werden als starre Einheit (konvexe Hülle) genestet, REFERENZ-Layer-Konturen wandern nicht mehr mit (Überlagerungen)
  * V1.5: Feat — Schachtelplan als PDF (Autonest-Dialog, Planliste) über /api/reports/plan-pdf
@@ -138,9 +139,10 @@ const NestingPlan = (() => {
             if (!pts) { errors.push(`${part.name}: keine geschlossene Außenkontur`); continue; }
             const priority = PRIORITY[d.priority || 'normal'] ?? 0;
             const rotationSteps = ROTATIONS[d.angles || 'r90'] || ROTATIONS.r90;
-            const typeKey = `${d.partId}@${part.revision}|${d.angles || 'r90'}`;
+            const commonLine = !!(d.commonLine ?? part.nesting?.commonLine);        // V1.8: Rechtecke bündig (Abstand 0), Engine prüft die Rechteckform
+            const typeKey = `${d.partId}@${part.revision}|${d.angles || 'r90'}${commonLine ? '|cl' : ''}`;
             for (let i = 0; i < qty; i++) {
-                items.push({ points: pts, isClosed: true, name: part.name, priority, rotationSteps, typeKey });
+                items.push({ points: pts, isClosed: true, name: part.name, priority, rotationSteps, typeKey, commonLine });
                 meta.push({ partId: d.partId });
             }
         }
@@ -183,7 +185,8 @@ const NestingPlan = (() => {
                           innerPlacement: 'prevent', heads: { min: 1, max: 1, distance: 0 }, rectOptimize: false },
                 instances,
                 demand: Object.fromEntries(demand.map(d => [d.partId, {
-                    qty: d.qty, priority: d.priority || 'normal', angles: d.angles || 'r90', mirror: false }])),
+                    qty: d.qty, priority: d.priority || 'normal', angles: d.angles || 'r90', mirror: false,
+                    commonLine: !!(d.commonLine ?? partsMap[d.partId]?.nesting?.commonLine) }])),
                 cutOrder: [], remnants: [],
                 stats: { requested: items.length, nested: instances.length, unplaced: res.unplaced.length,
                          sheets: res.sheets.length, utilization: res.totalUtilization, sheetStats: res.sheets,
@@ -442,7 +445,7 @@ class AutoNestDialog {
                             <button data-act="search">Suchen</button></div>
                         <div id="an-hits" style="max-height:110px;overflow:auto;border:1px solid #bbb;font-size:11px;margin:4px 0"></div>
                         <table style="width:100%;border-collapse:collapse;font-size:11px">
-                            <thead><tr style="background:#e8eef5;text-align:left"><th>Teil</th><th>B × L</th><th>Menge</th><th>Priorität</th><th>Drehung</th><th>Genestet</th><th></th></tr></thead>
+                            <thead><tr style="background:#e8eef5;text-align:left"><th>Teil</th><th>B × L</th><th>Menge</th><th>Priorität</th><th>Drehung</th><th title="Gemeinsame Schnittlinie: Rechtecke bündig (Abstand 0), Kante wird nur einmal geschnitten. Achtung: ein Teil bekommt die Austrittsseite des Strahls (Kantenbruch-Risiko) — nur für Teile ohne Sichtkante.">Common-Line</th><th>Genestet</th><th></th></tr></thead>
                             <tbody id="an-rows"></tbody></table>
                     </div>
                     <div style="flex:.8;min-width:260px;font-size:11px">
@@ -498,6 +501,7 @@ class AutoNestDialog {
             if (f === 'qty') r.qty = Math.max(0, parseInt(e.target.value, 10) || 0);
             if (f === 'priority') r.priority = e.target.value;
             if (f === 'angles') r.angles = e.target.value;
+            if (f === 'commonLine') r.commonLine = e.target.checked;
         });
         ov.querySelector('#an-sheet').addEventListener('change', e => { this.sheetIndex = Number(e.target.value); this._renderPreview(); });
         this._search();
@@ -522,7 +526,7 @@ class AutoNestDialog {
         try {
             const full = await PartLibrary.get(partId);
             this.partsMap[partId] = full;
-            this.rows.push({ partId, qty: full.qty || 1, priority: 'normal', angles: 'r90' });
+            this.rows.push({ partId, qty: full.qty || 1, priority: 'normal', angles: 'r90', commonLine: !!full.nesting?.commonLine });
             this._renderRows();
         } catch (e) { this._toast(`Teil nicht ladbar: ${e.message}`, 'error'); }
     }
@@ -536,6 +540,7 @@ class AutoNestDialog {
                 <td><input data-f="qty" type="number" min="0" value="${r.qty}" style="width:55px"></td>
                 <td><select data-f="priority">${sel(r.priority, [['high', 'Hoch'], ['normal', 'Normal'], ['low', 'Niedrig']])}</select></td>
                 <td><select data-f="angles">${sel(r.angles, [['none', 'Keine'], ['r90', '90°'], ['r45', '45°'], ['free', 'Frei (10°)']])}</select></td>
+                <td style="text-align:center"><input data-f="commonLine" type="checkbox" ${r.commonLine ? 'checked' : ''}></td>
                 <td>${this.result ? `${nested[r.partId] || 0}/${r.qty}` : ''}</td>
                 <td><button data-act="del">×</button></td></tr>`;
         }).join('');

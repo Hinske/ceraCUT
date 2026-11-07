@@ -10,6 +10,7 @@
  *
  * Last Modified: 2026-11-07
  * Build: 20261107-group
+ * V1.6: Feat — Common-Line: contour.commonLine (nur achsparallele Rechtecke) liegt mit Abstand = Schnittspalt (cfg.commonLineGap, 0,8 mm; Linie mittig, G40) an anderen Common-Line-Rechtecken, exakt gerastet (_snapFlush)
  * V1.5: Feat — Teil nach der Platzierung bis zum Mindestabstand schieben (_slide): gleichmäßige Fugen statt 3…8 mm
  * V1.4: Perf — Polygon-Vereinfachung (simplifyTol), Kanten-Raster je platziertem Teil (_polysClash), Suchhinweis je Teiletyp/Variante, Variante-passt-nicht-mehr-Merker, Raumindex + vorübersetzte Polygone, Blech-voll-Merker je Teiletyp (typeKey), gemeinsame Rotationsvarianten, numerisches Dedupe, cfg.onProgress(done,total,sheets)
  * V1.3: Feat — cfg.order ('large-first'|'small-first'|'input'), Kontur-Felder priority und rotationSteps (Override je Teil), Node-Export
@@ -21,9 +22,12 @@
 const NestingEngine = (() => {
     'use strict';
 
-    const VERSION = 'V1.5';
+    const VERSION = 'V1.6';
     const LOG_PREFIX = `[Nesting ${VERSION}]`;
     const EPSILON = 1e-8;
+    let _clGap = 0.8;              // mm: Abstand zweier Common-Line-Rechtecke = Schnittspalt (Linie mittig, G40) — in nest() aus cfg.commonLineGap gesetzt
+    const CL_TOL = 1e-6;           // mm: Toleranz für Common-Line-Abstand
+    const CL_SNAP = 0.1;           // mm: so nah an einer Nachbarkante wird bündig gerastet
     const MAX_GRID_CELLS = 6000;   // Obergrenze Raster-Kandidaten je Platzierungsversuch
 
     // ═══════════════════════════════════════════════════════════════════
@@ -39,6 +43,7 @@ const NestingEngine = (() => {
         gravity: 'bottom-left', // 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right'
         maxSheets: 100,         // Maximale Anzahl Bleche
         mergeToleranceNFP: 0.1, // Toleranz für NFP-Vereinfachung
+        commonLineGap: 0.8,     // mm: Abstand zwischen Common-Line-Rechtecken = Schnittspalt (Kerf); die gemeinsame Linie läuft mittig, ohne Kerfversatz
         simplifyTol: 0.05       // mm: Polygon-Vereinfachung für die Platzierung (0 = aus); Abstand wird um 4×tol erhöht (garantiert den echten Mindestabstand)
     };
 
@@ -387,7 +392,7 @@ const NestingEngine = (() => {
      * @param {number} spacing - Abstand zwischen Teilen
      * @returns {{x, y}|null} Beste Position oder null wenn kein Platz
      */
-    function _findBLFPosition(partPoints, sheet, placedParts, gravity, spacing, grid, hint) {
+    function _findBLFPosition(partPoints, sheet, placedParts, gravity, spacing, grid, hint, cl) {
         const partBBox = _boundingBox(partPoints);
         const bounds = _placementBounds(sheet, partBBox);
 
@@ -420,7 +425,7 @@ const NestingEngine = (() => {
 
         // Kandidatenpositionen generieren
         const candidates = _generateCandidatePositions(
-            genBounds, placedParts, partBBox, stepX, stepY, gravity, spacing
+            genBounds, placedParts, partBBox, stepX, stepY, gravity, spacing, cl
         );
 
         // Gravitations-Sortierung
@@ -445,8 +450,8 @@ const NestingEngine = (() => {
             }
 
             // Kollision mit platzierten Teilen prüfen
-            if (!_collidesWithPlaced(testBBox, partPoints, candidate, placedParts, spacing, grid)) {
-                return _slide(candidate, partPoints, partBBox, sheet, placedParts, spacing, grid, gravity);
+            if (!_collidesWithPlaced(testBBox, partPoints, candidate, placedParts, spacing, grid, cl)) {
+                return _slide(candidate, partPoints, partBBox, sheet, placedParts, spacing, grid, gravity, cl);
             }
         }
 
@@ -458,7 +463,7 @@ const NestingEngine = (() => {
      * der Mindestabstand erreicht ist. Das Raster der Kandidaten ist grob (bis 20 mm) und BBox-basiert: ohne diesen Schritt
      * blieben je nach Kontur 3…8 mm statt der eingestellten Fuge. Schrittweite ≤ 2×Abstand: kein "Durchtunneln" dünner Teile.
      */
-    function _slide(start, partPoints, partBBox, sheet, placedParts, spacing, grid, gravity) {
+    function _slide(start, partPoints, partBBox, sheet, placedParts, spacing, grid, gravity, cl) {
         const dy = (gravity === 'top-left' || gravity === 'top-right') ? 1 : -1;
         const dx = (gravity === 'bottom-right' || gravity === 'top-right') ? 1 : -1;
         const cap = Math.max(1, spacing > 0 ? spacing * 2 : 1);
@@ -466,7 +471,7 @@ const NestingEngine = (() => {
             const b = { minX: partBBox.minX + x, minY: partBBox.minY + y, maxX: partBBox.maxX + x, maxY: partBBox.maxY + y };
             if (b.minX < sheet.margin - EPSILON || b.minY < sheet.margin - EPSILON ||
                 b.maxX > sheet.width - sheet.margin + EPSILON || b.maxY > sheet.height - sheet.margin + EPSILON) return false;
-            return !_collidesWithPlaced(b, partPoints, { x, y }, placedParts, spacing, grid);
+            return !_collidesWithPlaced(b, partPoints, { x, y }, placedParts, spacing, grid, cl);
         };
         let x = start.x, y = start.y;
         for (let pass = 0; pass < 4; pass++) {
@@ -480,6 +485,36 @@ const NestingEngine = (() => {
             }
             if (!moved) break;
         }
+        return cl ? _snapFlush({ x, y }, partBBox, sheet, placedParts, fits) : { x, y };
+    }
+
+    /**
+     * V1.6: Common-Line — nach dem Schieben exakt bündig an Nachbarrechtecke und Blechrand rasten (Rest ≤ CL_SNAP),
+     * damit gemeinsame Kanten wirklich kollinear sind. Rastet nur, wenn die neue Position kollisionsfrei bleibt.
+     */
+    function _snapFlush(pos, partBBox, sheet, placedParts, fits) {
+        let { x, y } = pos;
+        for (const axis of ['y', 'x']) {
+            const lo = (axis === 'x' ? partBBox.minX : partBBox.minY), hi = (axis === 'x' ? partBBox.maxX : partBBox.maxY);
+            const cur = axis === 'x' ? x : y;
+            const targets = [];
+            const lim = axis === 'x' ? sheet.width : sheet.height;
+            targets.push(sheet.margin - lo, lim - sheet.margin - hi);
+            for (const q of placedParts) {
+                if (!q.cl) continue;
+                const qlo = axis === 'x' ? q.bbox.minX : q.bbox.minY, qhi = axis === 'x' ? q.bbox.maxX : q.bbox.maxY;
+                targets.push(qhi + _clGap - lo, qlo - _clGap - hi);
+            }
+            let best = null;
+            for (const t of targets) {
+                const d = Math.abs(t - cur);
+                if (d <= CL_SNAP && d > 0 && (best === null || d < Math.abs(best - cur))) {
+                    const ok = axis === 'x' ? fits(t, y) : fits(x, t);
+                    if (ok) best = t;
+                }
+            }
+            if (best !== null) { if (axis === 'x') x = best; else y = best; }
+        }
         return { x, y };
     }
 
@@ -487,7 +522,7 @@ const NestingEngine = (() => {
      * Kandidatenpositionen für BLF generieren.
      * Enthält Raster-Positionen und NFP-basierte Eckpositionen an platzierten Teilen.
      */
-    function _generateCandidatePositions(bounds, placedParts, partBBox, stepX, stepY, gravity, spacing) {
+    function _generateCandidatePositions(bounds, placedParts, partBBox, stepX, stepY, gravity, spacing, cl) {
         const candidates = [];
         const partW = partBBox.maxX - partBBox.minX;
         const partH = partBBox.maxY - partBBox.minY;
@@ -502,7 +537,7 @@ const NestingEngine = (() => {
         // 2) Kritische Positionen: direkt neben platzierten Teilen
         for (const placed of placedParts) {
             const pb = placed.bbox;
-            const gap = spacing;
+            const gap = (cl && placed.cl) ? _clGap : spacing;
 
             // Rechts neben dem platzierten Teil
             candidates.push({ x: pb.maxX + gap - partBBox.minX, y: pb.minY - partBBox.minY });
@@ -706,10 +741,15 @@ const NestingEngine = (() => {
      * Prüft Kollision eines Teils (an Kandidatenposition) mit allen platzierten Teilen.
      * Verwendet erst BBox-Check (schnell), dann Polygon-Check (genau).
      */
-    function _collidesWithPlaced(testBBox, partPoints, position, placedParts, spacing, grid) {
+    function _collidesWithPlaced(testBBox, partPoints, position, placedParts, spacing, grid, cl) {
         const list = grid ? grid.query(testBBox, spacing) : placedParts;
         let A = null;                                     // Teil an Kandidatenposition, einmal je Kandidat verschoben
         for (const placed of list) {
+            // V1.6: Common-Line — zwei achsparallele Rechtecke dürfen bündig liegen (Abstand 0): exakter BBox-Test mit Abstand = Schnittspalt (_clGap), Toleranz CL_TOL
+            if (cl && placed.cl) {
+                if (_bboxOverlap(testBBox, placed.bbox, _clGap - CL_TOL)) return true;
+                continue;
+            }
             // Schneller BBox-Check mit Spacing
             if (!_bboxOverlap(testBBox, placed.bbox, spacing)) continue;
             if (!A) A = _translate(partPoints, position);
@@ -872,6 +912,7 @@ const NestingEngine = (() => {
      */
     function nest(contours, config = {}) {
         const cfg = { ...DEFAULT_CONFIG, ...config };
+        _clGap = Math.max(0, Number(cfg.commonLineGap) >= 0 ? Number(cfg.commonLineGap) : DEFAULT_CONFIG.commonLineGap);
         const startTime = performance.now();
 
         console.log(`${LOG_PREFIX} Starte Nesting: ${contours.length} Konturen auf ${cfg.sheetWidth}×${cfg.sheetHeight}mm Blech`);
@@ -927,7 +968,7 @@ const NestingEngine = (() => {
                 position: { x: position.x, y: position.y }, rotation: variant.rotation, bbox: placedBBox
             });
             const abs = _translate(variant.points, position);
-            const entry = { points: variant.points, position, bbox: placedBBox, abs };
+            const entry = { points: variant.points, position, bbox: placedBBox, abs, cl: !!variant.cl };
             if (collSpacing > 0) {
                 const dim = Math.max(placedBBox.maxX - placedBBox.minX, placedBBox.maxY - placedBBox.minY);
                 entry.sg = _makeSegGrid(abs, placedBBox, Math.max(2 * collSpacing, dim / 40, 1));
@@ -944,8 +985,9 @@ const NestingEngine = (() => {
                 const key = part.typeKey + '|' + si + '|' + vi;
                 if (variantFailed.has(key)) continue;
                 const variant = variants[vi];
+                if (variant.cl === undefined) variant.cl = !!part.commonLine && _isAxisRect(variant.points);
                 const position = _findBLFPosition(variant.points, sheetConfig, sheets[si].placedParts, cfg.gravity, collSpacing,
-                    sheets[si].grid, variantHint.get(key));
+                    sheets[si].grid, variantHint.get(key), variant.cl);
                 if (position) {
                     variantHint.set(key, { x: position.x, y: position.y });
                     place(part, variant, position, si);
@@ -1068,6 +1110,20 @@ const NestingEngine = (() => {
         return out.length >= 3 ? out : points;
     }
 
+    /** V1.6: Ring ist ein achsparalleles Rechteck (alle Punkte auf der BBox-Kontur, Fläche = BBox-Fläche). */
+    function _isAxisRect(points) {
+        if (!points || points.length < 4) return false;
+        const b = _boundingBox(points), w = b.maxX - b.minX, h = b.maxY - b.minY;
+        if (!(w > 0 && h > 0)) return false;
+        const t = 1e-6 * Math.max(w, h);
+        for (const p of points) {
+            const onX = Math.abs(p.x - b.minX) <= t || Math.abs(p.x - b.maxX) <= t;
+            const onY = Math.abs(p.y - b.minY) <= t || Math.abs(p.y - b.maxY) <= t;
+            if (!onX && !onY) return false;
+        }
+        return Math.abs(Math.abs(_polygonArea(points)) - w * h) <= 1e-6 * w * h;
+    }
+
     /** Teiletyp-Schlüssel aus Form + Drehwinkeln (0,01 mm gerundet), wenn der Aufrufer keinen typeKey mitgibt. */
     function _signature(points, rotationSteps) {
         let h = 5381;
@@ -1099,6 +1155,8 @@ const NestingEngine = (() => {
             }
 
             const typeKey = contour?.typeKey != null ? String(contour.typeKey) : _signature(points, contour?.rotationSteps);
+            const clFlag = contour?.commonLine === true;
+            const typeKeyCl = clFlag ? typeKey + '|cl' : typeKey;
             let nestPts = simplifyCache.get(typeKey);
             if (!nestPts) { nestPts = _simplifyRing(points, cfg.simplifyTol); simplifyCache.set(typeKey, nestPts); }
             const norm = _normalizePart(nestPts);
@@ -1112,7 +1170,8 @@ const NestingEngine = (() => {
                 area: _polygonArea(norm.points),
                 isClosed: contour?.isClosed ?? true,
                 name: contour?.name || `Contour_${index}`,
-                typeKey,
+                typeKey: typeKeyCl,
+                commonLine: contour?.commonLine === true,                       // V1.6: Rechtecke dürfen bündig (Abstand 0) liegen
                 priority: Number(contour?.priority) || 0,                       // V1.3: höher = zuerst
                 rotationSteps: Array.isArray(contour?.rotationSteps) && contour.rotationSteps.length
                     ? contour.rotationSteps : null                                // V1.3: Override je Teil

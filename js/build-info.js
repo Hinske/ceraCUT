@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '7073cf2',
+        hash: '93b52c3',
         date: '2026-11-07',
-        message: 'fix: Ribbon-Tooltips per JS, CSS-Tooltip wurde im Ribbon abgeschnitten (app V6.7'
+        message: 'feat: DXF-/CNC-Server-Browser mit Vorschau-Panel, Common-Line-Schnitt (WIP), Duschboard-Entwu'
     },
 
     modules: {
@@ -42,7 +42,7 @@ const CERACUT_BUILD = {
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.5', build: '20261106-arcangle' },
         'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
-        'app':                { version: '6.73', build: '20261107-ribtip' },
+        'app':                { version: '6.74', build: '20261107-cncbrowse' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
         'properties-panel':   { version: '1.7', build: '20261107-leadmenu' },
@@ -58,8 +58,8 @@ const CERACUT_BUILD = {
         'arc-fitting':        { version: '3.4', build: '20261105-meander' },
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
         'dimension-tool':     { version: '2.6', build: '20261104-pushexecuted' },
-        'dxf-browser':        { version: '1.4', build: '20261107-pickmany' },
-        'server':             { version: '1.12', build: '20261107-seed' },
+        'dxf-browser':        { version: '1.6', build: '20261107-cncbrowse' },
+        'server':             { version: '1.13', build: '20261107-cncbrowse' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
         'constants': { version: '2.16', build: '20261107-tips' },

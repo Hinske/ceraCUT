@@ -19,9 +19,10 @@
  * V1.9: Feat — /api/dxf/list liefert mtime (Änderungsdatum) für Ordner und Dateien
  * V1.12: Feat — Seed (lib/seed.js): materials/technologies beim ersten Start aus CeraJetEngine
  * V1.11: Feat — Daten-API (lib/data-api.js): /api/parts|plans|sheets|orders|materials|technologies + /api/technology/resolve, hinter Login
+ * V1.13: Feat — GET /api/cnc/list + /api/cnc/file (CNC-Ordner browsen, read-only, hinter Login)
  * V1.10: Feat — POST /api/cnc/save schreibt .CNC-Dateien nach CNC_ROOT (default /mnt/cnc)
  * Last Modified: 2026-11-07
- * Build: 20261107-seed
+ * Build: 20261107-cncbrowse
  * V1.7: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * Statischer Dateiserver + DXF-Browse-API für Netzlaufwerk-Zugriff.
@@ -80,6 +81,7 @@ const CNC_ROOT = (() => {
     const r = path.resolve(process.env.CNC_ROOT || '/mnt/cnc');
     try { return fs.realpathSync(r); } catch { return r; }
 })();
+const CNC_EXTS = ['.cnc', '.mpf', '.nc', '.gcode', '.txt'];
 const STATIC_ROOT = __dirname;
 const NO_HTTPS = process.env.NO_HTTPS === '1';
 
@@ -252,8 +254,8 @@ function sendJSON(res, statusCode, data) {
  * API: GET /api/dxf/list?path=
  * Listet Verzeichnisinhalt (nur .dxf-Dateien und Unterordner).
  */
-function handleDXFList(res, queryPath) {
-    const dirPath = safePath(DXF_ROOT, queryPath);
+function handleDXFList(res, queryPath, root = DXF_ROOT, exts = ['.dxf']) {
+    const dirPath = safePath(root, queryPath);
     if (!dirPath) {
         return sendJSON(res, 403, { error: 'Zugriff verweigert' });
     }
@@ -277,7 +279,7 @@ function handleDXFList(res, queryPath) {
                     let dMtime = 0;
                     try { dMtime = fs.statSync(path.join(dirPath, entry.name)).mtimeMs; } catch {}
                     items.push({ name: entry.name, type: 'directory', mtime: dMtime });
-                } else if (entry.name.toLowerCase().endsWith('.dxf')) {
+                } else if (exts.some(x => entry.name.toLowerCase().endsWith(x))) {
                     // Dateigröße ermitteln
                     try {
                         const stat = fs.statSync(path.join(dirPath, entry.name));
@@ -398,18 +400,18 @@ async function handleDXFSave(req, res) {
  * API: GET /api/dxf/file?path=
  * Liefert DXF-Dateiinhalt (ISO-8859-1 raw bytes).
  */
-function handleDXFFile(res, queryPath) {
+function handleDXFFile(res, queryPath, root = DXF_ROOT, exts = ['.dxf']) {
     if (!queryPath) {
         return sendJSON(res, 400, { error: 'Pfad fehlt' });
     }
 
-    const filePath = safePath(DXF_ROOT, queryPath);
+    const filePath = safePath(root, queryPath);
     if (!filePath) {
         return sendJSON(res, 403, { error: 'Zugriff verweigert' });
     }
 
-    if (!filePath.toLowerCase().endsWith('.dxf')) {
-        return sendJSON(res, 403, { error: 'Nur DXF-Dateien erlaubt' });
+    if (!exts.some(x => filePath.toLowerCase().endsWith(x))) {
+        return sendJSON(res, 403, { error: 'Dateityp nicht erlaubt' });
     }
 
     fs.stat(filePath, (err, stats) => {
@@ -656,6 +658,16 @@ function requestHandler(req, res) {
     if (pathname === '/api/dxf/file' && req.method === 'GET') {
         if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
         return handleDXFFile(res, parsed.query.path || '');
+    }
+
+    // ── CNC-Ordner browsen (read-only, analog DXF): Login nötig ──
+    if (pathname === '/api/cnc/list' && req.method === 'GET') {
+        if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
+        return handleDXFList(res, parsed.query.path || '', CNC_ROOT, CNC_EXTS);
+    }
+    if (pathname === '/api/cnc/file' && req.method === 'GET') {
+        if (!currentUser) return sendJSON(res, 401, { error: 'Nicht angemeldet' });
+        return handleDXFFile(res, parsed.query.path || '', CNC_ROOT, CNC_EXTS);
     }
 
     if (pathname === '/api/dxf/save' && req.method === 'POST') {

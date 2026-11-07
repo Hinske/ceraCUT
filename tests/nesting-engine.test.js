@@ -133,3 +133,30 @@ test('Gleichmäßige Fugen: jedes Teil liegt am nächsten Nachbarn mit der einge
     const loose = nn.filter(v => v > spacing + 0.6).length;
     assert.ok(loose <= nn.length * 0.05, `${loose} von ${nn.length} Teilen haben mehr als ${spacing + 0.6} mm Abstand zum nächsten Nachbarn (max ${Math.max(...nn).toFixed(1)})`);
 });
+
+test('Common-Line: Rechtecke mit Flag liegen im Abstand = Schnittspalt (0,8 mm), ohne Flag bleibt die Fuge, gemischt = Fuge', () => {
+    const run = (flagA, flagB, n = 3) => {
+        const items = [rect(100, 50, { commonLine: flagA }), rect(100, 50, { commonLine: flagB }), rect(100, 50, { commonLine: flagA })].slice(0, n);
+        const r = quiet(() => N.nest(items, { sheetWidth: 400, sheetHeight: 120, sheetMargin: 5, spacing: 3, rotationSteps: [0] }));
+        assert.strictEqual(r.unplaced.length, 0);
+        const boxes = r.placements.map(p => p.bbox).sort((a, b) => a.minX - b.minX || a.minY - b.minY);
+        const gaps = [];
+        for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+            const a = boxes[i], b = boxes[j];
+            const gx = Math.max(b.minX - a.maxX, a.minX - b.maxX), gy = Math.max(b.minY - a.maxY, a.minY - b.maxY);
+            gaps.push(Math.max(gx, gy));
+        }
+        return Math.min(...gaps);
+    };
+    assert.ok(Math.abs(run(true, true) - 0.8) < 1e-6, 'Abstand = Schnittspalt');
+    assert.ok(run(false, false) >= 3 - 0.01, 'Fuge ohne Flag');
+    assert.ok(run(true, false, 2) >= 3 - 0.01, 'gemischt (Flag + ohne Flag): Fuge');
+});
+
+test('Common-Line: Nicht-Rechtecke (Kreis) mit Flag behalten die Fuge', () => {
+    const items = [circ(30, 48, { commonLine: true }), circ(30, 48, { commonLine: true })];
+    const r = quiet(() => N.nest(items, { sheetWidth: 300, sheetHeight: 100, sheetMargin: 5, spacing: 3, rotationSteps: [0] }));
+    const placed = clone(items);
+    quiet(() => N.applyPlacements(placed, r.placements));
+    assert.ok(minDist(placed[0].points, placed[1].points) >= 3 - 0.01);
+});

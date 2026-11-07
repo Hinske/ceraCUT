@@ -14,6 +14,7 @@
  * V6.60: Feat — Schnittreihenfolge manuell: Schnitte anklicken, Auswahl Anfang/↑/↓/Ende/Position N (je Fliese, Undo); alte Schnittliste war seit V5.7 nicht mehr im HTML
  * V6.59: Feat — Fliesen-Reihenfolge im Tab Reihenfolge: Presets (Zeile/Spalte/Schlangenlinie/Nachbar, Startecke, umkehren), Anklick-Modus, Drag&Drop, Sperre bei manueller Reihenfolge; Button "Fliesen erkennen" entfällt (Erkennung automatisch)
  * V6.58: Fix — Fliesen nach Auto-Referenz neu zuordnen, Nullpunkt-Gedaechtnis, Rechteck-Erkennung tolerant (verkettete Linien)
+ * V6.74: Feat — Button „CNC Server" (DXFBrowser kind=cnc, CNC-Ordner mit Vorschau)
  * V6.73: Fix — Ribbon-Tooltips per JS (CSS-Tooltip wurde im Ribbon abgeschnitten, z.B. Analyze)
  * V6.72: Feat — Tooltips auch fuer Flyout-Eintraege (data-fly-tool, Position rechts)
  * V6.57: Feat — Konturgeometrie nur im Tab CAD änderbar (isGeometryEditAllowed: Tools, Grips, Löschen); Schnittliste hält Fliesengruppen
@@ -34,8 +35,8 @@
  * V6.40: Feat — Druck/Bereichsdruck uebernimmt Layerfarben (helle Farben werden abgedunkelt)
  * V6.39: Feat — Bereichsdruck: startPrintSelection() (Rahmen aufziehen, Strg+Shift+P / Button), printCanvas(region) mit Clip
  * V6.38: Feat — Object Snap Tracking (F11), Polar Tracking (F10), Rasterfang (F9), Shift = Ortho temporaer umkehren; zentrale SnapManager.resolve()
- * Last Modified: 2026-11-06
- * Build: 20261106-tileref
+ * Last Modified: 2026-11-07
+ * Build: 20261107-cncbrowse
  * V6.36: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  * V6.35: Fix — Intarsien-Fugen-Offset korrigiert: _applyIntarsiaOffset() nutzte intern
  *        getKerfOffsetPolyline(), das für hole-Konturen (CCW) den Offset nach innen berechnete.
@@ -271,6 +272,7 @@ class CeraCutApp {
         // V5.9: DXF Browser (Server-Netzlaufwerk)
         if (typeof DXFBrowser !== 'undefined') {
             this.dxfBrowser = new DXFBrowser(this);
+            this.cncBrowser = new DXFBrowser(this, { kind: 'cnc', onLoad: (name, text) => window.CeraCutCncImportContent?.(text) });
         }
 
         // V3.11: Image Underlay Manager
@@ -2668,6 +2670,7 @@ class CeraCutApp {
     }
     
     updateContourPanel() {
+        try { this._updateLayerUI(); } catch (e) { /* Layer-Anzeige nicht kritisch */ }
         const listEl = document.getElementById('contour-list-panel');
         if (!listEl) return;
         
@@ -3430,6 +3433,9 @@ class CeraCutApp {
         // Server-DXF-Browse Button
         document.getElementById('btn-server-dxf')?.addEventListener('click', () => {
             this.dxfBrowser?.open();
+        });
+        document.getElementById('btn-server-cnc')?.addEventListener('click', () => {
+            this.cncBrowser?.open();
         });
 
         canvasArea?.addEventListener('dragover', (e) => {
@@ -5063,6 +5069,16 @@ class CeraCutApp {
             advBtn.addEventListener('click', () => {
                 const open = advPanel.classList.toggle('lead-adv-open');
                 try { localStorage.setItem('ceracut_lead_adv', open ? '1' : '0'); } catch (e) { /* ignore */ }
+            });
+        }
+
+        // V7.28: "Mehr"-Toggle (Schnitte manuell, Fliesen) im CAM-Tab
+        const moreBtn = document.getElementById('btn-cam-more');
+        if (advPanel && moreBtn) {
+            try { if (localStorage.getItem('ceracut_cam_more') === '1') advPanel.classList.add('cam-more-open'); } catch (e) { /* ignore */ }
+            moreBtn.addEventListener('click', () => {
+                const open = advPanel.classList.toggle('cam-more-open');
+                try { localStorage.setItem('ceracut_cam_more', open ? '1' : '0'); } catch (e) { /* ignore */ }
             });
         }
 
@@ -6794,7 +6810,17 @@ class CeraCutApp {
         const layers = this.layerManager.getAllLayers();
         const active = this.layerManager.activeLayer;
         const activeLayer = this.layerManager.getActiveLayer();
-        const activeColor = activeLayer?.color || '#fff';
+        // AutoCAD-Verhalten: bei Selektion zeigt die Anzeige den Layer der gewählten Kontur(en)
+        const selLayers = new Set((this.contours || []).filter(c => c.isSelected).map(c => c.layer || '0'));
+        let shownName = active;
+        let activeColor = activeLayer?.color || '#fff';
+        if (selLayers.size === 1) {
+            shownName = [...selLayers][0];
+            activeColor = this.layerManager.layers.get(shownName)?.color || activeColor;
+        } else if (selLayers.size > 1) {
+            shownName = '*VERSCHIEDENE*';
+            activeColor = '#888';
+        }
 
         // Live-Zählung: Layer mit Konturen ermitteln (unabhängig von entityCount-Cache)
         const usedLayers = new Set();
@@ -6839,7 +6865,7 @@ class CeraCutApp {
             const colorSpan = ribbonTrigger.querySelector('.layer-dd-color');
             const nameSpan = ribbonTrigger.querySelector('.layer-dd-name');
             if (colorSpan) colorSpan.style.background = activeColor;
-            if (nameSpan) nameSpan.textContent = active;
+            if (nameSpan) nameSpan.textContent = shownName;
         }
         const ribbonPanel = document.getElementById('ribbon-layer-panel');
         if (ribbonPanel) ribbonPanel.innerHTML = rowsHtml;
@@ -6850,7 +6876,7 @@ class CeraCutApp {
             const colorSpan = statusTrigger.querySelector('.layer-dd-color');
             const nameSpan = statusTrigger.querySelector('.layer-dd-name');
             if (colorSpan) colorSpan.style.background = activeColor;
-            if (nameSpan) nameSpan.textContent = active;
+            if (nameSpan) nameSpan.textContent = shownName;
         }
         const statusPanel = document.getElementById('status-layer-panel');
         if (statusPanel) statusPanel.innerHTML = rowsHtml;

@@ -182,3 +182,25 @@ test('Reale Testdatei HEIDED856000W-115V1 als GRUPPE (Standard): 40 Stück → k
     assert.ok(Math.min(...gaps) >= 3 - 0.01, `Mindestfuge ${Math.min(...gaps).toFixed(2)}`);
     assert.ok(gaps.filter(g => g > 3.6).length <= gaps.length * 0.05, `Fugen: max ${Math.max(...gaps).toFixed(1)} mm`);
 });
+
+test('Common-Line: Flag je Teil → Rechtecke im Schnittspalt-Abstand im Plan, Flag in plan.demand; ohne Flag Fuge wie bisher', () => {
+    const parts = { A: rectPart('A', 100, 60), B: rectPart('B', 100, 60) };
+    const gaps = plan => {
+        const boxes = plan.instances.map(i => bb(NestingPlan.placePart(parts[i.partId], i.rot, i.tx, i.ty)[0].points));
+        let m = Infinity;
+        for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+            const a = boxes[i], b = boxes[j];
+            m = Math.min(m, Math.max(a.minX - b.maxX, b.minX - a.maxX, a.minY - b.maxY, b.minY - a.maxY));
+        }
+        return m;
+    };
+    const on = quiet(() => NestingPlan.run([{ partId: 'A', qty: 6, commonLine: true }], parts, cfg));
+    assert.ok(Math.abs(gaps(on.plan) - 0.8) < 1e-3, 'Abstand = Schnittspalt');
+    assert.strictEqual(on.plan.demand.A.commonLine, true);
+    const off = quiet(() => NestingPlan.run([{ partId: 'B', qty: 6 }], parts, cfg));
+    assert.ok(gaps(off.plan) >= 3 - 1e-6, 'Fuge');
+    assert.strictEqual(off.plan.demand.B.commonLine, false);
+    parts.B.nesting = { commonLine: true };                       // Teile-Standard aus der Bibliothek
+    const lib = quiet(() => NestingPlan.run([{ partId: 'B', qty: 4 }], parts, cfg));
+    assert.ok(Math.abs(gaps(lib.plan) - 0.8) < 1e-3);
+});

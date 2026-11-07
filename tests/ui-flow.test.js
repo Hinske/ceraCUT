@@ -270,7 +270,7 @@ test('Teileimport „Vom Server…": Mehrfachauswahl über Ordner, Alle im Ordne
         assert.deepStrictEqual([...imp.items.map(i => i.fileName)].sort(), ['A.dxf', 'C.dxf', 'D.dxf']);
         assert.ok(imp.items.every(i => i.status === 'ready'));
         assert.ok(!$('.dxf-browser-ok'), 'Browser ist geschlossen');
-        assert.deepStrictEqual([...calls].sort(), ['A.dxf', 'Heide/C.dxf', 'Heide/D.dxf']);
+        assert.deepStrictEqual([...new Set(calls)].sort(), ['A.dxf', 'Heide/C.dxf', 'Heide/D.dxf']); // Vorschau-Abrufe können Dateien doppelt laden
         assert.ok([...imp.layerSel.keys()].includes('Teile Ä'), 'ISO-8859-1-Umlaut im Layernamen bleibt erhalten');
 
         // Abbrechen liefert []

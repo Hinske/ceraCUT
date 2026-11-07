@@ -692,8 +692,10 @@ const CeraCutPipeline = {
                 const first = c.points[0];
                 const last = c.points[c.points.length - 1];
                 const gap = Math.hypot(last.x - first.x, last.y - first.y);
-                if (gap > 0.01) {  // Nicht quasi-geschlossen
-                    const perimeter = this._calculatePerimeter(c.points);
+                const perimeter = this._calculatePerimeter(c.points);
+                // Gerade Linien / Schlitze / offene Ketten sind gewollt offen: Start/Ende-Gap nur,
+                // wenn die Kontur "fast geschlossen" ist (Abstand < 30 % der Konturlaenge)
+                if (gap > 0.01 && gap < perimeter * 0.3) {  // Nicht quasi-geschlossen
                     const isHealable = gap <= this.GAP_HEALABLE_MAX &&
                                        gap < perimeter * this.GAP_PERIMETER_RATIO;
                     c.gaps.push({
