@@ -1186,7 +1186,7 @@ class CeraCutApp {
         // V6.21: CAM-Aktionen erst nach abgeschlossenem Setup (Referenz + Nullpunkt)
         const isReference = contour.isReference;
         const setupComplete = this.isSetupComplete();
-        const isCuttable = (contour.isClosed || contour.cuttingMode === 'slit') && !isReference && setupComplete;
+        const isCuttable = (contour.isClosed || contour.cuttingMode === 'slit') && !isReference;
 
         const startpointItem = menu.querySelector('[data-action="set-startpoint"]');
         if (startpointItem) startpointItem.style.display = isCuttable ? 'flex' : 'none';
@@ -4359,6 +4359,7 @@ class CeraCutApp {
         document.getElementById('btn-apply-kerf')?.addEventListener('click', () => this.applyKerfWidth());
         document.getElementById('btn-direction-cw')?.addEventListener('click', () => this.setDirectionForSelected('cw'));
         document.getElementById('btn-direction-ccw')?.addEventListener('click', () => this.setDirectionForSelected('ccw'));
+        document.getElementById('btn-direction-reverse')?.addEventListener('click', () => this.reverseDirectionForSelected());
     }
     
     // ═══════════════════════════════════════════════════
@@ -4531,7 +4532,8 @@ class CeraCutApp {
         const selected = this.contours.filter(c => c.isSelected && c.isClosed && !c.isReference);
         
         if (selected.length === 0) {
-            this.showToast('Bitte erst Konturen auswählen', 'warning');
+            const hasOpen = this.contours.some(c => c.isSelected && !c.isClosed && !c.isReference);
+            this.showToast(hasOpen ? 'Offene Kontur: CW/CCW gilt nur für geschlossene — bitte ⇄ (Umkehren) nutzen' : 'Bitte erst Konturen auswählen', 'warning');
             return;
         }
         
@@ -4635,6 +4637,26 @@ class CeraCutApp {
         this.renderer?.render();
     }
     
+    // Schneidrichtung umkehren — auch für offene Konturen (CW/CCW gilt nur für geschlossene)
+    reverseDirectionForSelected() {
+        const selected = this.contours.filter(c => c.isSelected && !c.isReference && c.points && c.points.length >= 2);
+        if (selected.length === 0) {
+            this.showToast('Bitte erst Konturen auswählen', 'warning');
+            return;
+        }
+        this.undoManager.beginGroup('Richtung umkehren');
+        selected.forEach(c => {
+            this.undoManager.execute(new FunctionCommand(
+                'Richtung umkehren',
+                () => { c.points = c.points.slice().reverse(); c.invalidate?.(); },
+                () => { c.points = c.points.slice().reverse(); c.invalidate?.(); }
+            ));
+        });
+        this.undoManager.endGroup();
+        this.showToast(`${selected.length} Konturen umgekehrt (STRG+Z = Rückgängig)`, 'success');
+        this.renderer?.render();
+    }
+
     isClockwise(points) {
         let sum = 0;
         for (let i = 0; i < points.length - 1; i++) {

@@ -1,5 +1,6 @@
 /**
- * CeraCUT Toolpath Simulator V1.5
+ * CeraCUT Toolpath Simulator V1.6
+ * V1.6: Animation — Leerweg (Eilgang) gestrichelt/orange/1px sichtbar, Eilgang auf 15x Schnitttempo begrenzt (Kopf springt nicht mehr). Build 20261107-simrapid
  * V1.5: AP1 S5 — Lead-Laengen exakt aus Segmenten (Bogenlaenge statt Sehnenzug), Kollisions-/Plattenrand-Pruefung der
  *       Leads gegen die REALE Strahlmitte (getLeadIn/OutToolSegments, kerf/2 versetzt); Leads liegen jetzt wie die
  *       Kontur auf der Teilegeometrie (cam-contour V5.28) -> Animation ohne Sprung zwischen Lead und Kontur.
@@ -34,9 +35,9 @@
 
 const ToolpathSimulator = {
 
-    VERSION: '1.5',
+    VERSION: '1.6',
     BUILD: '20261106-leadseg',
-    PREFIX: '[ToolpathSim V1.5]',
+    PREFIX: '[ToolpathSim V1.6]',
 
     // ════════════════════════════════════════════════════════════════
     // KONFIGURATION
@@ -768,7 +769,7 @@ const ToolpathSimulator = {
         const onComplete = options.onComplete || null;
 
         const colors = Object.assign({
-            rapid:   '#888888',
+            rapid:   '#ffa500',
             cutting: '#00aaff',
             leadIn:  '#00ff00',
             leadOut: '#ff00ff',
@@ -828,10 +829,13 @@ const ToolpathSimulator = {
             const t = w2c(to);
             histCtx.beginPath();
             histCtx.strokeStyle = colors[phase] || colors.cutting;
-            histCtx.lineWidth = (phase === 'rapid' ? 0.5 : 1.5) * transform.dpr;
+            histCtx.lineWidth = (phase === 'rapid' ? 1 : 1.5) * transform.dpr;
+            // Leerweg (Eilgang) gestrichelt, damit er sich vom Schnitt abhebt
+            histCtx.setLineDash(phase === 'rapid' ? [6 * transform.dpr, 4 * transform.dpr] : []);
             histCtx.moveTo(f.x, f.y);
             histCtx.lineTo(t.x, t.y);
             histCtx.stroke();
+            histCtx.setLineDash([]);
         };
 
         let lastFrameTs = null;
@@ -986,7 +990,8 @@ const ToolpathSimulator = {
     _buildAnimationSegments(contours, cutOrder, nullPoint) {
         const segments = [];
         const cuttable = this._getCuttableContours(contours, cutOrder);
-        const rapidSpeed = this.DEFAULT_RAPID_SPEED;
+        // Animation: Eilgang auf das 15-fache des Schnitttempos begrenzt (sonst 300x -> Kopf springt unsichtbar)
+        const rapidSpeed = Math.min(this.DEFAULT_RAPID_SPEED, 100 * 15);
         let lastPos = nullPoint || { x: 0, y: 0 };
 
         for (let i = 0; i < cuttable.length; i++) {
@@ -1419,4 +1424,4 @@ const ToolpathSimulator = {
 };
 
 // Modul-Registrierung
-console.debug('[ToolpathSim V1.1] Loaded — Build 20260625-simcrashfix');
+console.debug('[ToolpathSim V1.6] Loaded — Build 20261107-simrapid');

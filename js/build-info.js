@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.20',
-    build: '20261107-dirarrows',
+    version: '7.21',
+    build: '20261107-simrapid',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'a0388f2',
+        hash: '70b346e',
         date: '2026-11-07',
-        message: 'fix: gleichmaessige Fugen (nesting V1.5: Teile bis zum Mindestabstand schieben),'
+        message: 'feat: Simulation Leerweg sichtbar + Eilgang begrenzt, Sim schliesst bei Tab-Wech'
     },
 
     modules: {
@@ -48,7 +48,7 @@ const CERACUT_BUILD = {
         'properties-panel':   { version: '1.7', build: '20261107-leadmenu' },
         'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
         'nesting':            { version: '1.5', build: '20261107-group' },
-        'toolpath-simulator': { version: '1.5', build: '20261106-leadseg' },
+        'toolpath-simulator': { version: '1.6', build: '20261107-simrapid' },
         'cost-calculator':    { version: '1.3', build: '20261104-reviewfix' },
         'machine-profiles':   { version: '1.2', build: '20261104-reviewfix' },
         'bridge-cutting':     { version: '1.1', build: '20261104-reviewfix' },
@@ -87,6 +87,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.21: Feat — Simulation (toolpath-simulator V1.6): Leerweg gestrichelt/orange sichtbar, Eilgang auf 15x Schnitttempo begrenzt; Simulation schliesst beim Ribbon-Tab-Wechsel; Schneidrichtung umkehren auch fuer offene Konturen (app.js).',
         'V7.20: Feat — Richtungspfeile klein und rot, max. 4 je Kontur; doppelte rote Kerf-Bahn-Pfeile entfernt (canvas-renderer V3.66).',
         'V7.19: Fix — Fugenband offener Konturen sitzt bei Kerf-Seite Links/Rechts neben der Kontur (canvas-renderer V3.65).',
         'V7.18: Fix — Schnittfuge bei offenen Konturen: Band wird gezeichnet (canvas-renderer V3.64) und Kerf-Aenderung (applyKerfWidth, app) wirkt jetzt auch auf offene Konturen (vorher nur geschlossene).',

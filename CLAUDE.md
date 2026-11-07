@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Letzte Aktualisierung:** 2026-11-07
-> **Version:** V7.20
-> **Build:** 20261107-dirarrows
+> **Version:** V7.21
+> **Build:** 20261107-simrapid
 
 ---
 
@@ -238,7 +238,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Measure Tool** | `measure-tool.js` | — | Messmodus |
 | **Debug Monitor** | `debug-monitor.js` | **V1.2** | Error-Catcher, Fallen-Erkennung, Strg+Shift+D Overlay |
 | **Nesting** | `nesting.js` | **V1.5** | BLF-Algorithmus, Multi-Rotation, Multi-Sheet |
-| **Toolpath Simulator** | `toolpath-simulator.js` | **V1.5** | Pfad-Verifikation, Animation, Kollisionsmatrix |
+| **Toolpath Simulator** | `toolpath-simulator.js` | **V1.6** | Pfad-Verifikation, Animation, Kollisionsmatrix |
 | **Cost Calculator** | `cost-calculator.js` | **V1.3** | Kosten-/Zeitkalkulation mit CeraJet-Integration |
 | **Machine Profiles** | `machine-profiles.js` | **V1.2** | Maschinenpark-Verwaltung, PP-Profile, localStorage |
 | **Bridge Cutting** | `bridge-cutting.js` | **V1.1** | Haltestege zwischen Teilen (auto/manuell) |
@@ -262,7 +262,7 @@ node scripts/sync-versions.js --check  # Nur prüfen (CI-tauglich)
 | **Seed** | `lib/seed.js` | **V1.0** | Erststart-Befuellung materials/technologies aus CeraJetEngine (nie ueberschreibend) |
 | **Data-API** | `lib/data-api.js` | **V1.0** | REST: /api/parts,plans,sheets,orders,materials,technologies, /api/technology/resolve; If-Match, Filter, Admin-only fuer Preise/Technologie |
 | **Store** | `lib/store.js` | **V1.0** | JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftraege, Technologie): atomar, Versions-Sperre (If-Match), ID-Validierung |
-| **Build-Info** | `build-info.js` | **V7.20** | Versions-Banner, Modul-Versionen, Changelog |
+| **Build-Info** | `build-info.js` | **V7.21** | Versions-Banner, Modul-Versionen, Changelog |
 | **Konstanten** | `constants.js` | V2.14 | Toleranzen, Farben, Defaults, INTARSIA_MATERIALS, TOOL_ECHO_NAMES |
 
 ---
@@ -297,9 +297,9 @@ ceraCUT/
 │   └── auth.js                        ← Cookie/Body-Parsing-Helper V1.0
 ├── data/                               ← users.json (gitignored — Passwort-Hashes)
 ├── js/
-│   ├── build-info.js                  ← Versions-Banner V7.20
+│   ├── build-info.js                  ← Versions-Banner V7.21
 │   ├── constants.js                   ← Toleranzen, Farben, Defaults, Intarsia-Materialien (V2.10)
-│   ├── app.js                         ← Hauptanwendung V7.20 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
+│   ├── app.js                         ← Hauptanwendung V7.21 (Lead-Profiles, Intarsien V2.0, Cycle-Selection)
 │   ├── dxf-parser.js                  ← DXF Parser V3.20 (Deque-Chaining, TEXT-Glyphs)
 │   ├── geometry.js                    ← Geometrie-Kernel V2.14
 │   ├── geometry-ops.js                ← GeometryOps V2.7 (Intersection, Arabeske, splitAndOverlap)
@@ -332,7 +332,7 @@ ceraCUT/
 │   ├── measure-tool.js               ← Messmodus
 │   ├── debug-monitor.js              ← Debug-Overlay (Strg+Shift+D)
 │   ├── nesting.js                    ← Nesting Engine V1.5
-│   ├── toolpath-simulator.js         ← Toolpath Simulator V1.5
+│   ├── toolpath-simulator.js         ← Toolpath Simulator V1.6
 │   ├── cost-calculator.js            ← Kalkulation V1.3
 │   ├── machine-profiles.js           ← Maschinenpark V1.2
 │   ├── bridge-cutting.js             ← Haltestege V1.1
@@ -561,7 +561,7 @@ Module-Details (in collapsed Gruppe, per Klick sichtbar):
   properties-panel: V1.7 (20261107-leadmenu)
   debug-monitor: V1.2 (20260630-consolelog)
   nesting: V1.5 (20261107-group)
-  toolpath-simulator: V1.5 (20261106-leadseg)
+  toolpath-simulator: V1.6 (20261107-simrapid)
   cost-calculator: V1.3 (20261104-reviewfix)
   machine-profiles: V1.2 (20261104-reviewfix)
   bridge-cutting: V1.1 (20261104-reviewfix)
