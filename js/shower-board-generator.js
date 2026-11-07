@@ -12,6 +12,7 @@
  * Phase 2a: nur rechteckiger Punktablauf. Rinne (2d), runder/aussermittiger Sonderfall-Check (2e) folgen.
  * Rein (kein DOM) — laeuft in Node (tests/shower-board.test.js).
  *
+ * V0.3.1: Raster 'ab Ablaufkante': Mittelband ueber dem Ablauf wird in Zellen <= Fliese geteilt (vorher Teile > Fliesenlaenge); Warnung 'Teil groesser als Fliese'
  * V0.3: Fugen-Layout (Reihen/Spalten + Fugenlisten je Reihe) fuer Kreuzfuge/Verband/Zufall ohne Drehung; Bearbeitungsfunktionen
  *       (moveLine/moveSub/addLine/addSub/removeLine/removeSub), jointSegments fuer Anzeige/Hit-Test
  * V0.2: Verlegemuster (Kreuzfuge, Verband 1/2 1/3 1/4 frei, Zufall, Fischgraet, Korbgeflecht), Ausrichtung horizontal/vertikal,
@@ -19,7 +20,7 @@
  * V0.1: Erstversion (Raster, Sektoren, Clipping, DXF)
  * Created: 2026-11-07 MEZ
  * Last Modified: 2026-11-07
- * Build: 20261107-dusch4
+ * Build: 20261107-dusch5
  */
 
 const ShowerBoardGenerator = (() => {
@@ -166,6 +167,12 @@ const ShowerBoardGenerator = (() => {
         if (anchorMode === 'ablauf') {
             for (let v = hi + tile + fuge / 2; v < L - fuge; v += pitch) out.push(v);
             for (let v = lo - tile - fuge / 2; v > fuge; v -= pitch) out.push(v);
+            // Mittelband ueber/neben dem Ablauf (Ablauf + je eine Fliese daneben, ggf. bis zur Feldkante) muss
+            // in gleich grosse Zellen <= Fliesenzelle geteilt werden, sonst entstehen Teile laenger als die Fliese
+            const A = lo - tile - fuge / 2 > fuge ? lo - tile - fuge / 2 : 0;
+            const B = hi + tile + fuge / 2 < L - fuge ? hi + tile + fuge / 2 : L;
+            const n = Math.ceil((B - A) / pitch - 1e-9);
+            for (let i = 1; i < n; i++) out.push(A + i * (B - A) / n);
         } else {
             const k0 = Math.ceil((0 - O) / pitch);
             for (let k = k0; O + k * pitch < L; k++) { const v = O + k * pitch; if (v > 0.01 && v < L - 0.01) out.push(v); }
@@ -466,9 +473,18 @@ const ShowerBoardGenerator = (() => {
         return best;
     }
 
+    /** groesster Abstand zweier Eckpunkte */
+    function diameter(poly) {
+        let d = 0;
+        for (let i = 0; i < poly.length; i++) for (let j = i + 1; j < poly.length; j++) d = Math.max(d, Math.hypot(poly[i].x - poly[j].x, poly[i].y - poly[j].y));
+        return d;
+    }
+
     function validate(p, pieces) {
         const warn = [];
+        const diag = Math.hypot(p.fliese.lang, p.fliese.kurz);
         for (const pc of pieces) {
+            if (p.muster !== 'keins' && diameter(pc.poly) > diag + 0.5) warn.push({ piece: pc, text: `Teil größer als die Fliese (${diameter(pc.poly).toFixed(0)} mm) in Sektor ${pc.sector} — Fugenbild prüfen` });
             const w = minWidth(pc.poly);
             if (w < p.minTeil) warn.push({ piece: pc, text: `Schmales Teil (${w.toFixed(1)} mm) in Sektor ${pc.sector}` });
         }
@@ -516,7 +532,7 @@ const ShowerBoardGenerator = (() => {
         return { ok: true, p, layout, chains, grid, editable: !!layout, pieces, warnings: validate(p, pieces), count: pieces.length, fileName, dxf: buildDXF(pieces) };
     }
 
-    return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, moveLine, moveSub, addLine, addSub, removeLine, removeSub, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, bboxOf, tilesFromPattern, hash01 } };
+    return { VERSION, LOG, DEFAULTS, compute, normalize, buildGrid, buildLayout, jointSegments, moveLine, moveSub, addLine, addSub, removeLine, removeSub, buildSectors, clipPieces, buildDXF, validate, _internals: { clipHalfPlane, area, minWidth, diameter, bboxOf, tilesFromPattern, hash01 } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = ShowerBoardGenerator;

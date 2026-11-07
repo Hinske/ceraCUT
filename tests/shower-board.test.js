@@ -57,7 +57,8 @@ test('Invarianten: Teile konvex, ueberlappungsfrei, Flaeche passt (mit Raster, n
 
 test('Raster: Fugenmitten ab Ablaufkante, Fuge zwischen Teilen exakt Fugenbreite', () => {
     const r = G.compute({ breite: 1300, tiefe: 1000, ablauf: { w: 140, h: 140 }, fliese: { x: 300, y: 300 } });
-    assert.ok(near(r.grid.xLines.find(v => v > 650 + 70), 650 + 70 + 300 + 1), 'erste Fugenmitte rechts von Ablaufkante = Kante + Fliese + Fuge/2');
+    assert.ok(r.grid.xLines.some(v => near(v, 650 + 70 + 300 + 1)), 'Fugenmitte = Ablaufkante + Fliese + Fuge/2');
+    assert.ok(r.grid.xLines.some(v => near(v, 650 - 70 - 300 - 1)), 'und gespiegelt links');
 });
 
 test('Aussenmass: Fliesenfeld = Aussenmass - 2 * Randfuge', () => {
@@ -237,4 +238,21 @@ test('Dialog: Bearbeitungsansicht zeichnet Fugenmitten und markiert die angefass
     assert.ok(edit.includes('stroke-dasharray="5 4"') && edit.includes('#ff9d00') && edit.includes('X = '));
     assert.ok(D._internals.statusHTML(r, true).includes('Fugenbild angepasst'));
     delete global.ShowerBoardGenerator;
+});
+
+test('Raster ab Ablaufkante: kein Teil ist groesser als die Fliese (Regression: 900-mm-Teile bei 600x300)', () => {
+    for (const [b, t, dw, dh] of [[1300, 1000, 140, 140], [1200, 900, 124, 124], [1000, 1000, 140, 140], [1600, 1000, 200, 120], [900, 900, 124, 124], [1670, 875, 150, 150], [1400, 1200, 300, 100]]) {
+        for (const ausrichtung of ['horizontal', 'vertikal']) {
+            const r = G.compute({ breite: b, tiefe: t, ablauf: { w: dw, h: dh }, fliese: { lang: 600, kurz: 300 }, ausrichtung });
+            assert.ok(r.ok, r.error);
+            const diag = Math.hypot(600, 300);
+            for (const pc of r.pieces) {
+                const bb = G._internals.bboxOf(pc.poly);
+                assert.ok(G._internals.diameter(pc.poly) <= diag + 0.5, `${b}x${t} ${ausrichtung}: Teil ${(bb.x1 - bb.x0).toFixed(0)}x${(bb.y1 - bb.y0).toFixed(0)} groesser als Fliese`);
+                const [w, h] = ausrichtung === 'horizontal' ? [600, 300] : [300, 600];
+                assert.ok(bb.x1 - bb.x0 <= w + 0.5 && bb.y1 - bb.y0 <= h + 0.5, `${b}x${t} ${ausrichtung}: Teil ${(bb.x1 - bb.x0).toFixed(0)}x${(bb.y1 - bb.y0).toFixed(0)} ueberschreitet Fliesenzelle ${w}x${h}`);
+            }
+            assert.ok(!r.warnings.some(w => /größer als die Fliese/.test(w.text)));
+        }
+    }
 });

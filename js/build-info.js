@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.32',
-    build: '20261107-dusch4',
+    version: '7.33',
+    build: '20261107-dusch5',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'b747313',
+        hash: '04ee63c',
         date: '2026-11-07',
-        message: 'feat: Duschboard V0.3 - Fugenbild bearbeiten (ziehen, setzen, loeschen, Listen, '
+        message: 'fix: Duschboard-Raster ab Ablaufkante - Mittelband geteilt, keine Teile laenger als'
     },
 
     modules: {
@@ -67,7 +67,7 @@ const CERACUT_BUILD = {
         'tile-grid': { version: '1.4', build: '20261106-fliesenrect' },
         'tile-layout': { version: '1.1', build: '20261106-fliesenrect' },
         'mosaic-generator': { version: '1.4', build: '20261106-fliesenrect' },
-        'shower-board-generator': { version: '0.3', build: '20261107-dusch4' },
+        'shower-board-generator': { version: '0.3.1', build: '20261107-dusch5' },
         'shower-board-dialog': { version: '0.3', build: '20261107-dusch4' },
         'image-underlay': { version: '1.2', build: '20261104-pushexecuted' },
         'svg-parser': { version: '1.1', build: '20261104-reviewfix' },
