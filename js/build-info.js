@@ -8,16 +8,16 @@
  */
 
 const CERACUT_BUILD = {
-    version: '7.15',
-    build: '20261107-occorner',
+    version: '7.16',
+    build: '20261107-leadmenu',
     date: '2026-11-07',
     time: '09:00 MEZ',
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: 'a76237b',
+        hash: 'cc576fd',
         date: '2026-11-07',
-        message: 'feat: Ueberschnitt an Ecken automatisch gesperrt; Ribbon: Ausfahrwinkel, Ausfahrlaenge/OC sichtbar, Schalter Ecke (cam-contour V5.31, app V6.68)'
+        message: 'feat: Lead-Menue - eigener Ausfahr-Typ/-Radius, Hover-Hinweis am Lead-Warnsymbol, OC-an-Ecke im Properties-Panel (app V6.69, renderer V3.63, panel V1.7)'
     },
 
     modules: {
@@ -25,7 +25,7 @@ const CERACUT_BUILD = {
         'geometry':           { version: '2.14', build: '20261104-reviewfix' },
         'pipeline':           { version: '3.12', build: '20261106-tileref' },
         'cam-contour':        { version: '5.31', build: '20261107-occorner' },
-        'canvas-renderer':    { version: '3.62', build: '20261106-classic' },
+        'canvas-renderer':    { version: '3.63', build: '20261107-leadmenu' },
         'undo-manager':       { version: '1.4', build: '20261104-reviewfix' },
         'sinumerik-pp':       { version: '2.9', build: '20261106-tileref' },
         'command-line':       { version: '1.6', build: '20261104-reviewfix' },
@@ -42,10 +42,10 @@ const CERACUT_BUILD = {
         'dxf-writer':         { version: '1.16', build: '20261104-reviewfix' },
         'lead-profiles':      { version: '1.5', build: '20261106-arcangle' },
         'lead-geometry':      { version: '1.1', build: '20261106-toolpath' },
-        'app':                { version: '6.68', build: '20261107-occorner' },
+        'app':                { version: '6.69', build: '20261107-leadmenu' },
         'document-manager':   { version: '1.6', build: '20261106-fliesenrect' },
         'project-manager':    { version: '1.2', build: '20261104-pushexecuted' },
-        'properties-panel':   { version: '1.6', build: '20261104-reviewfix' },
+        'properties-panel':   { version: '1.7', build: '20261107-leadmenu' },
         'debug-monitor':      { version: '1.2', build: '20260630-consolelog' },
         'nesting':            { version: '1.2', build: '20261104-reviewfix' },
         'toolpath-simulator': { version: '1.5', build: '20261106-leadseg' },
@@ -76,6 +76,7 @@ const CERACUT_BUILD = {
     },
 
     changes: [
+        'V7.16: Feat — Lead-Menue: eigener Ausfahr-Typ und -Radius (leer = wie Anfahrt), Hover-Hinweis am Lead-Warnsymbol mit Grund, Properties-Panel: OC an Ecke + Sperr-Hinweis (app V6.69, canvas-renderer V3.63, properties-panel V1.7). Nachbarabstand (collision-margin) und Innen-Ueberschnitt (int-overcut-length) existierten bereits.',
         'V7.15: Refactor — Setup-Tab entfaellt (Referenz/Nullpunkt laufen beim Import automatisch): Referenz + Nullpunkt im Tab Datei (fuer manuelle Korrektur), Technologie (Material/Dicke/Druck/Duese) als Gruppe ③ Technologie im Tab Bearbeitung (app V6.67, styles.css).',
         'V7.15: Feat — Ueberschnitt an Ecken automatisch gesperrt (cam-contour V5.31: isStartAtCorner/isOvercutBlocked, Schwelle 14 Grad, Option overcutAtCorners zum Erlauben); Ribbon: Ausfahrlaenge und Ueberschnitt nicht mehr hinter Erweitert, neuer eigener Ausfahrwinkel, Schalter Ecke (app V6.68).',
         'V7.14: Fix — Auto-Setup: Fliesenbogen auch ohne Layer Fliese erkannt (mehrere aeussere Rechtecke mit Schnitten, Fallback der Fliesen-Erkennung): keine Auto-Referenz mehr, sonst fehlte eine Fliese (app V6.66).',

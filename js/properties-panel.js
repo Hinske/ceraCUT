@@ -1,5 +1,6 @@
 /**
- * CeraCUT Properties Panel V1.6
+ * CeraCUT Properties Panel V1.7
+ * V1.7: Feat — Auswahl 'OC an Ecke' (Gesperrt/Erlaubt) + Hinweis, wenn Ueberschnitt am Eckstart gesperrt ist.
  * Kontur-Eigenschaften als Kontextmenu-Sektion (Step 4 / CAM)
  * - Generiert editierbare CAM-Felder (Quality, Piercing, Lead-In, Kerf)
  * - Bindet Events mit Undo-Support (PropertyChangeCommand)
@@ -323,6 +324,14 @@ class PropertiesPanel {
                     <span class="pp-unit">mm</span>
                 </div>
                 <div class="pp-row">
+                    <span class="pp-key">OC an Ecke:</span>
+                    <select class="pp-select" data-prop="overcutAtCorners" data-idx="${idx}">
+                        <option value="false" ${!contour.overcutAtCorners ? 'selected' : ''}>Gesperrt</option>
+                        <option value="true" ${contour.overcutAtCorners ? 'selected' : ''}>Erlaubt</option>
+                    </select>
+                </div>
+                ${contour.isOvercutBlocked?.() && (contour.overcutLength ?? 0) !== 0 ? '<div class="pp-row"><span class="pp-key" style="color:#ffb000">⚠ Start an Ecke: Überschnitt gesperrt</span></div>' : ''}
+                <div class="pp-row">
                     <span class="pp-key">Dyn. Lead:</span>
                     <select class="pp-select" data-prop="leadInDynamic" data-idx="${idx}">
                         <option value="false" ${!dynamic ? 'selected' : ''}>Aus</option>
@@ -459,7 +468,7 @@ class PropertiesPanel {
     // Lead-Properties die den leadManualOverride-Flag auslösen
     static LEAD_PROPERTIES = new Set([
         'leadInType', 'leadInLength', 'leadInRadius', 'leadInAngle',
-        'leadOutLength', 'overcutLength', 'piercingType',
+        'leadOutLength', 'overcutLength', 'overcutAtCorners', 'piercingType',
         'piercingStationaryTime', 'piercingCircularRadius', 'piercingCircularTime',
         'leadInDynamic', 'leadInLengthMin', 'leadInLengthMax'
     ]);

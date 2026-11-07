@@ -2,6 +2,7 @@
  * CeraCUT V3.52 - Canvas Renderer
  * V3.62: Feat — AP3 Classic-Theme (Palette #666 ohne Raster, Default), isDark auch fuer classic.
  * V3.61: Feat — AP1 S4b: Leads/Ueberschnitt/Startmarke auf der Teilegeometrie (wie G-Code), Fugenband entlang der realen Strahlmitte (getLeadIn/OutToolSegments, overcut.toolPoints).
+ * V3.63: Feat — Hover-Hinweis (Tooltip) am Lead-Warnsymbol mit Grund (gekuerzt/Startpunkt rotiert/Alternativ/Fallback).
  * V3.60: Feat — AP1 S3 (Waricam-Stil): Leads aus echten Segmenten (Bogen immer ctx.arc, kein Polylinien-Fallback), Anschnitt rot / Ausschnitt+Ueberschnitt blau, Pfeil in Schneidrichtung, einheitlicher Anschusspunkt, Warnsymbol (!) statt Zustandsfarben, Schnittfuge massstaeblich als Band (showKerfBand, Schalter btn-kerf-band). Typ-Farben/-Dashes/-Labels entfernt.
  * V3.58: Feat — Reihenfolge-Nummern: Anklick-Modus (cutSeq) grün/gedimmt, ausgewählte Schnitte gelb umrandet
  * V3.57: Feat — Fliesennummer gross mittig, Anklick-Modus zeigt Klick-Reihenfolge (app.tileSeq)
@@ -497,6 +498,12 @@ class CanvasRenderer {
         this.canvas.addEventListener('mousemove', (e) => {
             const worldPos = this.screenToWorld(e.offsetX, e.offsetY);
             this._lastMouseScreen = { x: e.offsetX, y: e.offsetY }; // V3.37: für Vollbild-Crosshair
+            // V3.62: Hover-Hinweis am Lead-Warnsymbol (Grund: gekuerzt/rotiert/Fallback)
+            {
+                const wa = (this._leadWarnAreas || []).find(a => Math.hypot(worldPos.x - a.x, worldPos.y - a.y) <= a.r * 1.3);
+                const t = wa ? wa.text : '';
+                if (this.canvas.title !== t) this.canvas.title = t;
+            }
 
             // V2.4: External pre-handler (Dimension-Grip-Drag etc.)
             if (this.onBeforeMouseMove) {
@@ -891,6 +898,7 @@ class CanvasRenderer {
     render() {
         const ctx = this.ctx;
         const dpr = this._dpr || 1;
+        this._leadWarnAreas = [];   // V3.62: Trefferflaechen der Warnsymbole (Hover-Hinweis)
 
         // DPR-Basistransform: Alle Zeichenoperationen in CSS-Pixel-Raum
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1773,8 +1781,10 @@ class CanvasRenderer {
 
     /** Kleines Warnsymbol (!) neben dem Anschuss-/End-Punkt. */
     _drawLeadWarning(ctx, point, lp) {
-        if (!point || !this._leadWarning(lp)) return;
+        const warnText = point ? this._leadWarning(lp) : null;
+        if (!warnText) return;
         const r = 5 / this.scale;
+        (this._leadWarnAreas || (this._leadWarnAreas = [])).push({ x: point.x + r * 1.6, y: point.y + r * 1.6, r, text: 'Lead: ' + warnText });
         ctx.save();
         ctx.translate(point.x + r * 1.6, point.y + r * 1.6);
         ctx.beginPath();

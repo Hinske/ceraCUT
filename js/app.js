@@ -1,5 +1,6 @@
 /**
  * CeraCUT V6.50 - Main Application
+ * V6.69: Feat — Ribbon: eigener Ausfahr-Typ und -Radius (lead-out-type/-radius, leer = wie Anfahrt).
  * V6.68: Feat — Ribbon: eigener Ausfahrwinkel (lead-out-angle), Schalter Ueberschnitt an Ecken (overcut-at-corners); Ausfahrlaenge/Winkel nicht mehr unter Erweitert.
  * V6.67: Refactor — Setup-Tab entfaellt: Referenz + Nullpunkt (Checkbox "Auto beim Import") wandern in den Tab Datei, Technologie (Material/Dicke/Druck) als ③ Technologie in Bearbeitung
  * V6.66: Fix — Auto-Setup erkennt Fliesenbogen auch OHNE Layer Fliese (mehrere aeussere Rechtecke mit Schnitten) und setzt dort keine Auto-Referenz (eine Fliese ging verloren)
@@ -4649,7 +4650,7 @@ class CeraCutApp {
         const extInputs = [
             'lead-type', 'lead-in-length', 'lead-in-radius', 'lead-in-angle', 'lead-arc-angle',
             'corner-lead-type', 'corner-lead-angle', 'corner-degrade',
-            'overcut-length', 'lead-out-length', 'lead-out-angle', 'overcut-at-corners',
+            'overcut-length', 'lead-out-length', 'lead-out-angle', 'overcut-at-corners', 'lead-out-type', 'lead-out-radius',
             'prefer-corners', 'piercing-type',
             'piercing-stationary-time', 'piercing-circular-radius', 'piercing-circular-time',
             'dynamic-lead-ext', 'dyn-lead-min', 'dyn-lead-max'
@@ -4738,6 +4739,8 @@ class CeraCutApp {
             // V5.31: eigener Ausfahrwinkel (0/leer = wie Anfahrt) + Ueberschnitt an Ecken erlauben
             leadOutAngle: (() => { const v = parseFloat(document.getElementById('lead-out-angle')?.value); return (isNaN(v) || v <= 0) ? undefined : v; })(),
             overcutAtCorners: document.getElementById('overcut-at-corners')?.checked ?? false,
+            leadOutType: document.getElementById('lead-out-type')?.value || undefined,          // V6.69: '' = wie Anfahrt
+            leadOutRadius: (() => { const v = parseFloat(document.getElementById('lead-out-radius')?.value); return (isNaN(v) || v <= 0) ? undefined : v; })(),
             preferCorners: document.getElementById('prefer-corners')?.checked ?? true,
             piercingType:  piercingType,
             // B.1: Piercing R-Parameter
@@ -4766,7 +4769,7 @@ class CeraCutApp {
             cornerLeadType: ext.cornerLeadType, cornerLeadAngle: ext.cornerLeadAngle, cornerDegradeThreshold: ext.cornerDegradeThreshold,   // Ecken-Lead gilt fuer Innen wie Aussen
             overcutLength: (() => { const v = parseFloat(document.getElementById('int-overcut-length')?.value); return isNaN(v) ? ext.overcutLength : v; })(),
             leadOutLength: parseFloat(document.getElementById('int-lead-out-length')?.value) || ext.leadOutLength,
-            leadOutAngle: ext.leadOutAngle, overcutAtCorners: ext.overcutAtCorners,
+            leadOutAngle: ext.leadOutAngle, overcutAtCorners: ext.overcutAtCorners, leadOutType: ext.leadOutType, leadOutRadius: ext.leadOutRadius,
             preferCorners: ext.preferCorners, // Gleiche Ecken-Präferenz für Innen
             piercingType:  ext.piercingType   // Gleicher Piercing-Typ (später per Flächenklasse überschreibbar)
         };
@@ -4794,9 +4797,9 @@ class CeraCutApp {
         c.leadInRadius = vals.leadInRadius;
         c.leadInAngle = vals.leadInAngle;
         c.overcutLength = vals.overcutLength;
-        c.leadOutType = vals.leadInType;
+        c.leadOutType = vals.leadOutType ?? vals.leadInType;   // V6.69: eigene Ausfahrform
         c.leadOutLength = vals.leadOutLength;
-        c.leadOutRadius = vals.leadInRadius;
+        c.leadOutRadius = vals.leadOutRadius ?? vals.leadInRadius;
         c.leadOutAngle = vals.leadOutAngle ?? vals.leadInAngle;   // V5.31: eigener Ausfahrwinkel
         c.overcutAtCorners = vals.overcutAtCorners ?? false;
         c.invalidate?.();
@@ -5205,6 +5208,10 @@ class CeraCutApp {
                 const el = document.getElementById(id);
                 if (el && val !== undefined) el.value = val;
             }
+            const loT = document.getElementById('lead-out-type');
+            if (loT) loT.value = (section.leadOutType && section.leadOutType !== section.leadInType) ? section.leadOutType : '';
+            const loR = document.getElementById('lead-out-radius');
+            if (loR) loR.value = (section.leadOutRadius && section.leadOutRadius !== section.leadInRadius) ? section.leadOutRadius : '';
             const ocCorners = document.getElementById('overcut-at-corners');
             if (ocCorners) ocCorners.checked = !!section.overcutAtCorners;
             const prefCorners = document.getElementById('prefer-corners');
