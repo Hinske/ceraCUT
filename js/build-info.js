@@ -15,9 +15,9 @@ const CERACUT_BUILD = {
 
     // Git-Commit — wird bei jedem Commit aktualisiert (Pflicht-Checkliste)
     git: {
-        hash: '2df9f11',
+        hash: '706e28b',
         date: '2026-11-07',
-        message: 'feat: lib/store.js — JSON-Datei-Store (Teile mit Historie, Plaene, Bleche, Auftr'
+        message: 'feat: REST-Daten-API (Teile, Plaene, Bleche, Auftraege, Technologie) + Server V1'
     },
 
     modules: {
@@ -59,7 +59,7 @@ const CERACUT_BUILD = {
         'measure-tool':       { version: '1.3', build: '20261104-reviewfix' },
         'dimension-tool':     { version: '2.6', build: '20261104-pushexecuted' },
         'dxf-browser':        { version: '1.3', build: '20261105-cncsave' },
-        'server':             { version: '1.10', build: '20261105-cncsave' },
+        'server':             { version: '1.11', build: '20261107-dataapi' },
         'cerajet-engine': { version: '1.1', build: '20261104-reviewfix' },
         'cnc-reader': { version: '1.3', build: '20261104-reviewfix' },
         'constants': { version: '2.15', build: '20261105-verband' },
@@ -71,7 +71,8 @@ const CERACUT_BUILD = {
         'user-store':         { version: '1.1', build: '20261104-reviewfix' },
         'session-store':      { version: '1.1', build: '20261104-reviewfix' },
         'auth-helper':        { version: '1.1', build: '20261104-reviewfix' },
-        'store':              { version: '1.0', build: '20261107-store' }
+        'store':              { version: '1.0', build: '20261107-store' },
+        'data-api':           { version: '1.0', build: '20261107-dataapi' }
     },
 
     changes: [

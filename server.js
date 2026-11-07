@@ -1,5 +1,5 @@
 /**
- * CeraCUT Server V1.8
+ * CeraCUT Server V1.11
  * V1.6: Fix — Slowloris-DoS im Dual-Protocol Gateway: socket.setTimeout(3000) +
  *       socket.on('timeout', destroy) schützt vor Angreifern die TCP-Verbindungen öffnen
  *       aber kein erstes Byte senden. Ohne Guard blieben Sockets unbegrenzt offen und
@@ -17,9 +17,10 @@
  * V1.3: Fix — safePath() prüft Symlink-Ziel via fs.realpathSync gegen DXF_ROOT,
  *       Content-Disposition-Header filtert CR/LF (Header-Injection)
  * V1.9: Feat — /api/dxf/list liefert mtime (Änderungsdatum) für Ordner und Dateien
+ * V1.11: Feat — Daten-API (lib/data-api.js): /api/parts|plans|sheets|orders|materials|technologies + /api/technology/resolve, hinter Login
  * V1.10: Feat — POST /api/cnc/save schreibt .CNC-Dateien nach CNC_ROOT (default /mnt/cnc)
- * Last Modified: 2026-11-05
- * Build: 20261105-cncsave
+ * Last Modified: 2026-11-07
+ * Build: 20261107-dataapi
  * V1.7: Fix — Code-Review 2026-11-04 (tasks/code-review-2026-11-04.md)
  *
  * Statischer Dateiserver + DXF-Browse-API für Netzlaufwerk-Zugriff.
